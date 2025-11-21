@@ -1,228 +1,261 @@
-let currentPool = []; // Store the dice rolls globally
-let chosenSetIndex = null; // Track which set they picked
+let currentPool = []; 
+let chosenSetIndex = null; 
+let classDetails = null; 
 
-window.onload = async function() {
-    await checkAuth(); 
-    await loadOptions();
-};
+window.onload = async function() { await checkAuth(); await loadOptions(); };
 
 async function checkAuth() {
     const res = await fetch("/auth/me");
     const data = await res.json();
+    const loginContainer = document.getElementById("login-btn-container");
+    const userContainer = document.getElementById("user-info-container");
+    const adminControls = document.getElementById("admin-controls");
 
     if (data.authenticated) {
-        document.getElementById("login-btn-container").style.display = "none";
-        document.getElementById("user-info-container").style.display = "block";
+        loginContainer.classList.add("hidden");
+        userContainer.classList.remove("hidden");
         document.getElementById("display-username").innerText = data.user.username;
-
-        // NEW: Check Admin Status
-        if (data.is_admin) {
-            document.getElementById("admin-controls").style.display = "block";
-        }
-
-        // Check if they already have a character
+        if (data.is_admin) adminControls.classList.remove("hidden");
+        else adminControls.classList.add("hidden");
         await loadMyCharacter();
     } else {
-        document.getElementById("login-btn-container").style.display = "block";
-        document.getElementById("user-info-container").style.display = "none";
-        document.getElementById("creator-section").style.display = "none"; 
-        document.getElementById("character-sheet").style.display = "none";
+        loginContainer.classList.remove("hidden");
+        userContainer.classList.add("hidden");
+        document.getElementById("creator-section").classList.add("hidden");
+        document.getElementById("character-sheet").classList.add("hidden");
     }
 }
 
 async function loadMyCharacter() {
     const res = await fetch("/my-character");
     const result = await res.json();
-
     if (result.found) {
-        // HIDE Creator, SHOW Sheet
-        document.getElementById("creator-section").style.display = "none";
-        document.getElementById("creator-controls").style.display = "none"; // Hide name input
-        document.getElementById("character-sheet").style.display = "block";
-
+        document.getElementById("creator-section").classList.add("hidden");
+        document.getElementById("character-sheet").classList.remove("hidden");
         renderSheet(result.data);
     } else {
-        // SHOW Creator, HIDE Sheet
-        document.getElementById("creator-section").style.display = "block";
-        document.getElementById("creator-controls").style.display = "block";
-        document.getElementById("character-sheet").style.display = "none";
+        document.getElementById("creator-section").classList.remove("hidden");
+        document.getElementById("character-sheet").classList.add("hidden");
     }
 }
 
-function renderSheet(char) {
-    document.getElementById("sheet-name").innerText = char.character_name;
-    document.getElementById("sheet-subtitle").innerText = `${char.species_name} ${char.class_name}`;
-    document.getElementById("sheet-hitdie").innerText = char.hit_die;
-    document.getElementById("sheet-speed").innerText = char.speed;
-
-    const container = document.getElementById("sheet-stats");
-    container.innerHTML = "";
-
-    // Standard order
-    const order = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
-
-    order.forEach(attr => {
-        const score = char.attributes[attr];
-        const modifier = Math.floor((score - 10) / 2);
-        const sign = modifier >= 0 ? "+" : "";
-
-        container.innerHTML += `
-            <div style="background: #fff; border: 1px solid #bdc3c7; padding: 10px; border-radius: 5px;">
-                <div style="font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; font-weight:bold;">${attr.substring(0,3)}</div>
-                <div style="font-size: 1.5rem; font-weight: bold; color: #2c3e50;">${score}</div>
-                <div style="font-size: 1rem; color: #e67e22; font-weight: bold;">${sign}${modifier}</div>
-            </div>
-        `;
-    });
+// --- WIZARD NAVIGATION ---
+function goToStep(stepNum) {
+    for(let i=1; i<=4; i++) document.getElementById(`step-${i}`).classList.add("hidden");
+    document.getElementById(`step-${stepNum}`).classList.remove("hidden");
 }
 
-async function loadOptions() {
-    try {
-        const classRes = await fetch("/options/classes");
-        const classes = await classRes.json();
-        const classSelect = document.getElementById("class-select");
-        classes.forEach(c => {
-            const opt = document.createElement("option");
-            opt.value = c.id;
-            opt.innerText = c.name;
-            classSelect.appendChild(opt);
-        });
-
-        const speciesRes = await fetch("/options/species");
-        const speciesList = await speciesRes.json();
-        const speciesSelect = document.getElementById("species-select");
-        speciesList.forEach(s => {
-            const opt = document.createElement("option");
-            opt.value = s.id;
-            opt.innerText = s.name;
-            speciesSelect.appendChild(opt);
-        });
-    } catch (error) { console.error("Error loading options:", error); }
+async function goToStep2() {
+    const name = document.getElementById("char_name").value;
+    const sp = document.getElementById("species-select").value;
+    const cl = document.getElementById("class-select").value;
+    if(!name || !sp || !cl) { alert("Please complete all fields."); return; }
+    
+    const res = await fetch(`/options/class-details/${cl}`);
+    classDetails = await res.json();
+    
+    goToStep(2);
 }
 
+function goToStep3() {
+    const attributes = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
+    for (let attr of attributes) {
+        if (!document.getElementById(`attr-${attr}`).value) { alert(`Assign ${attr} first.`); return; }
+    }
+    
+    const featContainer = document.getElementById("feature-selection-container");
+    featContainer.innerHTML = "<h3>Class Features</h3>";
+    
+    if(classDetails.features.length > 0) {
+        classDetails.features.forEach(f => {
+            if(f.options.length > 0) {
+                let opts = `<option value="">-- Select Option --</option>`;
+                f.options.forEach(o => { opts += `<option value="${o.id}">${o.name}</option>`; });
+                featContainer.innerHTML += `
+                    <div style="margin-bottom:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:4px;">
+                        <label>${f.name}</label>
+                        <select class="feature-choice" data-feature-id="${f.id}" style="margin-top:5px;">${opts}</select>
+                    </div>`;
+            } else {
+                featContainer.innerHTML += `<div style="margin-bottom:5px;">✓ <strong>${f.name}</strong>: ${f.description}</div>`;
+            }
+        });
+    } else { featContainer.innerHTML += "<p>No special choices at Level 1.</p>"; }
+
+    const spellContainer = document.getElementById("spell-selection-container");
+    const spellList = document.getElementById("spell-checkboxes");
+    spellList.innerHTML = "";
+    
+    if(classDetails.spellcasting_ability) {
+        spellContainer.classList.remove("hidden");
+        classDetails.spells.forEach(s => {
+            spellList.innerHTML += `
+                <label style="font-size:0.9rem;">
+                    <input type="checkbox" class="spell-choice" value="${s.id}"> ${s.name} (Lvl ${s.level})
+                </label>`;
+        });
+    } else {
+        spellContainer.classList.add("hidden");
+    }
+
+    goToStep(3);
+}
+
+function goToStep4() {
+    const selects = document.querySelectorAll(".feature-choice");
+    for(let s of selects) {
+        if(!s.value) { alert("Please make all class feature choices."); return; }
+    }
+    goToStep(4);
+}
+
+// --- STAT ROLLING ---
 async function rollStats() {
     const charName = document.getElementById("char_name").value;
-
-    if (!charName) {
-        alert("Please enter a Character Name.");
-        return;
-    }
-
-    const response = await fetch("/roll-stats/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ character_name: charName })
-    });
-
+    const response = await fetch("/roll-stats/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ character_name: charName }) });
     const data = await response.json();
-    currentPool = data.pool; 
+    currentPool = data.pool;
     
     const container = document.getElementById("output");
     container.innerHTML = "";
     
-    document.getElementById("assignment-section").style.display = "none";
-
-    if (data.pool) {
+    if(data.pool) {
         data.pool.forEach((set, index) => {
-            const setDiv = document.createElement("div");
-            setDiv.className = "stat-set";
-            let html = `<h3 class="set-title">Set ${index + 1}</h3>`;
+            let html = `<div class="stat-set"><h3 style="color:var(--accent-gold); font-size:1.1rem;">Set ${index + 1}</h3>`;
             set.forEach(stat => { html += `<div class="stat-box">${stat}</div>`; });
-            
-            html += `<button style="margin-top:10px; width:100%;" onclick="startAssignment(${index})">Select Set</button>`;
-            
-            setDiv.innerHTML = html;
-            container.appendChild(setDiv);
+            html += `<button style="margin-top:10px; width:100%;" onclick="selectSet(${index})">Select</button></div>`;
+            container.innerHTML += html;
         });
+        if(data.locked) alert("Locked: Displaying previously rolled stats.");
     }
 }
 
-function startAssignment(index) {
+function selectSet(index) {
     chosenSetIndex = index;
     const selectedStats = currentPool[index];
+    document.getElementById("output").innerHTML = ""; 
+    document.getElementById("assignment-area").classList.remove("hidden");
     
-    document.getElementById("output").style.display = "none";
-    const assignSection = document.getElementById("assignment-section");
-    assignSection.style.display = "block";
-    
-    const attributes = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
     const container = document.getElementById("stat-rows");
     container.innerHTML = "";
-
+    const attributes = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
+    
     attributes.forEach(attr => {
-        const row = document.createElement("div");
-        row.style.margin = "10px 0";
-        row.style.display = "flex";
-        row.style.justifyContent = "space-between";
-        row.style.alignItems = "center";
-
-        let optionsHtml = `<option value="">--</option>`;
-        selectedStats.forEach(num => {
-            optionsHtml += `<option value="${num}">${num}</option>`;
-        });
-
-        row.innerHTML = `
-            <label style="font-weight:bold; width: 120px; text-align:left;">${attr}:</label>
-            <select class="attr-select" id="attr-${attr}" style="width: 100px;">
-                ${optionsHtml}
-            </select>
-        `;
-        container.appendChild(row);
+        let opts = `<option value="">--</option>`;
+        selectedStats.forEach(num => { opts += `<option value="${num}">${num}</option>`; });
+        container.innerHTML += `
+            <div style="display:grid; grid-template-columns: 100px 1fr; gap:10px; margin-bottom:5px; align-items:center;">
+                <label class="ability-label">${attr}</label>
+                <select id="attr-${attr}">${opts}</select>
+            </div>`;
     });
 }
 
-function cancelAssignment() {
-    document.getElementById("assignment-section").style.display = "none";
-    document.getElementById("output").style.display = "flex";
-}
-
+// --- FINAL SAVE ---
 async function finalizeCharacter() {
-    const classId = document.getElementById("class-select").value;
-    const speciesId = document.getElementById("species-select").value;
+    const bg = document.getElementById("char-background").value;
+    const align = document.getElementById("char-alignment").value;
+    const bio = document.getElementById("char-bio").value;
+    if(!bg || !align) { alert("Please fill in Background and Alignment."); return; }
 
     const attributes = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
     const selectionMap = {};
     const usedValues = [];
-
     for (let attr of attributes) {
         const val = document.getElementById(`attr-${attr}`).value;
-        if (!val) {
-            alert(`Please assign a value for ${attr}`);
-            return;
-        }
         selectionMap[attr] = parseInt(val);
         usedValues.push(parseInt(val));
     }
-
+    
     const originalSet = [...currentPool[chosenSetIndex]].sort((a,b) => a-b);
     const selectedSet = [...usedValues].sort((a,b) => a-b);
+    if (JSON.stringify(originalSet) !== JSON.stringify(selectedSet)) { alert("Stat verification failed."); return; }
 
-    if (JSON.stringify(originalSet) !== JSON.stringify(selectedSet)) {
-        alert("You must use the exact numbers from your rolled set! (Check for duplicates)");
-        return;
+    const resMain = await fetch("/confirm-selection/", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ 
+            chosen_set_index: chosenSetIndex, 
+            class_id: parseInt(document.getElementById("class-select").value), 
+            species_id: parseInt(document.getElementById("species-select").value), 
+            attributes: selectionMap,
+            background: bg, alignment: align, bio: bio
+        }) 
+    });
+    const dataMain = await resMain.json();
+    if(dataMain.status !== "success") { alert("Error saving character base."); return; }
+
+    const featureSelects = document.querySelectorAll(".feature-choice");
+    for(let s of featureSelects) {
+        await fetch("/select-feature", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ feature_id: parseInt(s.dataset.featureId), option_id: parseInt(s.value) })
+        });
     }
 
-    const response = await fetch("/confirm-selection/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            chosen_set_index: chosenSetIndex,
-            class_id: parseInt(classId),
-            species_id: parseInt(speciesId),
-            attributes: selectionMap
-        })
+    const spellChecks = document.querySelectorAll(".spell-choice:checked");
+    for(let c of spellChecks) {
+        await fetch("/learn-spell", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ spell_id: parseInt(c.value) })
+        });
+    }
+
+    location.reload();
+}
+
+async function loadOptions() {
+    try {
+        const cRes = await fetch("/options/classes");
+        const classes = await cRes.json();
+        const cSel = document.getElementById("class-select");
+        classes.forEach(c => { cSel.innerHTML += `<option value="${c.id}">${c.name}</option>`; });
+
+        const sRes = await fetch("/options/species");
+        const species = await sRes.json();
+        const sSel = document.getElementById("species-select");
+        species.forEach(s => { sSel.innerHTML += `<option value="${s.id}">${s.name}</option>`; });
+    } catch (e) { console.error(e); }
+}
+
+function renderSheet(char) {
+    document.getElementById("sheet-name").innerText = char.character_name;
+    document.getElementById("sheet-subtitle").innerText = `Level ${char.level} ${char.species_name} ${char.class_name}`;
+    document.getElementById("sheet-bio-header").innerText = `${char.alignment || ""} • ${char.background || ""}`;
+    document.getElementById("sheet-bio-text").innerText = char.bio || "";
+    document.getElementById("sheet-hitdie").innerText = char.hit_die;
+    document.getElementById("sheet-hp").innerText = char.hp_max;
+    
+    const container = document.getElementById("sheet-stats");
+    container.innerHTML = "";
+    const order = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
+    order.forEach(attr => {
+        const score = char.attributes[attr];
+        const modifier = Math.floor((score - 10) / 2);
+        const sign = modifier >= 0 ? "+" : "";
+        container.innerHTML += `<div class="ability-card"><div class="ability-label">${attr.substring(0,3)}</div><div class="ability-score">${score}</div><div class="ability-mod">${sign}${modifier}</div></div>`;
     });
 
-    const result = await response.json();
-    if (result.status === "success") {
-        document.body.innerHTML = `
-            <div class="container">
-                <h1 style="color:#2ecc71">Character Complete!</h1>
-                <p>Stats Assigned and Saved.</p>
-                <button onclick="location.reload()">View Character Sheet</button>
-            </div>
-        `;
+    const featList = document.getElementById("features-list");
+    featList.innerHTML = "";
+    if(char.features) {
+        char.features.forEach(f => {
+            let txt = f.selected ? `<strong>${f.name}: ${f.selected.name}</strong>` : `<strong>${f.name}</strong>`;
+            featList.innerHTML += `<div style="margin-bottom:5px;">${txt} - ${f.description}</div>`;
+        });
+    }
+
+    const spellContainer = document.getElementById("spells-container");
+    const spellList = document.getElementById("known-spells-list");
+    spellList.innerHTML = "";
+    if(char.spellcasting_ability) {
+        spellContainer.classList.remove("hidden");
+        if(char.spells) char.spells.forEach(s => spellList.innerHTML += `<div class="stat-box">${s.name}</div>`);
     } else {
-        alert("Error: " + (result.detail || "Could not save character"));
+        spellContainer.classList.add("hidden");
     }
 }
+// Helper Placeholders
+async function openSpellManager() { /* Logic can be re-added for Level Up */ }
+async function learnSelectedSpell() { }
+async function forgetSpell(id) { }

@@ -2,42 +2,148 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DM Admin Dashboard</title>
+    <title>DM Forge & Dashboard</title>
+    <link rel="stylesheet" href="style.css">
     <style>
-        body { font-family: sans-serif; background: #2c3e50; color: white; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; background: #34495e; margin-top: 20px; }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #2c3e50; }
-        th { background: #e67e22; color: black; }
-        tr:hover { background: #415b76; }
+        /* Admin Specific Overrides */
+        body { text-align: left; }
+        .admin-nav { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 20px; }
+        .nav-item { padding: 15px 25px; cursor: pointer; color: var(--text-muted); font-family: 'Cinzel', serif; font-size: 1.1rem; }
+        .nav-item:hover { color: var(--text-main); background: rgba(255,255,255,0.05); }
+        .nav-item.active { color: var(--accent-gold); border-bottom: 3px solid var(--accent-gold); background: rgba(204, 164, 59, 0.1); }
         
-        button.unlock-btn {
-            background: #c0392b; color: white; border: none; padding: 8px 12px; 
-            cursor: pointer; border-radius: 4px; font-weight: bold;
-        }
-        button.unlock-btn:hover { background: #e74c3c; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
         
-        .stat-summary { font-family: monospace; color: #f1c40f; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .full-width { grid-column: span 2; }
+        
+        textarea { background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; width: 100%; border-radius: 4px; resize: vertical; height: 80px; font-family: 'Roboto', sans-serif; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
+        th { text-align: left; border-bottom: 1px solid var(--accent-gold); padding: 10px; color: var(--accent-gold); }
+        td { padding: 10px; border-bottom: 1px solid var(--border-color); }
+        
+        .badge { background: #333; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-right: 3px; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
-    <h1>DM Dashboard</h1>
-    <p>View all characters and manage lock status.</p>
 
-    <table id="char-table">
-        <thead>
-            <tr>
-                <th>Discord ID</th>
-                <th>Character Name</th>
-                <th>Class / Species</th>
-                <th>Stats (Selected)</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            </tbody>
-    </table>
+<div class="container" style="max-width: 1100px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1>DM Forge</h1>
+        <!-- FIXED: Use a pure styled link instead of a button tag -->
+        <a href="/static/index.html" class="btn" style="font-size:0.8rem; text-decoration:none;">Back to Game</a>
+    </div>
 
-    <script src="admin.js"></script>
+    <div class="admin-nav">
+        <div class="nav-item active" onclick="switchTab('roster')">Roster</div>
+        <div class="nav-item" onclick="switchTab('grimoire')">Grimoire (Spells)</div>
+        <div class="nav-item" onclick="switchTab('codex')">Codex (Classes/Species)</div>
+    </div>
+
+    <!-- TAB 1: ROSTER -->
+    <div id="tab-roster" class="tab-content active">
+        <div class="card">
+            <h3>Active Players</h3>
+            <table id="char-table">
+                <thead>
+                    <tr>
+                        <th>Discord ID</th><th>Character</th><th>Class/Race</th><th>Stats</th><th>Status</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 2: GRIMOIRE (Spell Creator) -->
+    <div id="tab-grimoire" class="tab-content">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+            <!-- Add Spell Form -->
+            <div class="card">
+                <h3>Scribe New Spell</h3>
+                <div class="form-grid">
+                    <input type="text" id="spell-name" placeholder="Spell Name (e.g. Fireball)" />
+                    <input type="number" id="spell-level" placeholder="Level (0=Cantrip)" min="0" max="9" />
+                    
+                    <select id="spell-school">
+                        <option value="Evocation">Evocation</option><option value="Abjuration">Abjuration</option>
+                        <option value="Conjuration">Conjuration</option><option value="Divination">Divination</option>
+                        <option value="Enchantment">Enchantment</option><option value="Illusion">Illusion</option>
+                        <option value="Necromancy">Necromancy</option><option value="Transmutation">Transmutation</option>
+                    </select>
+                    <input type="text" id="spell-cast" placeholder="Cast Time (e.g. 1 Action)" />
+                    
+                    <input type="text" id="spell-range" placeholder="Range (e.g. 120ft)" />
+                    <input type="text" id="spell-dur" placeholder="Duration (e.g. Instant)" />
+                    
+                    <input type="text" id="spell-comp" placeholder="Components (V, S, M)" class="full-width" />
+                    <textarea id="spell-desc" placeholder="Spell Description..." class="full-width"></textarea>
+                    
+                    <div class="full-width">
+                        <label class="ability-label">Classes Allowed:</label>
+                        <div id="class-checkboxes" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px;">
+                            <!-- JS will populate this -->
+                        </div>
+                    </div>
+                </div>
+                <button onclick="submitSpell()" style="width:100%; margin-top:15px;">Add to Grimoire</button>
+            </div>
+
+            <!-- Spell List View -->
+            <div class="card">
+                <h3>Existing Spells</h3>
+                <div id="spell-list-container" style="max-height: 500px; overflow-y: auto;">
+                    <table id="spell-table">
+                        <thead><tr><th>Lvl</th><th>Name</th><th>Classes</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: CODEX (Species/Classes) -->
+    <div id="tab-codex" class="tab-content">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+            
+            <!-- Add Species -->
+            <div class="card">
+                <h3>Discover Species</h3>
+                <input type="text" id="spec-name" placeholder="Name (e.g. Goliath)" />
+                <div class="options-row">
+                    <input type="number" id="spec-speed" placeholder="Speed (ft)" />
+                    <select id="spec-size"><option>Medium</option><option>Small</option><option>Large</option></select>
+                </div>
+                <textarea id="spec-desc" placeholder="Description..."></textarea>
+                <button onclick="submitSpecies()" style="width:100%; margin-top:10px;">Add Species</button>
+            </div>
+
+            <!-- Add Class -->
+            <div class="card">
+                <h3>Found Class</h3>
+                <input type="text" id="cls-name" placeholder="Name (e.g. Monk)" />
+                <div class="options-row">
+                    <input type="number" id="cls-hitdie" placeholder="Hit Die (d8)" />
+                    <input type="text" id="cls-primary" placeholder="Primary Stat (Dex/Wis)" />
+                </div>
+                <select id="cls-spell-stat">
+                    <option value="">None (Martial)</option>
+                    <option value="Intelligence">Intelligence</option>
+                    <option value="Wisdom">Wisdom</option>
+                    <option value="Charisma">Charisma</option>
+                </select>
+                <textarea id="cls-desc" placeholder="Description..."></textarea>
+                <button onclick="submitClass()" style="width:100%; margin-top:10px;">Add Class</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="admin.js"></script>
 </body>
 </html>
