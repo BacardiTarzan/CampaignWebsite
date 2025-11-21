@@ -1,0 +1,32 @@
+--- Security ---
+
+.env
+.env.local
+
+--- Python ---
+
+pycache/
+*.py[cod]
+*.log
+
+--- Environments ---
+
+venv/
+env/
+.venv/
+
+--- Database ---
+
+*.db
+*.sqlite3
+
+--- IDE Settings ---
+
+.vscode/
+.idea/
+*.swp
+
+--- OS Specific ---
+
+.DS_Store
+Thumbs.db

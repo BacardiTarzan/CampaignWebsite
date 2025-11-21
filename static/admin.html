@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DM Admin Dashboard</title>
+    <style>
+        body { font-family: sans-serif; background: #2c3e50; color: white; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; background: #34495e; margin-top: 20px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #2c3e50; }
+        th { background: #e67e22; color: black; }
+        tr:hover { background: #415b76; }
+        
+        button.unlock-btn {
+            background: #c0392b; color: white; border: none; padding: 8px 12px; 
+            cursor: pointer; border-radius: 4px; font-weight: bold;
+        }
+        button.unlock-btn:hover { background: #e74c3c; }
+        
+        .stat-summary { font-family: monospace; color: #f1c40f; }
+    </style>
+</head>
+<body>
+    <h1>DM Dashboard</h1>
+    <p>View all characters and manage lock status.</p>
+
+    <table id="char-table">
+        <thead>
+            <tr>
+                <th>Discord ID</th>
+                <th>Character Name</th>
+                <th>Class / Species</th>
+                <th>Stats (Selected)</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+
+    <script src="admin.js"></script>
+</body>
+</html>

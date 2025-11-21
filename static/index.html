@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D&D Character Creator</title>
+    <style>
+        body { font-family: sans-serif; background: #2c3e50; color: white; text-align: center; }
+        .container { max-width: 800px; margin: 50px auto; }
+        input, select, button { padding: 10px; font-size: 1.1rem; margin: 5px; }
+        button { background: #e67e22; border: none; cursor: pointer; color: white; font-weight: bold; }
+        button:hover { background: #d35400; }
+        .results-grid { display: flex; gap: 20px; justify-content: center; margin-top: 30px; }
+        .stat-set { background: #34495e; padding: 20px; border-radius: 10px; width: 200px; }
+        .stat-box { background: #ecf0f1; color: #2c3e50; margin: 10px 0; padding: 10px; font-weight: bold; }
+        .set-title { margin-bottom: 15px; color: #f1c40f; }
+        .options-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Campaign Character Creator</h1>
+    
+    <div class="options-row" id="auth-section">
+        <!-- Javascript will toggle these -->
+        <div id="login-btn-container">
+            <a href="/login"><button style="background:#5865F2;">Login with Discord</button></a>
+        </div>
+        
+        <div id="user-info-container" style="display:none;">
+            <p>Logged in as: <span id="display-username" style="color:#f1c40f; font-weight:bold;"></span></p>
+            
+            <!-- NEW: Admin Button (Hidden by default) -->
+            <div id="admin-controls" style="display:none; margin-bottom: 10px;">
+                <a href="/static/admin.html">
+                    <button style="background: #8e44ad; font-size: 0.9rem;">🛡️ DM Dashboard</button>
+                </a>
+            </div>
+
+            <!-- Input only shows if creating a new character -->
+            <div id="creator-controls">
+                <input type="text" id="char_name" placeholder="Character Name" />
+                <a href="/auth/logout" style="color: #e74c3c; margin-left: 10px;">Logout</a>
+            </div>
+        </div>
+
+    <!-- NEW: The Character Sheet Display (Hidden by default) -->
+    <div id="character-sheet" style="display:none; background: #ecf0f1; color: #2c3e50; padding: 20px; border-radius: 10px; text-align: left; margin-bottom: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #bdc3c7; padding-bottom:10px; margin-bottom:10px;">
+            <div>
+                <h1 id="sheet-name" style="margin:0; color:#2c3e50;">Name</h1>
+                <span id="sheet-subtitle" style="font-style:italic; font-size: 1.1rem;">Species Class</span>
+            </div>
+            <div style="text-align:right;">
+                <div><strong>HP (Hit Die):</strong> d<span id="sheet-hitdie"></span></div>
+                <div><strong>Speed:</strong> <span id="sheet-speed"></span> ft</div>
+            </div>
+        </div>
+
+        <div id="sheet-stats" style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 10px; text-align:center;">
+            <!-- Stats will be injected here -->
+        </div>
+
+        <div style="margin-top:20px; text-align:center;">
+            <!-- DELETE BUTTON REMOVED -->
+            <a href="/auth/logout"><button style="background: #7f8c8d;">Logout</button></a>
+        </div>
+    </div>
+
+    <!-- Wrap the Creator tools in a div so we can hide them easily -->
+    <div id="creator-section">
+        <div class="options-row">
+            <select id="species-select">
+                <option value="">Select Species...</option>
+            </select>
+            <select id="class-select">
+                <option value="">Select Class...</option>
+            </select>
+        </div>
+
+        <button onclick="rollStats()">Roll Stats & Create</button>
+        <div id="output" class="results-grid"></div>
+        
+        <!-- HIDDEN SECTION: Attribute Assignment -->
+        <div id="assignment-section" style="display:none; background: #34495e; padding: 20px; border-radius: 10px; margin-top: 20px;">
+            <h2 style="color: #f1c40f;">Assign Your Stats</h2>
+            <p>Map your rolled numbers to your abilities.</p>
+            
+            <div id="stat-rows">
+                <!-- JS will generate rows here: [Label] [Dropdown] -->
+            </div>
+
+            <button onclick="finalizeCharacter()" style="margin-top: 20px; background: #27ae60;">Save Character</button>
+            <button onclick="cancelAssignment()" style="background: #7f8c8d;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
