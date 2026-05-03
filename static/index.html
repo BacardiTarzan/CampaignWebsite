@@ -1,171 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campaign Manager</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>D&D 2024 — Character Creator</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
 <div class="container">
-    <h1>Legends of the Campaign</h1>
-    
-    <!-- AUTH SECTION -->
-    <div id="auth-section" class="card">
-        <div id="login-btn-container">
-            <p style="margin-bottom: 15px;">Sign in to access your character library.</p>
-            <a href="/login"><button style="background:#5865F2; border-color:#5865F2; color: white;">Login with Discord</button></a>
+  <h1 class="page-title">Character Creator</h1>
+  <p class="page-subtitle">D&amp;D 2024 · Session Zero</p>
+
+  <!-- Progress bar -->
+  <div class="wizard-progress" id="wizard-progress"></div>
+
+  <!-- Step panels -->
+  <div id="wizard-steps">
+
+    <!-- Step 1: Identity -->
+    <div class="card wizard-panel hidden" id="step-1">
+      <h2>Your Identity</h2>
+      <p class="hint mt-sm mb-md">Tell us who's playing and what this character is called.</p>
+      <div class="grid-2">
+        <div>
+          <label for="display-name">Your Name (Player)</label>
+          <input type="text" id="display-name" placeholder="e.g. Alex">
         </div>
-        
-        <div id="user-info-container" class="hidden">
-            <div class="flex-center" style="justify-content: space-between;">
-                <p>Welcome, <span id="display-username" style="color:var(--accent-gold);"></span></p>
-                <div>
-                    <span id="admin-controls" class="hidden" style="display:inline;">
-                        <a href="/static/admin.html"><button style="font-size: 0.8rem; padding: 8px 16px;">🛡️ DM Tools</button></a>
-                    </span>
-                    <a href="/auth/logout"><button class="danger" style="font-size: 0.8rem; padding: 8px 16px;">Logout</button></a>
-                </div>
-            </div>
+        <div>
+          <label for="char-name">Character Name</label>
+          <input type="text" id="char-name" placeholder="e.g. Zara Ironveil">
         </div>
+      </div>
+      <div class="wizard-nav">
+        <span></span>
+        <button class="btn-primary" onclick="saveIdentity()">Next: Species →</button>
+      </div>
     </div>
 
-    <!-- CHARACTER SHEET (View Mode) -->
-    <div id="character-sheet" class="card hidden parchment">
-        <div class="sheet-header">
-            <div>
-                <h2 id="sheet-name" style="margin:0;">Name</h2>
-                <span id="sheet-subtitle" style="color: var(--text-muted);">Level 1 Species Class</span>
-                <div id="sheet-bio-header" style="font-size:0.9rem; font-style:italic; color:#5d4037; margin-top:5px;"></div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size: 1.5rem; color: #8d6e63;">HP: <span id="sheet-hp" style="font-weight:bold;">10</span></div>
-                <div>Hit Die: <span style="color:#bf360c">d<span id="sheet-hitdie"></span></span></div>
-            </div>
-        </div>
-
-        <div id="sheet-stats" class="sheet-stats-grid"></div>
-        
-        <hr style="border: 0; border-top: 1px solid #8d6e63; margin: 20px 0;">
-
-        <div class="options-row">
-            <div>
-                <h3>Class Features</h3>
-                <div id="features-list" style="text-align:left; font-size: 0.9rem;"></div>
-            </div>
-
-            <div id="spells-container">
-                <h3>Spellbook</h3>
-                <div id="known-spells-list" style="margin-bottom: 15px;"></div>
-                <button onclick="openSpellManager()" style="width:100%; font-size:0.8rem;">Manage Spells</button>
-                <div id="spell-manager" class="hidden" style="margin-top:10px; background:rgba(0,0,0,0.05); padding:10px; border-radius:5px;">
-                    <select id="spell-select" style="width:100%; margin-bottom:5px;"></select>
-                    <button onclick="learnSelectedSpell()" style="width:100%; font-size:0.8rem; background: #27ae60; color:white;">Learn Spell</button>
-                </div>
-            </div>
-        </div>
-        
-        <div style="margin-top:20px; text-align:left; background:rgba(0,0,0,0.03); padding:15px; border-radius:5px;">
-            <h4>Biography</h4>
-            <p id="sheet-bio-text" style="font-size:0.9rem; white-space: pre-wrap;"></p>
-        </div>
-        
-        <div style="margin-top:30px; text-align:center; border-top: 1px solid #8d6e63; padding-top: 20px;">
-            <a href="/auth/logout"><button style="background: transparent; border-color: #5d4037; color: #5d4037;">Close Tome</button></a>
-        </div>
+    <!-- Step 2: Species -->
+    <div class="card wizard-panel hidden" id="step-2">
+      <h2>Choose a Species</h2>
+      <p class="hint mt-sm mb-md">Your species shapes your traits — but not your ability scores. Those come from your background.</p>
+      <div class="selection-grid" id="species-grid"></div>
+      <div class="detail-panel" id="species-detail">
+        <h3 id="species-detail-name"></h3>
+        <div id="species-detail-body"></div>
+      </div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(1)">← Back</button>
+        <button class="btn-primary" id="btn-species-next" disabled onclick="saveSpecies()">Next: Background →</button>
+      </div>
     </div>
 
-    <!-- CREATOR WIZARD -->
-    <div id="creator-section" class="hidden">
-        
-        <!-- STEP 1: IDENTITY -->
-        <div id="step-1" class="card">
-            <h2>Step 1: Identity</h2>
-            <p style="color:var(--text-muted); margin-bottom:15px;">Choose your path.</p>
-            
-            <label class="ability-label">Character Name</label>
-            <input type="text" id="char_name" placeholder="Name your hero..." />
-            
-            <div class="options-row">
-                <div>
-                    <label class="ability-label">Species</label>
-                    <select id="species-select"><option value="">Select...</option></select>
-                </div>
-                <div>
-                    <label class="ability-label">Class</label>
-                    <select id="class-select"><option value="">Select...</option></select>
-                </div>
-            </div>
-            <button onclick="goToStep2()" style="width:100%">Next: Roll Stats</button>
+    <!-- Step 3: Background -->
+    <div class="card wizard-panel hidden" id="step-3">
+      <h2>Choose a Background</h2>
+      <p class="hint mt-sm mb-md">Your background grants an Origin Feat, 2 skills, a tool, and your ability score increases (+2/+1 or +1/+1/+1 applied in the Stats step).</p>
+      <div class="selection-grid" id="background-grid"></div>
+      <div class="detail-panel" id="background-detail">
+        <h3 id="background-detail-name"></h3>
+        <div id="background-detail-body"></div>
+        <!-- Tool choice (if background offers "Choose one kind of...") -->
+        <div id="tool-choice-row" class="hidden mt-md">
+          <label id="tool-choice-label">Choose your tool proficiency:</label>
+          <select id="tool-choice-select"></select>
         </div>
-
-        <!-- STEP 2: STATS -->
-        <div id="step-2" class="card hidden">
-            <div style="display:flex; justify-content:space-between;">
-                <h2>Step 2: Attributes</h2>
-                <button onclick="goToStep(1)" style="font-size:0.7rem; padding:5px 10px;">Back</button>
-            </div>
-            
-            <div id="roll-controls">
-                <p>Roll 3 sets of ability scores. Choose the best one.</p>
-                <button onclick="rollStats()" style="width:100%; margin-bottom:15px;">Roll the Dice</button>
-            </div>
-            
-            <div id="output" class="results-grid"></div>
-            
-            <div id="assignment-area" class="hidden" style="margin-top:20px; border-top:1px solid var(--border-color); padding-top:20px;">
-                <h3>Assign Scores</h3>
-                <div id="stat-rows"></div>
-                <button onclick="goToStep3()" style="width:100%; margin-top:15px;">Next: Class Details</button>
-            </div>
-        </div>
-
-        <!-- STEP 3: FEATURES & SPELLS -->
-        <div id="step-3" class="card hidden">
-            <div style="display:flex; justify-content:space-between;">
-                <h2>Step 3: Build</h2>
-                <button onclick="goToStep(2)" style="font-size:0.7rem; padding:5px 10px;">Back</button>
-            </div>
-            
-            <div id="feature-selection-container"></div>
-
-            <div id="spell-selection-container" class="hidden" style="margin-top:20px; border-top:1px solid var(--border-color); padding-top:20px;">
-                <h3>Select Spells</h3>
-                <p style="font-size:0.9rem; color:var(--text-muted);">Pick your starting Level 1 spells.</p>
-                <div id="spell-checkboxes" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; text-align:left;"></div>
-            </div>
-
-            <button onclick="goToStep4()" style="width:100%; margin-top:20px;">Next: Biography</button>
-        </div>
-
-        <!-- STEP 4: BACKGROUND -->
-        <div id="step-4" class="card hidden">
-            <div style="display:flex; justify-content:space-between;">
-                <h2>Step 4: Story</h2>
-                <button onclick="goToStep(3)" style="font-size:0.7rem; padding:5px 10px;">Back</button>
-            </div>
-
-            <label class="ability-label">Background (e.g. Soldier)</label>
-            <input type="text" id="char-background" />
-
-            <label class="ability-label">Alignment</label>
-            <select id="char-alignment">
-                <option value="">Select Alignment...</option>
-                <option value="Lawful Good">Lawful Good</option><option value="Neutral Good">Neutral Good</option><option value="Chaotic Good">Chaotic Good</option>
-                <option value="Lawful Neutral">Lawful Neutral</option><option value="True Neutral">True Neutral</option><option value="Chaotic Neutral">Chaotic Neutral</option>
-                <option value="Lawful Evil">Lawful Evil</option><option value="Neutral Evil">Neutral Evil</option><option value="Chaotic Evil">Chaotic Evil</option>
-            </select>
-
-            <label class="ability-label">Bio / Description</label>
-            <textarea id="char-bio" style="height:120px; font-family:sans-serif;"></textarea>
-
-            <button onclick="finalizeCharacter()" style="width:100%; margin-top:20px; background:var(--accent-gold); color:black;">Finish Character</button>
-        </div>
-
+      </div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(2)">← Back</button>
+        <button class="btn-primary" id="btn-background-next" disabled onclick="saveBackground()">Next: Class →</button>
+      </div>
     </div>
-</div>
 
-<script src="script.js"></script>
+    <!-- Step 4: Class -->
+    <div class="card wizard-panel hidden" id="step-4">
+      <h2>Choose a Class</h2>
+      <p class="hint mt-sm mb-md">Your class determines your abilities, hit die, armor training, and playstyle.</p>
+      <div class="selection-grid" id="class-grid"></div>
+      <div class="detail-panel" id="class-detail">
+        <h3 id="class-detail-name"></h3>
+        <div id="class-detail-body"></div>
+      </div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(3)">← Back</button>
+        <button class="btn-primary" id="btn-class-next" disabled onclick="saveClass()">Next: Ability Scores →</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Stats -->
+    <div class="card wizard-panel hidden" id="step-5">
+      <h2>Ability Scores</h2>
+
+      <!-- Roll method toggle -->
+      <div class="flex-row mb-md">
+        <button id="btn-auto-roll" class="btn-gold" onclick="autoRoll()">🎲 Auto-Roll (4d6 drop lowest)</button>
+        <button onclick="showManualEntry()">✍ Enter My Rolls</button>
+      </div>
+
+      <!-- Manual entry -->
+      <div id="manual-entry" class="hidden mb-md">
+        <p class="hint">Enter three sets of six scores each (your physical dice results), then pick one set.</p>
+        <div id="manual-sets"></div>
+        <button onclick="submitManualRolls()">Use These Rolls</button>
+      </div>
+
+      <!-- Roll set picker -->
+      <div id="roll-set-picker" class="hidden">
+        <p class="hint mb-sm">Pick one set to assign to your ability scores:</p>
+        <div class="roll-set-grid" id="roll-set-cards"></div>
+      </div>
+
+      <!-- Drag-and-drop assignment -->
+      <div id="stat-assignment" class="hidden">
+        <p class="hint mb-sm">Drag values into the ability score slots:</p>
+        <div class="token-pool" id="token-pool"></div>
+        <div class="ability-grid" id="ability-slots"></div>
+      </div>
+
+      <!-- Background ASI -->
+      <div id="asi-section" class="hidden">
+        <hr class="divider">
+        <h3>Background Ability Score Increases</h3>
+        <p class="hint mb-sm" id="asi-hint"></p>
+        <div class="flex-row mb-sm">
+          <label><input type="radio" name="asi-mode" value="two_one" checked onchange="renderASIOptions()"> +2 to one, +1 to another</label>
+          <label><input type="radio" name="asi-mode" value="one_one_one" onchange="renderASIOptions()"> +1 to all three</label>
+        </div>
+        <div id="asi-options"></div>
+        <div class="ability-grid mt-md" id="final-ability-grid"></div>
+      </div>
+
+      <div class="wizard-nav">
+        <button onclick="goToStep(4)">← Back</button>
+        <button class="btn-primary" id="btn-stats-next" disabled onclick="saveStats()">Next: Class Features →</button>
+      </div>
+    </div>
+
+    <!-- Step 6: Class Features -->
+    <div class="card wizard-panel hidden" id="step-6">
+      <h2>Level 1 Class Features</h2>
+      <p class="hint mt-sm mb-md">Make any choices required by your level 1 class features.</p>
+      <div id="features-choices"></div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(5)">← Back</button>
+        <button class="btn-primary" id="btn-features-next" onclick="saveFeatures()">Next: Skills →</button>
+      </div>
+    </div>
+
+    <!-- Step 7: Skills & Languages -->
+    <div class="card wizard-panel hidden" id="step-7">
+      <h2>Skills &amp; Languages</h2>
+      <p class="hint mt-sm">Skills already granted by your background are pre-checked and cannot be de-selected.</p>
+      <div id="skills-section"></div>
+      <hr class="divider">
+      <h3>Languages</h3>
+      <p class="hint mb-sm">You know Common plus 2 additional languages. Choose them here.</p>
+      <div id="languages-section"></div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(6)">← Back</button>
+        <button class="btn-primary" id="btn-skills-next" onclick="saveSkills()">Next: Equipment →</button>
+      </div>
+    </div>
+
+    <!-- Step 8: Equipment -->
+    <div class="card wizard-panel hidden" id="step-8">
+      <h2>Starting Equipment</h2>
+      <p class="hint mt-sm mb-md">Choose option A (specific gear) or option B (gold) for each source.</p>
+      <h3 id="equip-class-header">Class Equipment</h3>
+      <div id="class-equipment-options"></div>
+      <hr class="divider">
+      <h3 id="equip-bg-header">Background Equipment</h3>
+      <div id="background-equipment-options"></div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(7)">← Back</button>
+        <button class="btn-primary" id="btn-equipment-next" onclick="saveEquipment()">Next: Spells →</button>
+      </div>
+    </div>
+
+    <!-- Step 9: Spells (conditional) -->
+    <div class="card wizard-panel hidden" id="step-9">
+      <h2>Spells</h2>
+      <p class="hint mt-sm mb-md" id="spells-hint"></p>
+      <div id="cantrips-section"></div>
+      <div id="level1-spells-section"></div>
+      <div class="wizard-nav">
+        <button onclick="goToStep(8)">← Back</button>
+        <button class="btn-primary" id="btn-spells-next" onclick="saveSpells()">Next: Bio →</button>
+      </div>
+    </div>
+
+    <!-- Step 10: Bio & Alignment -->
+    <div class="card wizard-panel hidden" id="step-10">
+      <h2>Biography &amp; Alignment</h2>
+      <p class="hint mt-sm mb-md">Optional flavor. You can fill this in later too.</p>
+      <div class="grid-2">
+        <div>
+          <label for="alignment-select">Alignment</label>
+          <select id="alignment-select">
+            <option value="">— Choose or skip —</option>
+            <option>Lawful Good</option><option>Neutral Good</option><option>Chaotic Good</option>
+            <option>Lawful Neutral</option><option>True Neutral</option><option>Chaotic Neutral</option>
+            <option>Lawful Evil</option><option>Neutral Evil</option><option>Chaotic Evil</option>
+          </select>
+        </div>
+      </div>
+      <label for="bio-text">Character Bio / Backstory</label>
+      <textarea id="bio-text" rows="5" placeholder="Where are they from? What drives them?"></textarea>
+      <div class="wizard-nav">
+        <button onclick="goToStep(9)">← Back</button>
+        <button class="btn-primary" onclick="saveBio()">Complete Character →</button>
+      </div>
+    </div>
+
+    <!-- Step 11: Complete -->
+    <div class="card wizard-panel hidden" id="step-done">
+      <h2 class="text-center">⚔ Character Complete!</h2>
+      <p class="hint text-center mt-md mb-md" id="done-summary"></p>
+      <div class="flex-row text-center" style="justify-content:center; gap: 16px; margin-top: 20px;">
+        <a class="btn btn-gold" id="btn-export-json" href="#" onclick="exportJSON(event)">⬇ Download JSON</a>
+        <a class="btn btn-primary" id="btn-export-pdf" href="#" onclick="exportPDF(event)">🖨 Download PDF</a>
+        <button onclick="startNewCharacter()">+ New Character</button>
+      </div>
+    </div>
+
+  </div><!-- /wizard-steps -->
+</div><!-- /container -->
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="/static/script.js"></script>
 </body>
 </html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ char.character_name }} — Character Sheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,700;1,400&family=MedievalSharp&family=Uncial+Antiqua&display=swap');
+
+  :root {
+    --paper-bg: #f3e5ab;
+    --ink-color: #2c1810;
+    --ink-faded: #5d4037;
+    --accent-gold: #b8860b;
+    --accent-red: #8b0000;
+    --font-header: 'Uncial Antiqua', cursive;
+    --font-hand: 'MedievalSharp', cursive;
+    --font-book: 'Crimson Pro', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-book);
+    background: var(--paper-bg);
+    color: var(--ink-color);
+    padding: 20px 30px;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  h1 { font-family: var(--font-header); font-size: 28pt; color: var(--accent-red); letter-spacing: 1px; }
+  h2 { font-family: var(--font-header); font-size: 14pt; border-bottom: 2px solid var(--accent-gold); margin: 10px 0 6px; }
+  h3 { font-family: var(--font-header); font-size: 11pt; color: var(--ink-faded); }
+
+  .sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 3px double var(--ink-color);
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+  }
+
+  .sheet-subtitle { font-family: var(--font-hand); font-size: 11pt; color: var(--ink-faded); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  .box {
+    border: 1px solid var(--ink-faded);
+    padding: 10px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.3);
+    margin-bottom: 14px;
+  }
+
+  .ability-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .ability-cell {
+    border: 2px solid var(--ink-color);
+    border-radius: 4px;
+    padding: 6px;
+    text-align: center;
+    background: rgba(255,255,255,0.25);
+  }
+
+  .ability-label { font-family: var(--font-header); font-size: 7pt; display: block; letter-spacing: 0.5px; }
+  .ability-score { font-family: var(--font-hand); font-size: 20pt; line-height: 1; display: block; }
+  .ability-mod { font-family: var(--font-hand); font-size: 11pt; color: var(--accent-red); display: block; }
+
+  .stat-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dotted var(--ink-faded); }
+  .stat-row:last-child { border: none; }
+  .stat-label { font-family: var(--font-book); }
+  .stat-value { font-family: var(--font-hand); font-weight: bold; }
+
+  .prof-item { padding: 1px 0; font-family: var(--font-book); font-size: 10pt; }
+  .prof-item::before { content: "• "; color: var(--accent-gold); }
+
+  .spell-level-header { font-family: var(--font-header); color: var(--accent-red); font-size: 10pt; margin-top: 6px; }
+  .spell-name { font-family: var(--font-book); font-size: 10pt; padding: 1px 4px; }
+</style>
+</head>
+<body>
+
+<div class="sheet-header">
+  <div>
+    <h1>{{ char.character_name }}</h1>
+    <div class="sheet-subtitle">
+      {% set cls = class_obj.name if class_obj else "—" %}
+      {% set lvl = char.classes[0].level if char.classes else 1 %}
+      {% set sp = species_obj.name if species_obj else "—" %}
+      {% set bg = background_obj.name if background_obj else "—" %}
+      {{ cls }} {{ lvl }} · {{ sp }} · {{ bg }}
+      {% if char.alignment %} · {{ char.alignment }}{% endif %}
+    </div>
+    <div class="sheet-subtitle">Created by {{ char.created_by_display_name }}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-family: var(--font-hand); font-size: 24pt; color: var(--accent-red);">{{ hp }} HP</div>
+    <div style="font-family: var(--font-hand);">AC {{ ac }} · Speed {{ speed }} ft.</div>
+    <div style="font-family: var(--font-hand);">Prof. Bonus {{ prof_bonus }}</div>
+  </div>
+</div>
+
+<!-- Ability Scores -->
+<h2>Ability Scores</h2>
+<div class="ability-grid">
+  {% for key, label in [("str","Strength"),("dex","Dexterity"),("con","Constitution"),("int","Intelligence"),("wis","Wisdom"),("cha","Charisma")] %}
+  <div class="ability-cell">
+    <span class="ability-label">{{ label[:3].upper() }}</span>
+    <span class="ability-score">{{ stats[key] }}</span>
+    <span class="ability-mod">{{ modifiers[key] }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="two-col">
+  <!-- Left column -->
+  <div>
+    <!-- Combat Stats -->
+    <div class="box">
+      <h3>Combat</h3>
+      <div class="stat-row"><span class="stat-label">Hit Points</span><span class="stat-value">{{ hp }}</span></div>
+      <div class="stat-row"><span class="stat-label">Armor Class</span><span class="stat-value">{{ ac }}</span></div>
+      <div class="stat-row"><span class="stat-label">Speed</span><span class="stat-value">{{ speed }} ft.</span></div>
+      <div class="stat-row"><span class="stat-label">Initiative</span><span class="stat-value">{{ modifiers.dex }}</span></div>
+      <div class="stat-row"><span class="stat-label">Proficiency Bonus</span><span class="stat-value">{{ prof_bonus }}</span></div>
+    </div>
+
+    <!-- Proficiencies -->
+    <div class="box">
+      <h3>Skill Proficiencies</h3>
+      {% for sp in char.skill_proficiencies %}
+      <div class="prof-item">{{ sp.skill_name }}{% if sp.expertise %} (Expertise){% endif %}</div>
+      {% else %}
+      <div style="color: var(--ink-faded); font-style: italic;">None recorded</div>
+      {% endfor %}
+    </div>
+
+    <!-- Languages -->
+    <div class="box">
+      <h3>Languages</h3>
+      {% for lp in char.language_proficiencies %}
+      <div class="prof-item">{{ lp.language_name }}</div>
+      {% else %}
+      <div class="prof-item">Common</div>
+      {% endfor %}
+    </div>
+
+    <!-- Tool Proficiencies -->
+    {% if char.tool_proficiencies %}
+    <div class="box">
+      <h3>Tool Proficiencies</h3>
+      {% for tp in char.tool_proficiencies %}
+      <div class="prof-item">{{ tp.tool_name }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right column -->
+  <div>
+    <!-- Feats -->
+    {% if char.feats %}
+    <div class="box">
+      <h3>Feats</h3>
+      {% for cf in char.feats %}
+      <div class="prof-item">{{ cf.feat_name }} <span style="color: var(--ink-faded); font-size: 9pt;">({{ cf.source }})</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Equipment -->
+    <div class="box">
+      <h3>Equipment</h3>
+      {% for eq in char.equipment %}
+      <div class="prof-item">{{ eq.name }}{% if eq.quantity > 1 %} ×{{ eq.quantity }}{% endif %}{% if eq.equipped %} ✦{% endif %}</div>
+      {% else %}
+      <div style="color: var(--ink-faded); font-style: italic;">None recorded</div>
+      {% endfor %}
+    </div>
+
+    <!-- Weapon Mastery -->
+    {% if char.weapon_mastery_unlocks %}
+    <div class="box">
+      <h3>Weapon Mastery</h3>
+      {% for wm in char.weapon_mastery_unlocks %}
+      <div class="prof-item">{{ wm }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Spells -->
+    {% if char.spells %}
+    <div class="box">
+      <h3>Spells</h3>
+      {% set cantrips = char.spells | selectattr("level", "equalto", 0) | list %}
+      {% set leveled = char.spells | rejectattr("level", "equalto", 0) | list %}
+      {% if cantrips %}
+      <div class="spell-level-header">Cantrips</div>
+      {% for s in cantrips %}<div class="spell-name">{{ s.spell_name }}</div>{% endfor %}
+      {% endif %}
+      {% if leveled %}
+      <div class="spell-level-header">Level 1</div>
+      {% for s in leveled %}<div class="spell-name">{{ s.spell_name }}</div>{% endfor %}
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Bio -->
+{% if char.bio %}
+<div class="box">
+  <h3>Biography</h3>
+  <p style="font-style: italic; margin-top: 4px;">{{ char.bio }}</p>
+</div>
+{% endif %}
+
+</body>
+</html>

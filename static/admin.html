@@ -1,149 +1,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>DM Forge & Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        /* Admin Specific Overrides */
-        body { text-align: left; }
-        .admin-nav { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 20px; }
-        .nav-item { padding: 15px 25px; cursor: pointer; color: var(--text-muted); font-family: 'Cinzel', serif; font-size: 1.1rem; }
-        .nav-item:hover { color: var(--text-main); background: rgba(255,255,255,0.05); }
-        .nav-item.active { color: var(--accent-gold); border-bottom: 3px solid var(--accent-gold); background: rgba(204, 164, 59, 0.1); }
-        
-        .tab-content { display: none; animation: fadeIn 0.3s ease; }
-        .tab-content.active { display: block; }
-        
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .full-width { grid-column: span 2; }
-        
-        textarea { background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; width: 100%; border-radius: 4px; resize: vertical; height: 80px; font-family: 'Roboto', sans-serif; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
-        th { text-align: left; border-bottom: 1px solid var(--accent-gold); padding: 10px; color: var(--accent-gold); }
-        td { padding: 10px; border-bottom: 1px solid var(--border-color); }
-        
-        .badge { background: #333; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-right: 3px; }
-        
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>D&D 2024 — DM Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<div class="container">
+  <h1 class="page-title">DM Admin</h1>
+  <p class="page-subtitle">Roster · Codex · Grimoire</p>
 
-<div class="container" style="max-width: 1100px;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h1>DM Forge</h1>
-        <!-- FIXED: Use a pure styled link instead of a button tag -->
-        <a href="/static/index.html" class="btn" style="font-size:0.8rem; text-decoration:none;">Back to Game</a>
+  <div class="card">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('roster')">⚔ Roster</button>
+      <button class="tab-btn" onclick="switchTab('codex')">📜 Codex</button>
+      <button class="tab-btn" onclick="switchTab('grimoire')">🔮 Grimoire</button>
+      <button class="tab-btn" onclick="switchTab('import')">⬆ Import</button>
     </div>
 
-    <div class="admin-nav">
-        <div class="nav-item active" onclick="switchTab('roster')">Roster</div>
-        <div class="nav-item" onclick="switchTab('grimoire')">Grimoire (Spells)</div>
-        <div class="nav-item" onclick="switchTab('codex')">Codex (Classes/Species)</div>
+    <!-- Roster -->
+    <div id="tab-roster">
+      <div class="flex-between mb-md">
+        <h3>All Characters</h3>
+        <button class="btn-gold" onclick="loadRoster()">↺ Refresh</button>
+      </div>
+      <div id="roster-table"></div>
     </div>
 
-    <!-- TAB 1: ROSTER -->
-    <div id="tab-roster" class="tab-content active">
-        <div class="card">
-            <h3>Active Players</h3>
-            <table id="char-table">
-                <thead>
-                    <tr>
-                        <th>Discord ID</th><th>Character</th><th>Class/Race</th><th>Stats</th><th>Status</th><th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+    <!-- Codex -->
+    <div id="tab-codex" class="hidden">
+      <div class="tab-bar" style="border-color: var(--color-ink-faded);">
+        <button class="tab-btn active" onclick="switchCodexTab('species')">Species</button>
+        <button class="tab-btn" onclick="switchCodexTab('backgrounds')">Backgrounds</button>
+        <button class="tab-btn" onclick="switchCodexTab('feats')">Feats</button>
+      </div>
+      <div id="codex-species">
+        <div class="flex-between mb-sm mt-md">
+          <h3>Species</h3>
+          <button onclick="showSpeciesForm()">+ New Species</button>
         </div>
-    </div>
-
-    <!-- TAB 2: GRIMOIRE (Spell Creator) -->
-    <div id="tab-grimoire" class="tab-content">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-            <!-- Add Spell Form -->
-            <div class="card">
-                <h3>Scribe New Spell</h3>
-                <div class="form-grid">
-                    <input type="text" id="spell-name" placeholder="Spell Name (e.g. Fireball)" />
-                    <input type="number" id="spell-level" placeholder="Level (0=Cantrip)" min="0" max="9" />
-                    
-                    <select id="spell-school">
-                        <option value="Evocation">Evocation</option><option value="Abjuration">Abjuration</option>
-                        <option value="Conjuration">Conjuration</option><option value="Divination">Divination</option>
-                        <option value="Enchantment">Enchantment</option><option value="Illusion">Illusion</option>
-                        <option value="Necromancy">Necromancy</option><option value="Transmutation">Transmutation</option>
-                    </select>
-                    <input type="text" id="spell-cast" placeholder="Cast Time (e.g. 1 Action)" />
-                    
-                    <input type="text" id="spell-range" placeholder="Range (e.g. 120ft)" />
-                    <input type="text" id="spell-dur" placeholder="Duration (e.g. Instant)" />
-                    
-                    <input type="text" id="spell-comp" placeholder="Components (V, S, M)" class="full-width" />
-                    <textarea id="spell-desc" placeholder="Spell Description..." class="full-width"></textarea>
-                    
-                    <div class="full-width">
-                        <label class="ability-label">Classes Allowed:</label>
-                        <div id="class-checkboxes" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px;">
-                            <!-- JS will populate this -->
-                        </div>
-                    </div>
-                </div>
-                <button onclick="submitSpell()" style="width:100%; margin-top:15px;">Add to Grimoire</button>
-            </div>
-
-            <!-- Spell List View -->
-            <div class="card">
-                <h3>Existing Spells</h3>
-                <div id="spell-list-container" style="max-height: 500px; overflow-y: auto;">
-                    <table id="spell-table">
-                        <thead><tr><th>Lvl</th><th>Name</th><th>Classes</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+        <div id="species-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+          <label>Name</label><input type="text" id="sp-name">
+          <label>Creature Type</label><input type="text" id="sp-type" value="Humanoid">
+          <label>Size Options (comma-sep)</label><input type="text" id="sp-sizes" placeholder="Medium">
+          <label>Speed (ft)</label><input type="number" id="sp-speed" value="30">
+          <label>Traits (JSON array)</label>
+          <textarea id="sp-traits" rows="4" placeholder='[{"name":"Trait","description":"..."}]'></textarea>
+          <div class="flex-row">
+            <button class="btn-primary" onclick="saveSpeciesForm()">Save</button>
+            <button onclick="document.getElementById('species-form').classList.add('hidden')">Cancel</button>
+          </div>
         </div>
-    </div>
-
-    <!-- TAB 3: CODEX (Species/Classes) -->
-    <div id="tab-codex" class="tab-content">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-            
-            <!-- Add Species -->
-            <div class="card">
-                <h3>Discover Species</h3>
-                <input type="text" id="spec-name" placeholder="Name (e.g. Goliath)" />
-                <div class="options-row">
-                    <input type="number" id="spec-speed" placeholder="Speed (ft)" />
-                    <select id="spec-size"><option>Medium</option><option>Small</option><option>Large</option></select>
-                </div>
-                <textarea id="spec-desc" placeholder="Description..."></textarea>
-                <button onclick="submitSpecies()" style="width:100%; margin-top:10px;">Add Species</button>
-            </div>
-
-            <!-- Add Class -->
-            <div class="card">
-                <h3>Found Class</h3>
-                <input type="text" id="cls-name" placeholder="Name (e.g. Monk)" />
-                <div class="options-row">
-                    <input type="number" id="cls-hitdie" placeholder="Hit Die (d8)" />
-                    <input type="text" id="cls-primary" placeholder="Primary Stat (Dex/Wis)" />
-                </div>
-                <select id="cls-spell-stat">
-                    <option value="">None (Martial)</option>
-                    <option value="Intelligence">Intelligence</option>
-                    <option value="Wisdom">Wisdom</option>
-                    <option value="Charisma">Charisma</option>
-                </select>
-                <textarea id="cls-desc" placeholder="Description..."></textarea>
-                <button onclick="submitClass()" style="width:100%; margin-top:10px;">Add Class</button>
-            </div>
+        <div id="species-list"></div>
+      </div>
+      <div id="codex-backgrounds" class="hidden">
+        <div class="flex-between mb-sm mt-md">
+          <h3>Backgrounds</h3>
+          <button onclick="showBgForm()">+ New Background</button>
         </div>
+        <div id="bg-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+          <div class="grid-2">
+            <div><label>Name</label><input type="text" id="bg-name"></div>
+            <div><label>Origin Feat Name</label><input type="text" id="bg-feat"></div>
+            <div><label>Ability Score Options (comma-sep)</label><input type="text" id="bg-abilities" placeholder="Strength, Dexterity, Constitution"></div>
+            <div><label>Skill Proficiencies (comma-sep)</label><input type="text" id="bg-skills"></div>
+            <div><label>Tool Proficiency</label><input type="text" id="bg-tool"></div>
+            <div><label>Language Count</label><input type="number" id="bg-langs" value="0"></div>
+          </div>
+          <label>Equipment Options (JSON)</label>
+          <textarea id="bg-equip" rows="4" placeholder='[{"label":"A","items":[...]},{"label":"B","gold":50}]'></textarea>
+          <label>Description</label>
+          <textarea id="bg-desc" rows="2"></textarea>
+          <div class="flex-row">
+            <button class="btn-primary" onclick="saveBgForm()">Save</button>
+            <button onclick="document.getElementById('bg-form').classList.add('hidden')">Cancel</button>
+          </div>
+        </div>
+        <div id="bg-list"></div>
+      </div>
+      <div id="codex-feats" class="hidden">
+        <div class="flex-between mb-sm mt-md">
+          <h3>Feats</h3>
+          <button onclick="showFeatForm()">+ New Feat</button>
+        </div>
+        <div id="feat-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+          <div class="grid-2">
+            <div><label>Name</label><input type="text" id="feat-name"></div>
+            <div><label>Category</label>
+              <select id="feat-cat">
+                <option value="origin">Origin</option>
+                <option value="general">General</option>
+                <option value="fighting_style">Fighting Style</option>
+                <option value="epic_boon">Epic Boon</option>
+              </select>
+            </div>
+          </div>
+          <label>Prerequisites (comma-sep, or leave blank)</label>
+          <input type="text" id="feat-prereqs">
+          <label>Description</label>
+          <textarea id="feat-desc" rows="4"></textarea>
+          <div class="flex-row">
+            <button class="btn-primary" onclick="saveFeatForm()">Save</button>
+            <button onclick="document.getElementById('feat-form').classList.add('hidden')">Cancel</button>
+          </div>
+        </div>
+        <div id="feat-list"></div>
+      </div>
     </div>
 
+    <!-- Grimoire -->
+    <div id="tab-grimoire" class="hidden">
+      <div class="flex-between mb-sm mt-md">
+        <h3>Spells</h3>
+        <div class="flex-row">
+          <select id="spell-filter-level" onchange="loadGrimoireSpells()">
+            <option value="">All Levels</option>
+            ${[0,1,2,3,4,5,6,7,8,9].map(n => `<option value="${n}">Level ${n}</option>`).join("")}
+          </select>
+          <button onclick="showSpellForm()">+ New Spell</button>
+        </div>
+      </div>
+      <div id="spell-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+        <div class="grid-2">
+          <div><label>Name</label><input type="text" id="spell-name"></div>
+          <div><label>Level (0 = cantrip)</label><input type="number" id="spell-level" value="1" min="0" max="9"></div>
+          <div><label>School</label><input type="text" id="spell-school"></div>
+          <div><label>Casting Time</label><input type="text" id="spell-cast-time" value="Action"></div>
+          <div><label>Range</label><input type="text" id="spell-range"></div>
+          <div><label>Components</label><input type="text" id="spell-components"></div>
+          <div><label>Duration</label><input type="text" id="spell-duration"></div>
+          <div><label>Classes (comma-sep)</label><input type="text" id="spell-classes"></div>
+        </div>
+        <div class="flex-row mb-sm">
+          <label class="flex-row"><input type="checkbox" id="spell-conc"> Concentration</label>
+          <label class="flex-row"><input type="checkbox" id="spell-ritual"> Ritual</label>
+        </div>
+        <label>Description</label>
+        <textarea id="spell-desc" rows="4"></textarea>
+        <div class="flex-row">
+          <button class="btn-primary" onclick="saveSpellForm()">Save</button>
+          <button onclick="document.getElementById('spell-form').classList.add('hidden')">Cancel</button>
+        </div>
+      </div>
+      <div id="grimoire-list"></div>
+    </div>
+
+    <!-- Import -->
+    <div id="tab-import" class="hidden">
+      <h3 class="mt-md">JSON Import</h3>
+      <p class="hint mb-md">Paste a JSON array of items to bulk-import homebrew content.</p>
+      <div class="grid-2">
+        <div>
+          <label>Content Type</label>
+          <select id="import-type">
+            <option value="species">Species</option>
+            <option value="backgrounds">Backgrounds</option>
+            <option value="feats">Feats</option>
+            <option value="spells">Spells</option>
+          </select>
+        </div>
+      </div>
+      <label>JSON Payload</label>
+      <textarea id="import-json" rows="10" placeholder='[{"name":"...", ...}]'></textarea>
+      <div class="flex-row mt-sm">
+        <button class="btn-primary" onclick="runImport()">Import</button>
+      </div>
+      <div id="import-result" class="hint mt-sm"></div>
+      <hr class="divider">
+      <h3>Re-seed from Reference Files</h3>
+      <p class="hint mb-sm">Re-parses all reference/ markdown files. Only inserts new records (safe to re-run).</p>
+      <button class="btn-gold" onclick="triggerSeed()">↺ Seed Database</button>
+      <div id="seed-result" class="hint mt-sm"></div>
+    </div>
+  </div>
 </div>
 
-<script src="admin.js"></script>
+<div class="toast" id="toast"></div>
+<script src="/static/admin.js"></script>
 </body>
 </html>
