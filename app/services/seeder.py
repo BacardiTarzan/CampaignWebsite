@@ -671,5 +671,77 @@ def seed_all(db: Session) -> dict:
                 existing_equip.add(item["name"])
                 counts["equipment"] += 1
 
+    for item in _gear_items():
+        if item["name"] not in existing_equip:
+            db.add(Equipment(**item))
+            existing_equip.add(item["name"])
+            counts["equipment"] += 1
+
     db.commit()
     return counts
+
+
+def _gear_items() -> list[dict]:
+    def g(name, item_type, category, cost, description=None):
+        return {"name": name, "item_type": item_type, "category": category,
+                "cost": cost, "description": description, "source": "PHB 2024"}
+
+    return [
+        # Ammunition
+        g("Arrows (20)",    "ammunition", "Ammunition", "1 GP"),
+        g("Bolts (20)",     "ammunition", "Ammunition", "1 GP"),
+        g("Sling Bullets (20)", "ammunition", "Ammunition", "4 CP"),
+        g("Needles (50)",   "ammunition", "Ammunition", "1 GP"),
+        # Arcane focuses
+        g("Arcane Focus: Crystal",  "focus", "Arcane Focus", "10 GP"),
+        g("Arcane Focus: Orb",      "focus", "Arcane Focus", "20 GP"),
+        g("Arcane Focus: Rod",      "focus", "Arcane Focus", "10 GP"),
+        g("Arcane Focus: Staff",    "focus", "Arcane Focus", "5 GP"),
+        g("Arcane Focus: Wand",     "focus", "Arcane Focus", "10 GP"),
+        # Druidic focuses
+        g("Druidic Focus: Mistletoe",    "focus", "Druidic Focus", "1 GP"),
+        g("Druidic Focus: Wooden Staff", "focus", "Druidic Focus", "5 GP"),
+        g("Druidic Focus: Yew Wand",     "focus", "Druidic Focus", "10 GP"),
+        # Holy symbols
+        g("Holy Symbol: Amulet",   "focus", "Holy Symbol", "5 GP"),
+        g("Holy Symbol: Emblem",   "focus", "Holy Symbol", "5 GP"),
+        g("Holy Symbol: Reliquary","focus", "Holy Symbol", "5 GP"),
+        # Adventuring packs
+        g("Burglar's Pack",    "pack", "Pack", "16 GP", "Backpack, Ball Bearings, Bell, 10 Candles, Crowbar, Hooded Lantern, 7 Oil flasks, 5 Rations, Rope, Tinderbox, Waterskin"),
+        g("Diplomat's Pack",   "pack", "Pack", "39 GP", "Chest, Fine Clothes, Ink, Ink Pen, Lamp, 2 Oil flasks, Paper (5 sheets), Perfume, Sealing Wax, Soap"),
+        g("Dungeoneer's Pack", "pack", "Pack", "12 GP", "Backpack, Caltrops, Crowbar, 2 Flasks of Oil, 10 Pitons, Rope, Tinderbox, 10 Torches, 5 Rations, Waterskin"),
+        g("Entertainer's Pack","pack", "Pack", "40 GP", "Backpack, Bedroll, Costume (2), Candle (5), Rations (5), Waterskin, Disguise Kit"),
+        g("Explorer's Pack",   "pack", "Pack", "10 GP", "Backpack, Bedroll, 2 Torches, Tinderbox, 10 Rations, Waterskin, Rope"),
+        g("Priest's Pack",     "pack", "Pack", "33 GP", "Backpack, Blanket, Candle (10), Tinderbox, Alms Box, Incense (2 blocks), Censer, Vestments, Rations (2), Waterskin"),
+        g("Scholar's Pack",    "pack", "Pack", "40 GP", "Backpack, Book, Ink, Ink Pen, Parchment (10 sheets), Bag of Sand, Small Knife"),
+        # Key gear
+        g("Backpack",         "gear", "Gear", "2 GP",   "Holds up to 30 lb."),
+        g("Bedroll",          "gear", "Gear", "1 GP"),
+        g("Blanket",          "gear", "Gear", "5 SP"),
+        g("Candle",           "gear", "Gear", "1 CP"),
+        g("Chain (10 ft.)",   "gear", "Gear", "5 GP"),
+        g("Climber's Kit",    "gear", "Gear", "25 GP"),
+        g("Clothes, Fine",    "gear", "Gear", "15 GP"),
+        g("Clothes, Traveler's","gear","Gear","2 GP"),
+        g("Component Pouch",  "gear", "Gear", "25 GP",  "Holds material components for spells."),
+        g("Crowbar",          "gear", "Gear", "2 GP"),
+        g("Grappling Hook",   "gear", "Gear", "2 GP"),
+        g("Healer's Kit",     "gear", "Gear", "5 GP",   "10 uses; stabilize a creature at 0 HP."),
+        g("Holy Water",       "gear", "Gear", "25 GP"),
+        g("Lamp",             "gear", "Gear", "5 SP"),
+        g("Lantern, Hooded",  "gear", "Gear", "5 GP"),
+        g("Lock",             "gear", "Gear", "10 GP"),
+        g("Manacles",         "gear", "Gear", "2 GP"),
+        g("Mirror",           "gear", "Gear", "5 GP"),
+        g("Oil (flask)",      "gear", "Gear", "1 SP"),
+        g("Potion of Healing","gear", "Gear", "50 GP",  "Regain 2d4+2 HP."),
+        g("Pouch",            "gear", "Gear", "5 SP"),
+        g("Quiver",           "gear", "Gear", "1 GP"),
+        g("Rations (1 day)",  "gear", "Gear", "5 SP"),
+        g("Rope (50 ft.)",    "gear", "Gear", "1 GP"),
+        g("Tent (2-person)",  "gear", "Gear", "2 GP"),
+        g("Thieves' Tools",   "gear", "Gear", "25 GP",  "Required for lockpicking and trap disarming."),
+        g("Tinderbox",        "gear", "Gear", "5 SP"),
+        g("Torch",            "gear", "Gear", "1 CP",   "Bright light 20 ft., dim 40 ft., for 1 hour."),
+        g("Waterskin",        "gear", "Gear", "2 SP"),
+    ]

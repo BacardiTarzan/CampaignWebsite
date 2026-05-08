@@ -122,7 +122,7 @@
       <!-- Drag-and-drop assignment -->
       <div id="stat-assignment" class="hidden">
         <p class="hint mb-sm">Drag values into the ability score slots:</p>
-        <div class="token-pool" id="token-pool"></div>
+        <div class="token-pool" id="token-pool" ondragover="event.preventDefault()" ondrop="onPoolDrop(event)"></div>
         <div class="ability-grid" id="ability-slots"></div>
       </div>
 
@@ -180,6 +180,7 @@
       <hr class="divider">
       <h3 id="equip-bg-header">Background Equipment</h3>
       <div id="background-equipment-options"></div>
+      <div id="unified-shop" class="hidden mt-md"></div>
       <div class="wizard-nav">
         <button onclick="goToStep(7)">← Back</button>
         <button class="btn-primary" id="btn-equipment-next" onclick="saveEquipment()">Next: Spells →</button>

@@ -22,6 +22,9 @@ const state = {
   classEquipOption: null,
   bgEquipOption: null,
   resolvedItems: [],
+  shopCart: [],
+  shopTab: "weapon",
+  equipCatalog: [],
   cantripIds: [],
   spellIds: [],
   // content cache
@@ -43,12 +46,20 @@ const STEPS = [
   { label: "Bio" },
 ];
 
-const ALL_LANGUAGES = [
-  "Common", "Common Sign Language", "Draconic", "Dwarvish", "Elvish",
-  "Giant", "Gnomish", "Goblin", "Halfling", "Orc", "Celestial",
-  "Deep Speech", "Infernal", "Primordial", "Sylvan", "Thieves' Cant",
-  "Undercommon",
+const STANDARD_LANGUAGES = [
+  "Common Sign Language", "Draconic", "Dwarvish", "Elvish",
+  "Giant", "Gnomish", "Goblin", "Halfling", "Orc",
 ];
+
+const SPECIES_LANGUAGE = {
+  "Dragonborn": "Draconic",
+  "Dwarf": "Dwarvish",
+  "Elf": "Elvish",
+  "Gnome": "Gnomish",
+  "Goliath": "Giant",
+  "Halfling": "Halfling",
+  "Orc": "Orc",
+};
 
 const TOOL_OPTIONS = {
   "Choose one kind of Artisan's Tools": [
@@ -412,31 +423,93 @@ function onSlotDrop(e, stat) {
   e.preventDefault();
   e.currentTarget.classList.remove("drop-hover");
   const val = parseInt(e.dataTransfer.getData("text/plain"));
+  const fromStat = e.dataTransfer.getData("from-stat");
 
-  // Swap: if stat already has a value, put the old value back in the pool
-  const oldVal = state.assignedStats[stat];
-  if (oldVal !== null) {
-    const pool = document.getElementById("token-pool");
-    const returnToken = document.createElement("div");
-    returnToken.className = "stat-token";
-    returnToken.draggable = true;
-    returnToken.dataset.value = oldVal;
-    returnToken.textContent = oldVal;
-    returnToken.addEventListener("dragstart", onTokenDragStart);
-    returnToken.addEventListener("dragend", onTokenDragEnd);
-    pool.appendChild(returnToken);
+  // If dragging from another slot, swap values
+  if (fromStat && fromStat !== stat) {
+    const oldVal = state.assignedStats[stat];
+    // Update the source slot
+    state.assignedStats[fromStat] = oldVal;
+    const srcCell = document.getElementById(`slot-val-${fromStat}`);
+    if (oldVal !== null) {
+      srcCell.textContent = oldVal;
+      srcCell.dataset.value = oldVal;
+      srcCell.dataset.stat = fromStat;
+      const srcMod = Math.floor((oldVal - 10) / 2);
+      document.getElementById(`slot-mod-${fromStat}`).textContent = (srcMod >= 0 ? "+" : "") + srcMod;
+    } else {
+      srcCell.textContent = "—";
+      srcCell.draggable = false;
+      srcCell.classList.remove("assigned-token");
+      srcCell.ondragstart = null;
+      document.getElementById(`slot-mod-${fromStat}`).textContent = "";
+    }
+    state.assignedStats[stat] = val;
+  } else {
+    // Dragging from pool — if slot occupied, return old value to pool
+    const oldVal = state.assignedStats[stat];
+    if (oldVal !== null) {
+      const pool = document.getElementById("token-pool");
+      const returnToken = document.createElement("div");
+      returnToken.className = "stat-token";
+      returnToken.draggable = true;
+      returnToken.dataset.value = oldVal;
+      returnToken.textContent = oldVal;
+      returnToken.addEventListener("dragstart", onTokenDragStart);
+      returnToken.addEventListener("dragend", onTokenDragEnd);
+      pool.appendChild(returnToken);
+    }
+    // Remove token from pool
+    if (dragToken && dragToken.parentElement) {
+      dragToken.parentElement.removeChild(dragToken);
+    }
+    state.assignedStats[stat] = val;
   }
-
-  // Remove token from pool
-  if (dragToken && dragToken.parentElement) {
-    dragToken.parentElement.removeChild(dragToken);
-  }
-
-  state.assignedStats[stat] = val;
-  document.getElementById(`slot-val-${stat}`).textContent = val;
+  const cell = document.getElementById(`slot-val-${stat}`);
+  cell.textContent = val;
+  cell.draggable = true;
+  cell.dataset.value = val;
+  cell.dataset.stat = stat;
+  cell.classList.add("assigned-token");
+  cell.ondragstart = (ev) => {
+    dragToken = ev.currentTarget;
+    ev.currentTarget.classList.add("dragging");
+    ev.dataTransfer.setData("text/plain", ev.currentTarget.dataset.value);
+    ev.dataTransfer.setData("from-stat", stat);
+  };
+  cell.ondragend = (ev) => {
+    ev.currentTarget.classList.remove("dragging");
+    dragToken = null;
+  };
   const mod = Math.floor((val - 10) / 2);
   document.getElementById(`slot-mod-${stat}`).textContent = (mod >= 0 ? "+" : "") + mod;
 
+  checkAllStatsAssigned();
+}
+
+function onPoolDrop(e) {
+  e.preventDefault();
+  const fromStat = e.dataTransfer.getData("from-stat");
+  if (!fromStat) return;
+  const val = parseInt(e.dataTransfer.getData("text/plain"));
+  // Return to pool
+  const pool = document.getElementById("token-pool");
+  const token = document.createElement("div");
+  token.className = "stat-token";
+  token.draggable = true;
+  token.dataset.value = val;
+  token.textContent = val;
+  token.addEventListener("dragstart", onTokenDragStart);
+  token.addEventListener("dragend", onTokenDragEnd);
+  pool.appendChild(token);
+  // Clear the slot
+  state.assignedStats[fromStat] = null;
+  const cell = document.getElementById(`slot-val-${fromStat}`);
+  cell.textContent = "—";
+  cell.draggable = false;
+  cell.classList.remove("assigned-token");
+  cell.ondragstart = null;
+  document.getElementById(`slot-mod-${fromStat}`).textContent = "";
   checkAllStatsAssigned();
 }
 
@@ -743,21 +816,41 @@ function renderSkillsStep() {
      </div>`;
 
   // Language pickers
-  document.getElementById("languages-section").innerHTML =
-    `<div class="grid-2">
-       <div>
-         <label>Language 1</label>
-         <select id="lang-1">
-           ${ALL_LANGUAGES.filter(l => l !== "Common").map(l => `<option>${l}</option>`).join("")}
-         </select>
-       </div>
-       <div>
-         <label>Language 2</label>
-         <select id="lang-2">
-           ${ALL_LANGUAGES.filter(l => l !== "Common").map(l => `<option>${l}</option>`).join("")}
-         </select>
-       </div>
-     </div>`;
+  const className = state.currentClass?.name || "";
+  const speciesName = state.currentSpecies?.name || "";
+  const speciesLang = SPECIES_LANGUAGE[speciesName] || null;
+  const isRogue = className === "Rogue";
+  const isDruid = className === "Druid";
+
+  const langOptions = (defaultTo) => STANDARD_LANGUAGES.map(l =>
+    `<option${l === defaultTo ? " selected" : ""}>${l}</option>`
+  ).join("");
+
+  const classNote = isRogue
+    ? `<p class="hint mb-sm">Your class grants <strong>Thieves' Cant</strong> automatically, plus one extra language below.</p>`
+    : isDruid
+    ? `<p class="hint mb-sm">Your class grants <strong>Druidic</strong> automatically (secret language of Druids).</p>`
+    : "";
+
+  const extraPicker = isRogue ? `
+    <div>
+      <label>Extra Language (Thieves' Cant)</label>
+      <select id="lang-3">${langOptions(null)}</select>
+    </div>` : "";
+
+  document.getElementById("languages-section").innerHTML = `
+    ${classNote}
+    <div class="grid-2">
+      <div>
+        <label>Language 1</label>
+        <select id="lang-1">${langOptions(speciesLang)}</select>
+      </div>
+      <div>
+        <label>Language 2</label>
+        <select id="lang-2">${langOptions(speciesLang ? STANDARD_LANGUAGES.find(l => l !== speciesLang) : null)}</select>
+      </div>
+      ${extraPicker}
+    </div>`;
 }
 
 function checkSkillLimit(max) {
@@ -783,9 +876,13 @@ async function saveSkills() {
 
   const lang1 = document.getElementById("lang-1")?.value;
   const lang2 = document.getElementById("lang-2")?.value;
+  const lang3 = document.getElementById("lang-3")?.value;
   const langs = ["Common"];
+  if (state.currentClass?.name === "Rogue") langs.push("Thieves' Cant");
+  if (state.currentClass?.name === "Druid") langs.push("Druidic");
   if (lang1) langs.push(lang1);
   if (lang2 && lang2 !== lang1) langs.push(lang2);
+  if (lang3 && lang3 !== lang1 && lang3 !== lang2) langs.push(lang3);
 
   state.selectedSkills = chosen;
   state.selectedLanguages = langs;
@@ -795,7 +892,7 @@ async function saveSkills() {
       skills: chosen,
       languages: langs,
     });
-    renderEquipmentStep();
+    await renderEquipmentStep();
     showStep(8);
   } catch(e) { err(e.message); }
 }
@@ -803,13 +900,150 @@ async function saveSkills() {
 // ---------------------------------------------------------------------------
 // Step 8 — Equipment
 // ---------------------------------------------------------------------------
-function renderEquipmentStep() {
+async function renderEquipmentStep() {
   const cls = state.currentClass;
   const bg = state.currentBackground;
   document.getElementById("equip-class-header").textContent = `${cls?.name || "Class"} Equipment`;
   document.getElementById("equip-bg-header").textContent = `${bg?.name || "Background"} Equipment`;
+  state.shopCart = [];
+  state.shopTab = "weapon";
+  if (!state.equipCatalog.length) {
+    try { state.equipCatalog = await api("GET", "/api/content/equipment"); } catch(e) { state.equipCatalog = []; }
+  }
   renderEquipOptions("class-equipment-options", cls?.equipment_options || [], "class");
   renderEquipOptions("background-equipment-options", bg?.equipment_options || [], "bg");
+  updateShopVisibility();
+}
+
+function parseCostGP(costStr) {
+  if (!costStr) return 0;
+  const m = costStr.match(/([\d.]+)\s*(GP|SP|CP)/i);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  const unit = m[2].toUpperCase();
+  if (unit === "GP") return n;
+  if (unit === "SP") return n / 10;
+  return n / 100;
+}
+
+function shopGetBudget() {
+  const classOpts = state.currentClass?.equipment_options || [];
+  const bgOpts = state.currentBackground?.equipment_options || [];
+  const classOpt = classOpts.find(o => o.label === state.classEquipOption);
+  const bgOpt = bgOpts.find(o => o.label === state.bgEquipOption);
+  return ((classOpt?.gold && !classOpt?.items?.length) ? classOpt.gold : 0)
+       + ((bgOpt?.gold && !bgOpt?.items?.length) ? bgOpt.gold : 0);
+}
+
+function shopSpent() {
+  return state.shopCart.reduce((sum, i) => sum + i.qty * parseCostGP(i.cost), 0);
+}
+
+function shopAddItem(name) {
+  const item = state.equipCatalog.find(i => i.name === name);
+  if (!item) return;
+  const existing = state.shopCart.find(c => c.name === name);
+  if (existing) existing.qty++;
+  else state.shopCart.push({ name: item.name, qty: 1, cost: item.cost, item_type: item.item_type });
+  renderShop();
+}
+
+function shopRemoveItem(name) {
+  const idx = state.shopCart.findIndex(c => c.name === name);
+  if (idx === -1) return;
+  if (state.shopCart[idx].qty > 1) state.shopCart[idx].qty--;
+  else state.shopCart.splice(idx, 1);
+  renderShop();
+}
+
+function setShopTab(tab) {
+  state.shopTab = tab;
+  renderShop();
+}
+
+function updateShopVisibility() {
+  const budget = shopGetBudget();
+  const shopDiv = document.getElementById("unified-shop");
+  if (!shopDiv) return;
+  if (budget > 0) {
+    shopDiv.classList.remove("hidden");
+    renderShop();
+  } else {
+    shopDiv.classList.add("hidden");
+  }
+}
+
+function renderShop() {
+  const container = document.getElementById("unified-shop");
+  if (!container) return;
+  const budget = shopGetBudget();
+  const spent = Math.round(shopSpent() * 100) / 100;
+  const remaining = Math.round((budget - spent) * 100) / 100;
+  const over = spent > budget;
+  const pct = Math.min(100, budget > 0 ? Math.round((spent / budget) * 100) : 0);
+  const tab = state.shopTab;
+  const cart = state.shopCart;
+
+  const CAT_ORDER = ["Pack","Ammunition","Arcane Focus","Druidic Focus","Holy Symbol","Gear"];
+  const items = state.equipCatalog.filter(i => {
+    if (tab === "weapon") return i.item_type === "weapon";
+    if (tab === "armor")  return i.item_type === "armor" || i.item_type === "shield";
+    return ["gear","pack","focus","ammunition"].includes(i.item_type);
+  }).sort((a, b) => {
+    if (tab === "gear") {
+      const ca = CAT_ORDER.indexOf(a.category) === -1 ? 99 : CAT_ORDER.indexOf(a.category);
+      const cb = CAT_ORDER.indexOf(b.category) === -1 ? 99 : CAT_ORDER.indexOf(b.category);
+      if (ca !== cb) return ca - cb;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  container.innerHTML = `
+    <div class="shop-panel">
+      <h4 style="margin:0 0 10px;font-family:var(--font-display);letter-spacing:.05em;">Spend Your Gold (${budget} GP total)</h4>
+      <div class="shop-budget">
+        <div class="shop-budget-bar"><div class="shop-budget-fill${over ? " over" : ""}" style="width:${pct}%"></div></div>
+        <div class="shop-budget-text${over ? " over" : ""}">
+          ${spent} / ${budget} GP spent — <strong>${over ? "OVER BUDGET" : remaining + " GP remaining"}</strong>
+        </div>
+      </div>
+      <div class="shop-tabs">
+        <button class="shop-tab${tab === "weapon" ? " active" : ""}" onclick="setShopTab('weapon')">Weapons</button>
+        <button class="shop-tab${tab === "armor" ? " active" : ""}" onclick="setShopTab('armor')">Armor &amp; Shield</button>
+        <button class="shop-tab${tab === "gear" ? " active" : ""}" onclick="setShopTab('gear')">Gear &amp; Focuses</button>
+      </div>
+      <div class="shop-items">
+        ${items.map(item => {
+          const costGP = parseCostGP(item.cost);
+          const detail = item.item_type === "weapon"
+            ? `${item.damage || "—"} ${item.damage_type || ""}`.trim()
+            : item.item_type === "armor" || item.item_type === "shield"
+            ? (item.ac_formula || "—")
+            : item.description || item.category || "";
+          return `<div class="shop-item">
+            <span class="shop-item-name">${item.name}</span>
+            <span class="shop-item-detail">${detail}</span>
+            <span class="shop-item-cost">${item.cost || "—"}</span>
+            <button class="shop-add-btn${costGP > remaining ? " unaffordable" : ""}" onclick="shopAddItem('${item.name.replace(/'/g,"\\'")}')">+</button>
+          </div>`;
+        }).join("")}
+      </div>
+      ${cart.length ? `
+        <div class="shop-cart">
+          <div class="shop-cart-title">Cart</div>
+          ${cart.map(c => `
+            <div class="shop-cart-item">
+              <span class="shop-cart-name">${c.name}</span>
+              <span class="shop-cart-sub">${(c.qty * parseCostGP(c.cost)).toFixed(1)} GP</span>
+              <div class="shop-qty">
+                <button onclick="shopRemoveItem('${c.name.replace(/'/g,"\\'")}')">−</button>
+                <span>${c.qty}</span>
+                <button onclick="shopAddItem('${c.name.replace(/'/g,"\\'")}')">+</button>
+              </div>
+            </div>`).join("")}
+        </div>` : `<p class="hint mt-sm">No items added yet.</p>`}
+      <p class="shop-note">Only weapons and armor are in the catalog. Unspent gold will be noted on your sheet.</p>
+    </div>`;
 }
 
 function renderEquipOptions(containerId, options, prefix) {
@@ -819,7 +1053,7 @@ function renderEquipOptions(containerId, options, prefix) {
   container.innerHTML = options.map((opt, idx) => {
     const isGold = opt.gold && !opt.items?.length;
     const label = isGold
-      ? `<strong>Option ${opt.label}:</strong> ${opt.gold} GP`
+      ? `<strong>Option ${opt.label}:</strong> ${opt.gold} GP — add to shared gold pool`
       : `<strong>Option ${opt.label}:</strong> ` + renderItemList(opt.items || []);
     const choiceHtml = buildChoiceSelects(opt.items || [], opt.label, prefix);
     return `<div class="mb-sm">
@@ -832,7 +1066,6 @@ function renderEquipOptions(containerId, options, prefix) {
     </div>`;
   }).join("");
 
-  // Initialize first option
   if (options[0]) {
     state[prefix === "class" ? "classEquipOption" : "bgEquipOption"] = options[0].label;
   }
@@ -866,6 +1099,28 @@ function buildChoiceSelects(items, optLabel, prefix) {
 function selectEquipOption(prefix, label, optData) {
   if (prefix === "class") state.classEquipOption = label;
   else state.bgEquipOption = label;
+  updateShopVisibility();
+}
+
+function resolvePackOption(opt) {
+  const items = [];
+  for (const item of opt.items || []) {
+    if (item.type === "gold") {
+      items.push({ name: "Gold", qty: item.qty, equipped: false });
+    } else if (item.type === "ref") {
+      const toolName = state.currentBackground?.tool_proficiency;
+      if (toolName && !toolName.toLowerCase().startsWith("choose")) {
+        items.push({ name: toolName, qty: item.qty, equipped: false });
+      }
+    } else if (item.type === "choice") {
+      const selects = document.querySelectorAll(`[id*="-choice-"]`);
+      const sel = [...selects].find(s => s.id.includes(item.name.slice(0,6).replace(/\s/g,"")));
+      items.push({ name: sel ? sel.value : item.name, qty: item.qty, equipped: false });
+    } else {
+      items.push({ name: item.name, qty: item.qty, equipped: false });
+    }
+  }
+  return items;
 }
 
 async function saveEquipment() {
@@ -874,34 +1129,19 @@ async function saveEquipment() {
   const classOptLabel = state.classEquipOption || (cls?.equipment_options?.[0]?.label ?? "A");
   const bgOptLabel = state.bgEquipOption || (bg?.equipment_options?.[0]?.label ?? "A");
 
-  const allOpts = [
-    ...(cls?.equipment_options || []).filter(o => o.label === classOptLabel),
-    ...(bg?.equipment_options || []).filter(o => o.label === bgOptLabel),
-  ];
+  const classOpt = (cls?.equipment_options || []).find(o => o.label === classOptLabel);
+  const bgOpt = (bg?.equipment_options || []).find(o => o.label === bgOptLabel);
 
   const resolvedItems = [];
-  for (const opt of allOpts) {
-    if (opt.gold && !opt.items?.length) {
-      resolvedItems.push({ name: "Gold", qty: opt.gold, equipped: false });
-    } else {
-      for (const item of opt.items || []) {
-        if (item.type === "gold") {
-          resolvedItems.push({ name: "Gold", qty: item.qty, equipped: false });
-        } else if (item.type === "ref") {
-          const toolName = state.currentBackground?.tool_proficiency;
-          if (toolName && !toolName.toLowerCase().startsWith("choose")) {
-            resolvedItems.push({ name: toolName, qty: item.qty, equipped: false });
-          }
-        } else if (item.type === "choice") {
-          // Try to find a select for this choice
-          const selects = document.querySelectorAll(`[id*="-choice-"]`);
-          const sel = [...selects].find(s => s.id.includes(item.name.slice(0,6).replace(/\s/g,"")));
-          resolvedItems.push({ name: sel ? sel.value : item.name, qty: item.qty, equipped: false });
-        } else {
-          resolvedItems.push({ name: item.name, qty: item.qty, equipped: false });
-        }
-      }
-    }
+  const totalBudget = shopGetBudget();
+
+  if (classOpt && !(classOpt.gold && !classOpt.items?.length)) resolvedItems.push(...resolvePackOption(classOpt));
+  if (bgOpt && !(bgOpt.gold && !bgOpt.items?.length)) resolvedItems.push(...resolvePackOption(bgOpt));
+
+  if (totalBudget > 0) {
+    for (const c of state.shopCart) resolvedItems.push({ name: c.name, qty: c.qty, equipped: false });
+    const remaining = Math.round((totalBudget - shopSpent()) * 100) / 100;
+    if (remaining > 0) resolvedItems.push({ name: "Gold", qty: remaining, equipped: false });
   }
 
   state.resolvedItems = resolvedItems;
@@ -1075,6 +1315,7 @@ function startNewCharacter() {
     assignedStats: { str: null, dex: null, con: null, int: null, wis: null, cha: null },
     backgroundASI: {}, featuresChoices: [], selectedSkills: [], selectedLanguages: [],
     classEquipOption: null, bgEquipOption: null, resolvedItems: [],
+    shopCart: [], shopTab: "weapon",
     cantripIds: [], spellIds: [], currentClass: null, currentBackground: null, currentSpecies: null,
   });
   document.getElementById("display-name").value = "";
