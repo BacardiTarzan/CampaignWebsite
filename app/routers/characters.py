@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Any
 from ..database import get_db
+from ..dependencies import require_user
 from ..models.character import (
     Character, CharacterClass, StatRollSet, CharacterChoice,
     CharacterFeat, CharacterSpell, CharacterEquipment,
@@ -85,6 +86,11 @@ def _get_char(char_id: int, db: Session) -> Character:
     return char
 
 
+def _check_owner(char: Character, user: dict) -> None:
+    if char.owner_email and char.owner_email != user.get("email"):
+        raise HTTPException(403, "Not your character")
+
+
 def _compute_hp(char: Character, db: Session) -> int:
     cc = char.character_classes[0] if char.character_classes else None
     if not cc:
@@ -140,10 +146,11 @@ def _char_summary(char: Character) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.post("")
-def create_character(data: CreateCharacterIn, db: Session = Depends(get_db)):
+def create_character(data: CreateCharacterIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = Character(
         created_by_display_name=data.created_by_display_name,
         character_name=data.character_name,
+        owner_email=user["email"],
         wizard_step=2,
     )
     db.add(char)
@@ -153,14 +160,17 @@ def create_character(data: CreateCharacterIn, db: Session = Depends(get_db)):
 
 
 @router.get("/{char_id}")
-def get_character(char_id: int, db: Session = Depends(get_db)):
-    return _char_summary(_get_char(char_id, db))
+def get_character(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner(char, user)
+    return _char_summary(char)
 
 
 # --- Step 2: Species ---
 @router.post("/{char_id}/step/species")
-def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db)):
+def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     char.species_id = data.species_id
     species = db.get(Species, data.species_id)
     if species:
@@ -172,8 +182,9 @@ def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db
 
 # --- Step 3: Background ---
 @router.post("/{char_id}/step/background")
-def save_background(char_id: int, data: StepBackgroundIn, db: Session = Depends(get_db)):
+def save_background(char_id: int, data: StepBackgroundIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     char.background_id = data.background_id
     char.tool_proficiency_choice = data.tool_proficiency_choice
 
@@ -212,8 +223,9 @@ def save_background(char_id: int, data: StepBackgroundIn, db: Session = Depends(
 
 # --- Step 4: Class ---
 @router.post("/{char_id}/step/class")
-def save_class(char_id: int, data: StepClassIn, db: Session = Depends(get_db)):
+def save_class(char_id: int, data: StepClassIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     # Remove existing class entries
     for cc in list(char.character_classes):
         db.delete(cc)
@@ -228,8 +240,9 @@ def save_class(char_id: int, data: StepClassIn, db: Session = Depends(get_db)):
 
 # --- Step 5: Stats ---
 @router.post("/{char_id}/step/stats")
-def save_stats(char_id: int, data: StepStatsIn, db: Session = Depends(get_db)):
+def save_stats(char_id: int, data: StepStatsIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     if char.stat_roll_locked:
         raise HTTPException(403, "Stats are locked. Ask your DM to unlock.")
     char.base_attributes = data.base_attributes
@@ -244,8 +257,9 @@ def save_stats(char_id: int, data: StepStatsIn, db: Session = Depends(get_db)):
 
 # --- Stat roll ---
 @router.post("/{char_id}/roll-stats")
-def roll_stats(char_id: int, db: Session = Depends(get_db)):
+def roll_stats(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     if char.stat_roll_locked:
         raise HTTPException(403, "Stats are locked.")
     # Remove previous rolls
@@ -262,8 +276,9 @@ def roll_stats(char_id: int, db: Session = Depends(get_db)):
 
 # --- Step 6: Features ---
 @router.post("/{char_id}/step/features")
-def save_features(char_id: int, data: StepFeaturesIn, db: Session = Depends(get_db)):
+def save_features(char_id: int, data: StepFeaturesIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     # Clear existing feature choices
     for c in list(char.choices):
         db.delete(c)
@@ -291,8 +306,9 @@ def save_features(char_id: int, data: StepFeaturesIn, db: Session = Depends(get_
 
 # --- Step 7: Skills ---
 @router.post("/{char_id}/step/skills")
-def save_skills(char_id: int, data: StepSkillsIn, db: Session = Depends(get_db)):
+def save_skills(char_id: int, data: StepSkillsIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     # Remove class-sourced skills and all language proficiencies
     for sp in list(char.skill_proficiencies):
         if sp.source == "class":
@@ -313,8 +329,9 @@ def save_skills(char_id: int, data: StepSkillsIn, db: Session = Depends(get_db))
 
 # --- Step 8: Equipment ---
 @router.post("/{char_id}/step/equipment")
-def save_equipment(char_id: int, data: StepEquipmentIn, db: Session = Depends(get_db)):
+def save_equipment(char_id: int, data: StepEquipmentIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     for ce in list(char.equipment):
         db.delete(ce)
     db.flush()
@@ -341,8 +358,9 @@ def save_equipment(char_id: int, data: StepEquipmentIn, db: Session = Depends(ge
 
 # --- Step 9: Spells ---
 @router.post("/{char_id}/step/spells")
-def save_spells(char_id: int, data: StepSpellsIn, db: Session = Depends(get_db)):
+def save_spells(char_id: int, data: StepSpellsIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     for cs in list(char.spells):
         db.delete(cs)
     db.flush()
@@ -365,8 +383,9 @@ def save_spells(char_id: int, data: StepSpellsIn, db: Session = Depends(get_db))
 
 # --- Step 10: Bio ---
 @router.post("/{char_id}/step/bio")
-def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db)):
+def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     char.alignment = data.alignment
     char.bio = data.bio
     char.wizard_step = max(char.wizard_step, 10)
@@ -377,14 +396,16 @@ def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db)):
 
 # --- Exports ---
 @router.get("/{char_id}/export/json")
-def export_json(char_id: int, db: Session = Depends(get_db)):
+def export_json(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     return character_to_dict(char, db)
 
 
 @router.get("/{char_id}/export/pdf")
-def export_pdf(char_id: int, db: Session = Depends(get_db)):
+def export_pdf(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
+    _check_owner(char, user)
     char_dict = character_to_dict(char, db)
     cc = char.character_classes[0] if char.character_classes else None
     class_obj = db.get(DnDClass, cc.class_id) if cc else None

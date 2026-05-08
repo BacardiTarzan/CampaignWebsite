@@ -19,6 +19,7 @@ class Character(Base):
     speed = Column(Integer, nullable=True)
     equipment_choice = Column(JSON, nullable=True)  # {"class": "A", "background": "A"}
     tool_proficiency_choice = Column(String, nullable=True)  # resolved tool when background offers a choice
+    owner_email = Column(String, nullable=True)
     stat_roll_locked = Column(Boolean, default=False)
     wizard_step = Column(Integer, default=1)
     is_complete = Column(Boolean, default=False)

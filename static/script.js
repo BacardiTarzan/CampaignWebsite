@@ -73,9 +73,10 @@ async function api(method, path, body) {
   const opts = { method, headers: { "Content-Type": "application/json" } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
+  if (res.status === 401) { window.location.href = "/auth/login"; return; }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || `HTTP ${res.status}`);
   }
   return res.json().catch(() => null);
 }
@@ -219,8 +220,7 @@ function selectBackground(id) {
   const isChoice = bg.tool_proficiency && bg.tool_proficiency.toLowerCase().startsWith("choose");
   state.toolChoiceRequired = isChoice;
   if (isChoice) {
-    const opts = Object.entries(TOOL_OPTIONS).find(([k]) => bg.tool_proficiency.toLowerCase().includes(k.split(" ")[3]?.toLowerCase() || ""));
-    const choices = opts ? opts[1] : [];
+    const choices = TOOL_OPTIONS[bg.tool_proficiency] || [];
     state.toolChoiceOptions = choices;
     document.getElementById("tool-choice-label").textContent = bg.tool_proficiency + ":";
     toolSelect.innerHTML = choices.map(c => `<option>${c}</option>`).join("");
@@ -542,6 +542,54 @@ async function saveStats() {
 // ---------------------------------------------------------------------------
 // Step 6 — Class Features
 // ---------------------------------------------------------------------------
+const FIGHTING_STYLE_DESCRIPTIONS = {
+  "Archery":               "+2 bonus to attack rolls with Ranged weapons.",
+  "Blind Fighting":        "Blindsight with a range of 10 feet.",
+  "Defense":               "+1 AC while wearing Light, Medium, or Heavy armor.",
+  "Dueling":               "+2 damage rolls with a Melee weapon held in one hand while wielding no other weapons.",
+  "Great Weapon Fighting": "When rolling damage with a Melee weapon held in two hands (Two-Handed or Versatile), treat any 1 or 2 on a damage die as a 3.",
+  "Interception":          "Reaction — when a creature within 5 ft is hit by an attack, reduce damage by 1d10 + Proficiency Bonus. Must hold a Shield or Simple/Martial weapon.",
+  "Protection":            "Reaction — impose Disadvantage on an attack against an ally within 5 ft. Requires a Shield.",
+  "Thrown Weapon Fighting":"+ 2 damage on hits with a weapon that has the Thrown property.",
+  "Two-Weapon Fighting":   "Add your ability modifier to the damage of the extra attack granted by the Light property.",
+  "Unarmed Fighting":      "Unarmed Strikes deal 1d6 + Strength Bludgeoning damage (1d8 if not holding a weapon or Shield). At turn start, deal 1d4 Bludgeoning to one creature you've Grappled.",
+};
+
+const MASTERY_PROPERTIES = {
+  Club:          { name: "Slow",   desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
+  Dagger:        { name: "Nick",   desc: "Make the Light extra attack as part of the Attack action, not a Bonus Action." },
+  Greatclub:     { name: "Push",   desc: "On hit, push target up to 10 ft away (Large or smaller)." },
+  Handaxe:       { name: "Vex",    desc: "On hit, gain Advantage on your next attack roll against that target." },
+  Javelin:       { name: "Slow",   desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
+  "Light Hammer":{ name: "Nick",   desc: "Make the Light extra attack as part of the Attack action, not a Bonus Action." },
+  Mace:          { name: "Sap",    desc: "On hit, target has Disadvantage on its next attack roll before your next turn." },
+  Quarterstaff:  { name: "Topple", desc: "On hit, target makes a Constitution save or gains the Prone condition." },
+  Sickle:        { name: "Nick",   desc: "Make the Light extra attack as part of the Attack action, not a Bonus Action." },
+  Spear:         { name: "Sap",    desc: "On hit, target has Disadvantage on its next attack roll before your next turn." },
+  Dart:          { name: "Vex",    desc: "On hit, gain Advantage on your next attack roll against that target." },
+  "Light Crossbow":{ name: "Slow", desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
+  Shortbow:      { name: "Vex",    desc: "On hit, gain Advantage on your next attack roll against that target." },
+  Sling:         { name: "Slow",   desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
+  Battleaxe:     { name: "Topple", desc: "On hit, target makes a Constitution save or gains the Prone condition." },
+  Flail:         { name: "Sap",    desc: "On hit, target has Disadvantage on its next attack roll before your next turn." },
+  Glaive:        { name: "Graze",  desc: "On a miss, deal damage equal to your ability modifier (min 0)." },
+  Greataxe:      { name: "Cleave", desc: "On hit, make one free melee attack against a second creature within 5 ft (once per turn, no ability mod to damage)." },
+  Greatsword:    { name: "Graze",  desc: "On a miss, deal damage equal to your ability modifier (min 0)." },
+  Halberd:       { name: "Cleave", desc: "On hit, make one free melee attack against a second creature within 5 ft (once per turn, no ability mod to damage)." },
+  Lance:         { name: "Topple", desc: "On hit, target makes a Constitution save or gains the Prone condition." },
+  Longsword:     { name: "Sap",    desc: "On hit, target has Disadvantage on its next attack roll before your next turn." },
+  Maul:          { name: "Topple", desc: "On hit, target makes a Constitution save or gains the Prone condition." },
+  Morningstar:   { name: "Sap",    desc: "On hit, target has Disadvantage on its next attack roll before your next turn." },
+  Pike:          { name: "Push",   desc: "On hit, push target up to 10 ft away (Large or smaller)." },
+  Rapier:        { name: "Vex",    desc: "On hit, gain Advantage on your next attack roll against that target." },
+  Scimitar:      { name: "Nick",   desc: "Make the Light extra attack as part of the Attack action, not a Bonus Action." },
+  Shortsword:    { name: "Vex",    desc: "On hit, gain Advantage on your next attack roll against that target." },
+  Trident:       { name: "Topple", desc: "On hit, target makes a Constitution save or gains the Prone condition." },
+  Warhammer:     { name: "Push",   desc: "On hit, push target up to 10 ft away (Large or smaller)." },
+  "War Pick":    { name: "Slow",   desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
+  Whip:          { name: "Slow",   desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
+};
+
 const WEAPON_LIST = [
   "Club","Dagger","Greatclub","Handaxe","Javelin","Light Hammer","Mace",
   "Quarterstaff","Sickle","Spear","Dart","Light Crossbow","Shortbow","Sling",
@@ -571,9 +619,12 @@ function renderFeaturesStep() {
         <h3>${feat.name}</h3>
         <p class="hint mb-sm">Choose ${slots} weapons to apply mastery properties to. (Select exactly ${slots}.)</p>
         <div class="checklist" id="mastery-checklist">
-          ${WEAPON_LIST.map(w =>
-            `<label class="check-item"><input type="checkbox" class="mastery-cb" value="${w}" onchange="checkMasteryLimit(${slots})"> ${w}</label>`
-          ).join("")}
+          ${WEAPON_LIST.map(w => {
+            const mp = MASTERY_PROPERTIES[w];
+            const titleAttr = mp ? ` title="${mp.name}: ${mp.desc}"` : "";
+            const tag = mp ? `<span class="mastery-tag" title="${mp.desc}">${mp.name}</span>` : "";
+            return `<label class="check-item"${titleAttr}><input type="checkbox" class="mastery-cb" value="${w}" onchange="checkMasteryLimit(${slots})"> ${w}${tag}</label>`;
+          }).join("")}
         </div>
       </div>`;
     }
@@ -581,20 +632,30 @@ function renderFeaturesStep() {
       return `<div class="mb-md">
         <h3>${feat.name}</h3>
         <p class="hint mb-sm">Choose a Fighting Style feat:</p>
-        ${(feat.options||[]).map(opt =>
-          `<label class="flex-row mb-sm"><input type="radio" name="fighting_style" value="${opt}"> <strong>${opt}</strong></label>`
-        ).join("")}
+        ${(feat.options||[]).map(opt => {
+          const desc = FIGHTING_STYLE_DESCRIPTIONS[opt] || "";
+          return `<label class="feat-option">
+            <span class="feat-option-header"><input type="radio" name="fighting_style" value="${opt}"> ${opt}</span>
+            ${desc ? `<span class="feat-option-desc">${desc}</span>` : ""}
+          </label>`;
+        }).join("")}
       </div>`;
     }
     if (feat.choice_key === "divine_order") {
+      const divineDescs = {
+        "Protector":    "Gain proficiency with Martial weapons and Heavy armor.",
+        "Thaumaturge":  "Learn one extra Cleric cantrip and gain Expertise in Arcana or Religion.",
+      };
       return `<div class="mb-md">
         <h3>${feat.name}</h3>
         <p class="hint mb-sm">Choose your Divine Order:</p>
-        ${(feat.options||[]).map(opt =>
-          `<label class="flex-row mb-sm"><input type="radio" name="divine_order" value="${opt}"> <strong>${opt}</strong>
-           ${opt === "Protector" ? "— Martial weapons + Heavy armor" : "— Extra cantrip + Arcana/Religion bonus"}
-           </label>`
-        ).join("")}
+        ${(feat.options||[]).map(opt => {
+          const desc = divineDescs[opt] || "";
+          return `<label class="feat-option">
+            <span class="feat-option-header"><input type="radio" name="divine_order" value="${opt}"> ${opt}</span>
+            ${desc ? `<span class="feat-option-desc">${desc}</span>` : ""}
+          </label>`;
+        }).join("")}
       </div>`;
     }
     // Generic single-choice
@@ -664,7 +725,8 @@ function renderSkillsStep() {
   if (!cls || !bg) return;
 
   const bgSkills = bg.skill_proficiencies || [];
-  const classOptions = cls.skill_options || [];
+  const ALL_SKILLS = ["Acrobatics","Animal Handling","Arcana","Athletics","Deception","History","Insight","Intimidation","Investigation","Medicine","Nature","Perception","Performance","Persuasion","Religion","Sleight of Hand","Stealth","Survival"];
+  const classOptions = (cls.skill_options && cls.skill_options.length > 0) ? cls.skill_options : ALL_SKILLS;
   const needed = cls.skill_choices || 2;
 
   document.getElementById("skills-section").innerHTML =
@@ -1025,4 +1087,27 @@ function startNewCharacter() {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-showStep(1);
+async function boot() {
+  const res = await fetch("/auth/me");
+  if (res.status === 401) {
+    window.location.href = "/auth/login";
+    return;
+  }
+  const user = await res.json();
+
+  const badge = document.getElementById("user-badge");
+  if (badge) {
+    document.getElementById("user-name").textContent = user.name || user.email;
+    badge.style.display = "flex";
+  }
+
+  const nameInput = document.getElementById("display-name");
+  if (nameInput && !nameInput.value) {
+    nameInput.value = user.name || "";
+    state.displayName = nameInput.value;
+  }
+
+  showStep(1);
+}
+
+boot();

@@ -9,8 +9,16 @@
 <body>
 
 <div class="container">
-  <h1 class="page-title">Character Creator</h1>
-  <p class="page-subtitle">D&amp;D 2024 · Session Zero</p>
+  <div class="page-header-row">
+    <div>
+      <h1 class="page-title">Character Creator</h1>
+      <p class="page-subtitle">D&amp;D 2024 · Session Zero</p>
+    </div>
+    <div class="user-badge" id="user-badge" style="display:none">
+      <span id="user-name"></span>
+      <a href="/auth/logout" class="btn-logout">Sign out</a>
+    </div>
+  </div>
 
   <!-- Progress bar -->
   <div class="wizard-progress" id="wizard-progress"></div>

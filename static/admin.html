@@ -8,8 +8,16 @@
 </head>
 <body>
 <div class="container">
-  <h1 class="page-title">DM Admin</h1>
-  <p class="page-subtitle">Roster · Codex · Grimoire</p>
+  <div class="page-header-row">
+    <div>
+      <h1 class="page-title">DM Admin</h1>
+      <p class="page-subtitle">Roster · Codex · Grimoire</p>
+    </div>
+    <div class="user-badge" id="user-badge" style="display:none">
+      <span id="user-name"></span>
+      <a href="/auth/logout" class="btn-logout">Sign out</a>
+    </div>
+  </div>
 
   <div class="card">
     <div class="tab-bar">

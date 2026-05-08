@@ -1,0 +1,51 @@
+{
+  "classes": [
+    {
+      "name": "Barbarian",
+      "hit_die": 12,
+      "primary_ability": "Strength",
+      "spellcasting_ability": null,
+      "description": "A fierce warrior of primitive background who can enter a battle rage.",
+      "flavor_text": "For some, their rage springs from a communion with fierce animal spirits. For others, it draws from a roiling reservoir of anger at a world full of pain. For every barbarian, rage is a power that fuels not just a battle frenzy but uncanny reflexes, resilience, and feats of strength."
+    },
+    {
+      "name": "Wizard",
+      "hit_die": 6,
+      "primary_ability": "Intelligence",
+      "spellcasting_ability": "Intelligence",
+      "description": "A scholarly magic-user capable of manipulating the structures of reality.",
+      "flavor_text": "Wizards are supreme magic-users, defined and united by the works of the spells they cast. Drawing on the subtle weave of magic that permeates the cosmos, wizards cast spells of explosive fire, arcing lightning, subtle deception, and brute-force mind control."
+    },
+    {
+      "name": "Fighter",
+      "hit_die": 10,
+      "primary_ability": "Strength or Dexterity",
+      "spellcasting_ability": null,
+      "description": "A master of martial combat, skilled with a variety of weapons and armor.",
+      "flavor_text": "Fighters learn the basics of all combat styles. Every fighter can swing an axe, fence with a rapier, wield a longsword or a greatsword, use a bow, and even trap foes in a net with some degree of skill. Likewise, a fighter is adept with shields and every form of armor."
+    }
+  ],
+  "species": [
+    {
+      "name": "Human",
+      "speed": 30,
+      "size": "Medium",
+      "description": "+1 to all Ability Scores",
+      "flavor_text": "Humans are the most adaptable and ambitious people among the common races. Whatever drives them, humans are the innovators, the achievers, and the pioneers of the worlds."
+    },
+    {
+      "name": "Elf",
+      "speed": 30,
+      "size": "Medium",
+      "description": "Darkvision, Keen Senses, Fey Ancestry, Trance",
+      "flavor_text": "Elves are a magical people of otherworldly grace, living in the world but not entirely part of it. They live in places of ethereal beauty, in the midst of ancient forests or in silvery spires glittering with faerie light."
+    },
+    {
+      "name": "Dwarf",
+      "speed": 25,
+      "size": "Medium",
+      "description": "Darkvision, Dwarven Resilience, Combat Training",
+      "flavor_text": "Kingdoms rich in ancient grandeur, halls carved into the roots of mountains, the echoing of picks and hammers in deep mines and blazing forges, a commitment to clan and tradition, and a burning hatred of goblins and orcs—these common threads unite all dwarves."
+    }
+  ]
+}

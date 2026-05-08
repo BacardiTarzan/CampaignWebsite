@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Any
 from ..database import get_db
+from ..dependencies import require_admin
 from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment
 from ..models.character import Character
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
 # ---------------------------------------------------------------------------

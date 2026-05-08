@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DM Forge & Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { text-align: left; background-image: none; background-color: #1a1a1a; } /* Darker BG for Admin */
+        .container { max-width: 1200px; }
+        .admin-nav { display: flex; gap: 10px; border-bottom: 1px solid #444; margin-bottom: 20px; padding-bottom: 10px; }
+        .nav-item { 
+            padding: 10px 20px; cursor: pointer; 
+            color: #888; font-family: var(--font-header); font-size: 1.2rem; 
+            border-radius: 4px; transition: all 0.2s;
+        }
+        .nav-item:hover { background: #333; color: #ccc; }
+        .nav-item.active { background: var(--accent-gold); color: #000; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: #fff; color: #000; border-radius: 4px; overflow: hidden; }
+        th { background: #333; color: var(--accent-gold); padding: 12px; text-align: left; font-family: var(--font-header); }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        
+        /* Admin Card Override */
+        .admin-card {
+            background: #fff; color: #333;
+            padding: 25px; border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            height: 100%;
+        }
+        .admin-card h3 { color: var(--accent-red); border-bottom: 2px solid var(--accent-gold); padding-bottom: 10px; }
+        
+        .forge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        textarea { height: 100px; font-family: sans-serif; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+        <h1 style="color:var(--accent-gold); text-shadow:none;">DM Forge</h1>
+        <a href="/static/index.html" class="btn">Back to Game</a>
+    </div>
+
+    <div class="admin-nav">
+        <div class="nav-item active" onclick="switchTab('roster')">Roster</div>
+        <div class="nav-item" onclick="switchTab('grimoire')">Grimoire</div>
+        <div class="nav-item" onclick="switchTab('codex')">Codex</div>
+    </div>
+
+    <!-- TAB 1: ROSTER -->
+    <div id="tab-roster" class="tab-content active">
+        <div class="admin-card">
+            <h3>Active Players</h3>
+            <table id="char-table">
+                <thead><tr><th>ID</th><th>Character</th><th>Class/Race</th><th>Stats</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 2: GRIMOIRE -->
+    <div id="tab-grimoire" class="tab-content">
+        <div class="forge-grid">
+            <div class="admin-card">
+                <h3>Scribe New Spell</h3>
+                <div class="form-grid">
+                    <div class="full-width"><label class="ability-label">Name</label><input type="text" id="spell-name" /></div>
+                    
+                    <div><label class="ability-label">Level</label><input type="number" id="spell-level" min="0" max="9" value="1" /></div>
+                    <div>
+                        <label class="ability-label">School</label>
+                        <select id="spell-school">
+                            <option>Evocation</option><option>Abjuration</option><option>Conjuration</option>
+                            <option>Divination</option><option>Enchantment</option><option>Illusion</option>
+                            <option>Necromancy</option><option>Transmutation</option>
+                        </select>
+                    </div>
+                    
+                    <div><label class="ability-label">Cast Time</label><input type="text" id="spell-cast" /></div>
+                    <div><label class="ability-label">Range</label><input type="text" id="spell-range" /></div>
+                    
+                    <div><label class="ability-label">Duration</label><input type="text" id="spell-dur" /></div>
+                    <div><label class="ability-label">Components</label><input type="text" id="spell-comp" /></div>
+                    
+                    <div class="full-width">
+                        <label class="ability-label">Description</label>
+                        <textarea id="spell-desc"></textarea>
+                    </div>
+                    
+                    <div class="full-width">
+                        <label class="ability-label">Classes</label>
+                        <div id="class-checkboxes" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+                    </div>
+                </div>
+                <button onclick="submitSpell()" style="width:100%; margin-top:15px;">Add Spell</button>
+            </div>
+
+            <div class="admin-card">
+                <h3>Spellbook</h3>
+                <div id="spell-list-container" style="height: 500px; overflow-y: auto;">
+                    <table id="spell-table">
+                        <thead><tr><th>Lvl</th><th>Name</th><th>Classes</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: CODEX -->
+    <div id="tab-codex" class="tab-content">
+        <div class="forge-grid">
+            <!-- Add Species -->
+            <div class="admin-card">
+                <h3>Add Species</h3>
+                <label class="ability-label">Name</label>
+                <input type="text" id="spec-name" />
+                
+                <div class="options-row">
+                    <div><label class="ability-label">Speed</label><input type="number" id="spec-speed" value="30" /></div>
+                    <div><label class="ability-label">Size</label><select id="spec-size"><option>Medium</option><option>Small</option><option>Large</option></select></div>
+                </div>
+                
+                <label class="ability-label">Game Rules</label>
+                <textarea id="spec-desc" placeholder="Traits..."></textarea>
+                
+                <label class="ability-label">Flavor Text</label>
+                <textarea id="spec-flavor" placeholder="Lore..."></textarea>
+                
+                <button onclick="submitSpecies()" style="width:100%; margin-top:10px;">Save Species</button>
+            </div>
+
+            <!-- Add Class -->
+            <div class="admin-card">
+                <h3>Add Class</h3>
+                <label class="ability-label">Name</label>
+                <input type="text" id="cls-name" />
+                
+                <div class="options-row">
+                    <div><label class="ability-label">Hit Die</label><input type="number" id="cls-hitdie" value="8" /></div>
+                    <div><label class="ability-label">Primary Stat</label><input type="text" id="cls-primary" /></div>
+                </div>
+                
+                <label class="ability-label">Spellcasting Ability</label>
+                <select id="cls-spell-stat">
+                    <option value="">None</option><option>Intelligence</option><option>Wisdom</option><option>Charisma</option>
+                </select>
+                
+                <label class="ability-label">Game Rules</label>
+                <textarea id="cls-desc" placeholder="Features..."></textarea>
+                
+                <label class="ability-label">Flavor Text</label>
+                <textarea id="cls-flavor" placeholder="Lore..."></textarea>
+                
+                <button onclick="submitClass()" style="width:100%; margin-top:10px;">Save Class</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

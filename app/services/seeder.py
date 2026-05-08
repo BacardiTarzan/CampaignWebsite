@@ -225,16 +225,18 @@ def _parse_class_file(path: Path) -> dict:
         if w.lower() in weapon_raw.lower():
             weapons.append(w)
 
-    # Skill choices
-    skill_raw = _field(text, "Skill Proficiencies")
+    # Skill choices — handles "**Skill Proficiencies (choose N):** list" and "**Skill Proficiencies:** Choose any N"
     skill_choices = 2
     skill_options = []
-    if skill_raw:
-        cm = re.search(r"choose\s+(\d+)", skill_raw, re.IGNORECASE)
-        if cm:
-            skill_choices = int(cm.group(1))
-        after_colon = re.sub(r".*?:\s*", "", skill_raw, count=1)
-        skill_options = _split_list(after_colon)
+    skill_m = re.search(r"\*\*Skill Proficiencies[^*]*?\(choose\s+(\d+)\)[^*]*:\*\*\s*(.+)", text)
+    if skill_m:
+        skill_choices = int(skill_m.group(1))
+        skill_options = _split_list(skill_m.group(2).strip())
+    else:
+        skill_m2 = re.search(r"\*\*Skill Proficiencies:\*\*\s*Choose any\s+(\d+)", text, re.IGNORECASE)
+        if skill_m2:
+            skill_choices = int(skill_m2.group(1))
+            skill_options = []  # "any" means no restricted list
 
     # Starting equipment
     equip_raw = _field(text, "Starting Equipment") or ""

@@ -1,0 +1,227 @@
+/* --- IMPORTS --- */
+/* Uncial Antiqua: Medieval Manuscript Headers (Replacing Pinyon)
+   MedievalSharp: Readable Handwritten Text
+   Crimson Pro: Standard Book Text */
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,700;1,400&family=MedievalSharp&family=Uncial+Antiqua&display=swap');
+
+/* --- VARIABLES --- */
+:root {
+    --bg-wood: #2d1b0e;
+    --paper-bg: #f3e5ab;
+    --ink-color: #2c1810;
+    --ink-faded: #5d4037;
+    --accent-gold: #b8860b;
+    --accent-red: #8b0000;
+    
+    /* Fonts */
+    --font-header: 'Uncial Antiqua', cursive; /* NEW FONT */
+    --font-hand: 'MedievalSharp', cursive;
+    --font-book: 'Crimson Pro', serif;
+}
+
+/* --- BASE --- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: var(--font-book);
+    color: var(--ink-color);
+    line-height: 1.5;
+    text-align: center;
+    min-height: 100vh;
+    padding-bottom: 50px;
+    background-color: var(--bg-wood);
+    background-image: 
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 20px),
+        radial-gradient(circle at 50% 0, rgba(0,0,0,0) 20%, rgba(0,0,0,0.6) 100%);
+}
+
+/* --- TYPOGRAPHY --- */
+h1, h2 {
+    font-family: var(--font-header);
+    color: var(--ink-color);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase; /* Uncial looks best in caps/small-caps style */
+    letter-spacing: 1px;
+}
+
+h1 { 
+    font-size: 3.5rem; 
+    color: #d4c4a8;
+    text-shadow: 3px 3px 0px #000; 
+}
+
+h2 { 
+    font-size: 2rem; 
+    border-bottom: 2px solid var(--accent-gold); 
+    display: inline-block; 
+    padding-bottom: 5px;
+}
+
+h3 { 
+    font-family: var(--font-header); 
+    font-size: 1.4rem; 
+    color: var(--ink-faded); 
+    border-bottom: 1px solid #d7ccc8; 
+    margin-bottom: 15px; 
+    margin-top: 10px;
+}
+
+/* --- LAYOUT --- */
+.container {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 20px;
+}
+
+/* --- SCROLL / PAPER CARD --- */
+.card {
+    background-color: var(--paper-bg);
+    color: var(--ink-color);
+    padding: 40px;
+    margin-bottom: 30px;
+    position: relative;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+    border-radius: 2px;
+    /* Paper Texture */
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* Scroll Rollers */
+.card::before, .card::after {
+    content: ""; display: block; height: 25px;
+    background: linear-gradient(to bottom, #3e2723, #5d4037);
+    border-radius: 12px;
+    margin: -30px -50px 25px -50px;
+    box-shadow: 0 5px 10px rgba(0,0,0,0.5);
+    border: 1px solid #2d1b0e;
+}
+.card::after { margin: 25px -50px -30px -50px; }
+
+/* --- FORMS & INPUTS --- */
+input, select, textarea {
+    background: rgba(255,255,255,0.3);
+    border: 1px solid var(--ink-faded);
+    font-family: var(--font-hand);
+    font-size: 1.1rem;
+    color: var(--ink-color);
+    padding: 8px;
+    width: 100%;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    background: rgba(255,255,255,0.6);
+    box-shadow: 0 0 5px var(--accent-gold);
+}
+
+label.ability-label {
+    display: block;
+    text-align: left;
+    font-family: var(--font-header);
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+    color: var(--ink-faded);
+}
+
+/* --- BUTTONS --- */
+button, .btn {
+    font-family: var(--font-header);
+    font-size: 1rem;
+    padding: 10px 20px;
+    border: 2px solid #3e2723;
+    background: #5d4037;
+    color: #f3e5ab;
+    cursor: pointer;
+    border-radius: 4px;
+    box-shadow: 0 4px 0 #2d1b0e; /* 3D Clicky Effect */
+    transition: all 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: inline-block;
+    text-decoration: none;
+}
+
+button:active, .btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #2d1b0e;
+}
+
+button:hover, .btn:hover {
+    background: #4e342e;
+    color: white;
+}
+
+button.danger { background: #8b0000; border-color: #500000; box-shadow: 0 4px 0 #500000; }
+button.danger:hover { background: #a00000; }
+button.danger:active { box-shadow: 0 0 0 #500000; }
+
+/* --- GRIDS --- */
+.options-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+.options-row > * { flex: 1; }
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    text-align: left;
+}
+.full-width { grid-column: span 2; }
+
+/* --- SHEET ELEMENTS --- */
+.sheet-header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    border-bottom: 3px double var(--ink-color);
+    padding-bottom: 15px; margin-bottom: 25px;
+}
+
+#sheet-name { font-family: var(--font-header); font-size: 3.5rem; color: var(--accent-red); line-height: 1; text-shadow: none; }
+#sheet-hp { font-family: var(--font-hand); font-size: 3rem; color: var(--accent-red); }
+
+.ability-card {
+    border: 2px solid var(--ink-color);
+    border-radius: 5px; padding: 10px;
+    background: rgba(255,255,255,0.2);
+}
+.ability-label { font-family: var(--font-header); font-weight: normal; }
+.ability-score { font-family: var(--font-hand); font-size: 2rem; line-height: 1; }
+
+/* --- BOOK MODAL --- */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8); z-index: 100;
+    display: flex; justify-content: center; align-items: center;
+    backdrop-filter: blur(5px);
+}
+.spellbook {
+    width: 90vw; max-width: 1000px; height: 80vh;
+    background: #fdf3d0;
+    border: 12px solid #3e2723;
+    border-radius: 8px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    position: relative;
+    box-shadow: 0 0 60px rgba(0,0,0,0.9);
+}
+.spellbook::before {
+    content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
+    background: #3e2723; transform: translateX(-50%);
+    box-shadow: inset 5px 0 20px rgba(0,0,0,0.2);
+}
+.page { padding: 30px; overflow-y: auto; font-family: var(--font-book); }
+.page-title { font-family: var(--font-header); color: var(--accent-red); text-align: center; border: none; margin-bottom: 20px;}
+
+/* --- UTILS --- */
+.hidden { display: none !important; }
+.flex-center { display: flex; justify-content: center; align-items: center; gap: 10px;}
+.sheet-stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.dnd-container { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
+.token-pool { display: flex; justify-content: center; gap: 15px; padding: 15px; border: 2px dashed var(--ink-faded); border-radius: 8px; min-height:80px; }
+.stat-token { width: 50px; height: 50px; background: var(--ink-color); color: var(--paper-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-hand); font-size: 1.4rem; cursor: grab; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
+.stat-slots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+.stat-slot { border: 2px solid var(--ink-faded); padding: 10px; min-height: 90px; display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.05); border-radius: 6px;}

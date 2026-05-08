@@ -7,6 +7,8 @@ async function api(method, path, body) {
   const opts = { method, headers: { "Content-Type": "application/json" } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
+  if (res.status === 401) { window.location.href = "/auth/login"; return; }
+  if (res.status === 403) { document.body.innerHTML = "<div style='padding:2rem;font-family:serif'>Access denied.</div>"; return; }
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     throw new Error(e.detail || `HTTP ${res.status}`);
@@ -337,4 +339,19 @@ async function triggerSeed() {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-loadRoster();
+async function boot() {
+  const res = await fetch("/auth/me");
+  if (res.status === 401) { window.location.href = "/auth/login"; return; }
+  if (res.status === 403) { document.body.innerHTML = "<div style='padding:2rem;font-family:serif'>Access denied.</div>"; return; }
+  const user = await res.json();
+
+  const badge = document.getElementById("user-badge");
+  if (badge) {
+    document.getElementById("user-name").textContent = user.name || user.email;
+    badge.style.display = "flex";
+  }
+
+  loadRoster();
+}
+
+boot();
