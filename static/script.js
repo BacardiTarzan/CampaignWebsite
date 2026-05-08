@@ -822,35 +822,45 @@ function renderSkillsStep() {
   const isRogue = className === "Rogue";
   const isDruid = className === "Druid";
 
-  const langOptions = (defaultTo) => STANDARD_LANGUAGES.map(l =>
-    `<option${l === defaultTo ? " selected" : ""}>${l}</option>`
-  ).join("");
+  const grantedLanguages = [];
+  if (isRogue) grantedLanguages.push("Thieves' Cant");
+  if (isDruid) grantedLanguages.push("Druidic");
 
-  const classNote = isRogue
-    ? `<p class="hint mb-sm">Your class grants <strong>Thieves' Cant</strong> automatically, plus one extra language below.</p>`
-    : isDruid
-    ? `<p class="hint mb-sm">Your class grants <strong>Druidic</strong> automatically (secret language of Druids).</p>`
+  const classNote = grantedLanguages.length
+    ? `<p class="hint mb-sm">Your class grants you <strong>${grantedLanguages.join(" and ")}</strong> — no choice needed.</p>`
     : "";
 
-  const extraPicker = isRogue ? `
-    <div>
-      <label>Extra Language (Thieves' Cant)</label>
-      <select id="lang-3">${langOptions(null)}</select>
-    </div>` : "";
+  const pickerCount = isRogue ? 3 : 2;
+  const defaults = [speciesLang, STANDARD_LANGUAGES.find(l => l !== speciesLang), null];
+
+  const pickerHtml = Array.from({ length: pickerCount }, (_, i) =>
+    `<div><label>Language ${i + 1}</label>
+      <select id="lang-${i + 1}" onchange="syncLangPickers()">
+        <option value="">— choose —</option>
+        ${STANDARD_LANGUAGES.map(l => `<option${l === defaults[i] ? " selected" : ""}>${l}</option>`).join("")}
+      </select></div>`
+  ).join("");
 
   document.getElementById("languages-section").innerHTML = `
     ${classNote}
-    <div class="grid-2">
-      <div>
-        <label>Language 1</label>
-        <select id="lang-1">${langOptions(speciesLang)}</select>
-      </div>
-      <div>
-        <label>Language 2</label>
-        <select id="lang-2">${langOptions(speciesLang ? STANDARD_LANGUAGES.find(l => l !== speciesLang) : null)}</select>
-      </div>
-      ${extraPicker}
-    </div>`;
+    <div class="grid-2">${pickerHtml}</div>`;
+
+  syncLangPickers();
+}
+
+function syncLangPickers() {
+  const selects = [1, 2, 3].map(i => document.getElementById(`lang-${i}`)).filter(Boolean);
+  const selected = selects.map(s => s.value);
+  selects.forEach((sel, i) => {
+    const others = selected.filter((_, j) => j !== i);
+    const current = sel.value;
+    sel.innerHTML = `<option value="">— choose —</option>` + STANDARD_LANGUAGES
+      .filter(l => l === current || !others.includes(l))
+      .map(l => `<option${l === current ? " selected" : ""}>${l}</option>`)
+      .join("");
+  });
+  const allChosen = selects.every(s => s.value !== "");
+  document.getElementById("btn-skills-next").disabled = !allChosen;
 }
 
 function checkSkillLimit(max) {
@@ -876,10 +886,10 @@ async function saveSkills() {
 
   const lang1 = document.getElementById("lang-1")?.value;
   const lang2 = document.getElementById("lang-2")?.value;
-  const lang3 = document.getElementById("lang-3")?.value;
   const langs = ["Common"];
   if (state.currentClass?.name === "Rogue") langs.push("Thieves' Cant");
   if (state.currentClass?.name === "Druid") langs.push("Druidic");
+  const lang3 = document.getElementById("lang-3")?.value;
   if (lang1) langs.push(lang1);
   if (lang2 && lang2 !== lang1) langs.push(lang2);
   if (lang3 && lang3 !== lang1 && lang3 !== lang2) langs.push(lang3);
