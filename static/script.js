@@ -258,7 +258,7 @@ async function loadClasses() {
 function renderClassGrid() {
   const grid = document.getElementById("class-grid");
   grid.innerHTML = state.allClasses.map(c => {
-    const casting = c.spellcasting_type ? ` · ${c.spellcasting_type} caster` : "";
+    const casting = "";
     return `<div class="select-card" data-id="${c.id}" onclick="selectClass(${c.id})">
       <span class="select-card-name">${c.name}</span>
       <span class="select-card-sub">d${c.hit_die} · ${(c.primary_abilities||[]).join("/")}${casting}</span>
@@ -313,12 +313,9 @@ function renderStatsStep() {
 }
 
 function renderManualSets() {
-  const container = document.getElementById("manual-sets");
-  container.innerHTML = [1, 2, 3].map(i =>
-    `<div class="mb-sm">
-      <label>Set ${i} — enter six values (comma-separated, e.g. 15,14,13,12,10,8):</label>
-      <input type="text" id="manual-set-${i}" placeholder="15, 14, 13, 12, 10, 8">
-    </div>`
+  const container = document.getElementById("manual-fields");
+  container.innerHTML = [1,2,3,4,5,6].map(i =>
+    `<input type="number" id="manual-val-${i}" min="1" max="20" placeholder="${i}">`
   ).join("");
 }
 
@@ -326,6 +323,7 @@ function showManualEntry() {
   document.getElementById("manual-entry").classList.remove("hidden");
   document.getElementById("roll-set-picker").classList.add("hidden");
   document.getElementById("stat-assignment").classList.add("hidden");
+  document.getElementById("manual-fields").querySelector("input")?.focus();
 }
 
 async function autoRoll() {
@@ -336,14 +334,14 @@ async function autoRoll() {
 }
 
 function submitManualRolls() {
-  const sets = [];
-  for (let i = 1; i <= 3; i++) {
-    const val = document.getElementById(`manual-set-${i}`).value;
-    const nums = val.split(/[\s,]+/).map(Number).filter(n => n >= 1 && n <= 20);
-    if (nums.length !== 6) { toast(`Set ${i} must have exactly 6 values between 1 and 20.`); return; }
-    sets.push(nums);
+  const nums = [];
+  for (let i = 1; i <= 6; i++) {
+    const n = parseInt(document.getElementById(`manual-val-${i}`).value, 10);
+    if (!n || n < 1 || n > 20) { toast(`Value ${i} must be a number between 1 and 20.`); return; }
+    nums.push(n);
   }
-  renderRollSets(sets, true);
+  document.getElementById("manual-entry").classList.add("hidden");
+  renderStatAssignment(nums);
 }
 
 function renderRollSets(sets, isManual) {

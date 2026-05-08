@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Any
@@ -8,6 +9,7 @@ from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spel
 from ..models.character import Character
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
+from ..services.pdf import render_character_html, render_character_pdf
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -36,6 +38,30 @@ def list_characters(db: Session = Depends(get_db)):
             "created_at": c.created_at,
         })
     return result
+
+
+@router.get("/characters/{char_id}/export/html", response_class=HTMLResponse)
+def admin_view_character(char_id: int, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    char_dict = character_to_dict(char, db)
+    cc = char.character_classes[0] if char.character_classes else None
+    class_obj = db.get(DnDClass, cc.class_id) if cc else None
+    return render_character_html(char_dict, class_obj=class_obj, species_obj=char.species, background_obj=char.background)
+
+
+@router.get("/characters/{char_id}/export/pdf")
+def admin_export_pdf(char_id: int, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    char_dict = character_to_dict(char, db)
+    cc = char.character_classes[0] if char.character_classes else None
+    class_obj = db.get(DnDClass, cc.class_id) if cc else None
+    pdf_bytes = render_character_pdf(char_dict, class_obj=class_obj, species_obj=char.species, background_obj=char.background)
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{char.character_name}.pdf"'})
 
 
 @router.delete("/characters/{char_id}")

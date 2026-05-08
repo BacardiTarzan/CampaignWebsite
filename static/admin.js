@@ -64,6 +64,8 @@ async function loadRoster() {
       <td><div class="actions">
         <button onclick="levelUp(${c.id})">+Lv</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
+        <a href="/api/admin/characters/${c.id}/export/html" target="_blank"><button>👁 View</button></a>
+        <a href="/api/admin/characters/${c.id}/export/pdf" target="_blank"><button>⬇ PDF</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
       </div></td>
     </tr>`).join("");

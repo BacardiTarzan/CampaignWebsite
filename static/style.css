@@ -312,6 +312,28 @@ label {
 .stat-token.dragging { opacity: 0.4; cursor: grabbing; }
 
 /* ── Roll set cards ── */
+.manual-roll-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.manual-roll-fields input {
+  width: 64px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-family: var(--font-book);
+  padding: 8px 4px;
+  border: 2px solid var(--color-ink-faded);
+  border-radius: var(--radius-sm);
+  background: var(--color-parchment);
+  color: var(--color-ink);
+}
+.manual-roll-fields input:focus {
+  border-color: var(--color-gold);
+  outline: none;
+}
+
 .roll-set-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -64,3 +64,35 @@ def render_character_pdf(char_dict: dict, class_obj=None, species_obj=None, back
         stylesheets=[extra_css] if extra_css else []
     )
     return pdf_bytes
+
+
+def render_character_html(char_dict: dict, class_obj=None, species_obj=None, background_obj=None) -> str:
+    env = _get_jinja_env()
+    template = env.get_template("character_sheet.html")
+
+    attrs = char_dict.get("base_attributes") or {}
+    asi = char_dict.get("background_asi") or {}
+
+    def total(key):
+        return (attrs.get(key) or 0) + (asi.get(key) or 0)
+
+    stats = {
+        "str": total("str"), "dex": total("dex"), "con": total("con"),
+        "int": total("int"), "wis": total("wis"), "cha": total("cha"),
+    }
+    modifiers = {k: _modifier(v) for k, v in stats.items()}
+
+    context = {
+        "char": char_dict,
+        "stats": stats,
+        "modifiers": modifiers,
+        "prof_bonus": "+2",
+        "hp": char_dict.get("hp_max") or "—",
+        "ac": "—",
+        "speed": char_dict.get("speed") or "30",
+        "class_obj": class_obj,
+        "species_obj": species_obj,
+        "background_obj": background_obj,
+        "static_dir": "/static",
+    }
+    return template.render(**context)
