@@ -1195,17 +1195,19 @@ function renderSpellsStep() {
   const spellCounts = {
     Bard: 4, Cleric: 4, Druid: 4, Sorcerer: 2, Wizard: 6, Warlock: 2, Paladin: 2, Ranger: 2,
   };
-  const cantripCount = cantripCounts[cls.name] || 2;
+  const cantripCount = cantripCounts[cls.name] ?? 0;
   const spellCount = spellCounts[cls.name] || 2;
 
   const cantrips = state.allSpells.filter(s => s.level === 0);
   const spells1 = state.allSpells.filter(s => s.level === 1);
 
-  document.getElementById("spells-hint").textContent =
-    `Choose ${cantripCount} cantrip${cantripCount > 1 ? "s" : ""} and ${spellCount} level 1 spell${spellCount > 1 ? "s" : ""}.`;
+  const hintParts = [];
+  if (cantripCount > 0) hintParts.push(`${cantripCount} cantrip${cantripCount > 1 ? "s" : ""}`);
+  hintParts.push(`${spellCount} level 1 spell${spellCount > 1 ? "s" : ""}`);
+  document.getElementById("spells-hint").textContent = `Choose ${hintParts.join(" and ")}.`;
 
   const cantripSec = document.getElementById("cantrips-section");
-  cantripSec.innerHTML = cantrips.length
+  cantripSec.innerHTML = (cantripCount > 0 && cantrips.length)
     ? `<h3>Cantrips (choose ${cantripCount})</h3>
        <div class="spell-grid" id="cantrip-cards">
          ${cantrips.map(s => spellCard(s, "cantrip", cantripCount)).join("")}
