@@ -1,9 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pathlib import Path
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import settings
@@ -37,9 +38,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
+class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        proto = request.headers.get("x-forwarded-proto")
+        if proto == "http":
+            url = request.url.replace(scheme="https")
+            return RedirectResponse(url, status_code=301)
+        return await call_next(request)
+
+
 app = FastAPI(title="D&D 2024 Character Generator", lifespan=lifespan)
 
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
+app.add_middleware(HTTPSRedirectMiddleware)
 
 app.include_router(auth_router)
 app.include_router(content.router)
