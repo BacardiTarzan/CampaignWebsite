@@ -403,5 +403,10 @@ def admin_set_lore_visibility(slug: str, visible: bool, db: Session = Depends(ge
 
 @router.post("/seed")
 def trigger_seed(db: Session = Depends(get_db)):
-    counts = seed_all(db)
-    return {"seeded": counts}
+    import traceback
+    try:
+        counts = seed_all(db)
+        return {"seeded": counts}
+    except Exception as e:
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{e}\n\n{tb}")

@@ -40,10 +40,12 @@ def _seed():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        alembic_cfg = AlembicConfig("alembic.ini")
+        alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+        alembic_cfg = AlembicConfig(str(alembic_ini))
         alembic_command.upgrade(alembic_cfg, "head")
+        log.info("Alembic migrations applied.")
     except Exception as e:
-        log.error("Alembic migration failed: %s", e)
+        log.error("Alembic migration failed: %s", e, exc_info=True)
 
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _seed)
