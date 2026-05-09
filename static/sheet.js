@@ -100,6 +100,21 @@ async function boot() {
   document.getElementById("sheet-loading").classList.add("hidden");
   document.getElementById("sheet-root").classList.remove("hidden");
   render();
+  setInterval(pollHp, 15000);
+}
+
+async function pollHp() {
+  try {
+    const r = await api("GET", `/api/characters/${charId}/hp`);
+    if (!r) return;
+    if (r.hp_current === charData.hp_current && r.hp_max === charData.hp_max) return;
+    charData.hp_current = r.hp_current;
+    charData.hp_max = r.hp_max;
+    const cell = document.getElementById("hp-cell");
+    if (!cell) return;
+    const label = cell.querySelector(".sh-combat-label").outerHTML;
+    cell.innerHTML = label + renderHpWidget(charData);
+  } catch (_) { /* ignore poll errors */ }
 }
 
 // ---------------------------------------------------------------------------
