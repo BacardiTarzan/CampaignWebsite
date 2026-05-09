@@ -11,7 +11,8 @@ from ..models.character import (
     SkillProficiency, ToolProficiency, LanguageProficiency, WeaponMasteryUnlock,
 )
 from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species
-from ..services.export import character_to_dict
+from ..services.export import character_to_dict, character_to_sheet_dict
+from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
 import random
 
@@ -77,6 +78,15 @@ class StepBioIn(BaseModel):
     bio: str | None = None
 
 
+class HpAdjustIn(BaseModel):
+    delta: int | None = None   # relative: +5 or -3
+    set: int | None = None     # absolute override
+
+
+class SpellSlotsIn(BaseModel):
+    used: dict[str, int]       # {"1": 2, "2": 0}
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -91,6 +101,13 @@ def _get_char(char_id: int, db: Session) -> Character:
 def _check_owner(char: Character, user: dict) -> None:
     if char.owner_email and char.owner_email != user.get("email"):
         raise HTTPException(403, "Not your character")
+
+
+def _check_owner_or_admin(char: Character, user: dict) -> None:
+    is_owner = char.owner_email == user.get("email")
+    is_admin = user.get("email") == settings.admin_email.lower()
+    if not (is_owner or is_admin):
+        raise HTTPException(403, "Not authorized")
 
 
 def _compute_hp(char: Character, db: Session) -> int:
@@ -396,6 +413,38 @@ def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db), user:
     char.is_complete = True
     db.commit()
     return {"ok": True}
+
+
+# --- HP & spell slot tracking ---
+@router.post("/{char_id}/hp")
+def adjust_hp(char_id: int, data: HpAdjustIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    if data.set is not None:
+        char.hp_current = max(0, min(data.set, char.hp_max or 0))
+    elif data.delta is not None:
+        current = char.hp_current or 0
+        char.hp_current = max(0, min(current + data.delta, char.hp_max or 0))
+    else:
+        raise HTTPException(400, "Provide 'delta' or 'set'")
+    db.commit()
+    return {"hp_current": char.hp_current, "hp_max": char.hp_max}
+
+
+@router.post("/{char_id}/spell-slots")
+def update_spell_slots(char_id: int, data: SpellSlotsIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    char.spell_slots_used = data.used
+    db.commit()
+    return {"spell_slots_used": char.spell_slots_used}
+
+
+@router.get("/{char_id}/sheet-data")
+def sheet_data(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    return character_to_sheet_dict(char, db)
 
 
 # --- Exports ---

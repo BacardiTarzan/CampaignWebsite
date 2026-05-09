@@ -1,0 +1,498 @@
+/* ── Live Character Sheet ── */
+
+.sheet-page {
+  min-height: 100vh;
+  padding-bottom: 48px;
+}
+
+.sheet-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+}
+
+.sheet-back {
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  color: var(--color-light-dim);
+  text-decoration: none;
+}
+.sheet-back:hover { color: var(--color-light); }
+
+.sheet-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Header ── */
+.sh-header {
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 20px var(--container-pad, 16px);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.sh-char-name {
+  font-family: var(--font-header);
+  font-size: 2rem;
+  color: var(--color-light);
+  letter-spacing: 0.5px;
+}
+
+.sh-identity {
+  font-family: var(--font-book);
+  font-size: 1rem;
+  color: var(--color-light-dim);
+  margin-top: 2px;
+}
+
+.sh-player {
+  font-family: var(--font-book);
+  font-size: 0.82rem;
+  color: var(--color-ink-faded);
+  margin-top: 4px;
+}
+
+/* ── Combat bar ── */
+.sh-combat-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  background: rgba(0,0,0,0.3);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.sh-combat-cell {
+  flex: 1 1 120px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.06);
+  min-width: 100px;
+}
+
+.sh-combat-label {
+  font-family: var(--font-header);
+  font-size: 0.7rem;
+  letter-spacing: 0.8px;
+  color: var(--color-ink-faded);
+  margin-bottom: 4px;
+}
+
+.sh-combat-big {
+  font-family: var(--font-header);
+  font-size: 1.6rem;
+  color: var(--color-light);
+}
+
+/* ── HP widget ── */
+.hp-bar-wrap {
+  height: 6px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.hp-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s, background 0.3s;
+}
+.hp-numbers {
+  font-family: var(--font-header);
+  font-size: 1.5rem;
+  color: var(--color-light);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.hp-max {
+  font-size: 1rem;
+  color: var(--color-ink-faded);
+}
+.hp-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.hp-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--color-light);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hp-btn:hover { background: rgba(255,255,255,0.2); }
+.hp-btn-apply {
+  width: auto;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-family: var(--font-book);
+}
+.hp-input {
+  width: 52px;
+  height: 28px;
+  padding: 0 6px;
+  font-size: 0.9rem;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--color-light);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  margin-bottom: 0;
+}
+.hp-input:focus {
+  outline: none;
+  border-color: var(--color-red);
+}
+
+/* ── Spell slot bar ── */
+.sh-slot-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.slot-bar-title {
+  font-family: var(--font-header);
+  font-size: 0.72rem;
+  letter-spacing: 0.8px;
+  color: var(--color-ink-faded);
+  margin-right: 4px;
+}
+
+.slot-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slot-label {
+  font-family: var(--font-book);
+  font-size: 0.78rem;
+  color: var(--color-light-dim);
+  min-width: 24px;
+}
+
+.slot-pips {
+  display: flex;
+  gap: 5px;
+}
+
+.slot-pip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.4);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.slot-pip:hover { border-color: var(--color-light); }
+.slot-pip.used {
+  background: var(--color-red);
+  border-color: var(--color-red-dark);
+}
+
+/* ── Main layout ── */
+.sh-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.sh-col-left {
+  border-right: 1px solid rgba(255,255,255,0.08);
+  padding: 16px;
+}
+
+.sh-col-right {
+  padding: 16px;
+}
+
+.sh-section {
+  margin-bottom: 20px;
+}
+
+.sh-section-title {
+  font-family: var(--font-header);
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  color: var(--color-ink-faded);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.sh-prose {
+  font-family: var(--font-book);
+  font-size: 0.95rem;
+  color: var(--color-light);
+  margin-bottom: 4px;
+}
+
+/* ── Ability scores ── */
+.ability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.ability-card {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  padding: 8px 4px 6px;
+  text-align: center;
+}
+
+.ability-label {
+  font-family: var(--font-header);
+  font-size: 0.62rem;
+  letter-spacing: 1px;
+  color: var(--color-ink-faded);
+}
+
+.ability-score {
+  font-family: var(--font-header);
+  font-size: 1.4rem;
+  color: var(--color-light);
+  line-height: 1.2;
+}
+
+.ability-mod {
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  color: var(--color-light-dim);
+}
+
+/* ── Saves & Skills ── */
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+}
+
+.prof-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  flex-shrink: 0;
+}
+.prof-dot.prof   { background: var(--color-red); border-color: var(--color-red-dark); }
+.prof-dot.expert { background: #c8a000; border-color: #a07800; }
+
+.save-name {
+  flex: 1;
+  color: var(--color-light);
+}
+
+.skill-ab {
+  font-size: 0.78rem;
+  color: var(--color-ink-faded);
+}
+
+.save-val {
+  font-family: var(--font-header);
+  font-size: 0.9rem;
+  color: var(--color-light);
+  min-width: 28px;
+  text-align: right;
+}
+
+/* ── Tabs ── */
+.sh-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid rgba(255,255,255,0.1);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.sh-tab-btn {
+  font-family: var(--font-header);
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
+  color: var(--color-light-dim);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.sh-tab-btn:hover { color: var(--color-light); }
+.sh-tab-btn.active {
+  color: var(--color-light);
+  border-bottom-color: var(--color-red);
+}
+
+.sh-tab-panel {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px;
+}
+
+/* ── Spell cards ── */
+.spell-card {
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.spell-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.05);
+  user-select: none;
+}
+.spell-card:hover .spell-card-header { background: rgba(255,255,255,0.1); }
+
+.spell-name {
+  font-family: var(--font-header);
+  font-size: 0.95rem;
+  color: var(--color-light);
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.spell-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.spell-tag {
+  font-family: var(--font-book);
+  font-size: 0.72rem;
+  color: var(--color-light-dim);
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.spell-chevron {
+  font-size: 0.65rem;
+  color: var(--color-ink-faded);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.spell-card.open .spell-chevron { transform: rotate(90deg); }
+
+.spell-card-body {
+  display: none;
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: rgba(0,0,0,0.15);
+}
+.spell-card.open .spell-card-body { display: block; }
+
+.spell-meta {
+  font-family: var(--font-book);
+  font-size: 0.82rem;
+  color: var(--color-light-dim);
+  margin-bottom: 6px;
+}
+
+.spell-desc {
+  font-family: var(--font-book);
+  font-size: 0.92rem;
+  color: var(--color-light);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ── Feature cards ── */
+.feature-card {
+  border-left: 3px solid var(--color-red);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.feature-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.feature-name {
+  font-family: var(--font-header);
+  font-size: 0.95rem;
+  color: var(--color-light);
+}
+
+.feature-badge {
+  font-family: var(--font-book);
+  font-size: 0.72rem;
+  color: var(--color-ink-faded);
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.feature-desc {
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  color: var(--color-light-dim);
+  line-height: 1.5;
+}
+
+/* ── Equipment table ── */
+.sh-equip-table { width: 100%; }
+.sh-equip-table td { vertical-align: middle; }
+.text-muted { color: var(--color-ink-faded); font-size: 0.85rem; }
+
+/* ── Bio ── */
+.bio-text {
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .sh-main {
+    grid-template-columns: 1fr;
+  }
+  .sh-col-left {
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .sh-combat-cell { flex: 1 1 80px; }
+  .ability-grid { grid-template-columns: repeat(3, 1fr); }
+}

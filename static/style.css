@@ -642,6 +642,11 @@ label {
 .data-table tr:hover td { background: rgba(0,0,0,0.05); }
 .data-table .actions { display: flex; gap: 8px; }
 .data-table .actions button { font-size: 0.75rem; padding: 4px 10px; }
+.roster-hp { font-family: var(--font-book); font-weight: 600; }
+.roster-hp-cell { white-space: nowrap; }
+.hp-adj-row { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
+.hp-adj-input { font-size: 0.78rem; padding: 2px 4px; width: 48px; margin-bottom: 0; }
+.hp-adj-row button { font-size: 0.72rem; padding: 3px 7px; }
 
 /* ── ASI distributor ── */
 .asi-grid {

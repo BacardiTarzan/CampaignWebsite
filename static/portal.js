@@ -99,7 +99,7 @@ function renderCard(c) {
       ${stats}
       <div class="char-card-actions">
         ${continueBtn}
-        ${c.is_complete ? `<a href="/api/characters/${c.id}/export/html" target="_blank"><button>View Sheet</button></a>` : ""}
+        ${c.is_complete ? `<a href="/characters/${c.id}/sheet"><button class="btn-primary">View Sheet</button></a>` : ""}
         ${c.is_complete ? `<a href="/api/characters/${c.id}/export/pdf" target="_blank"><button>Download PDF</button></a>` : ""}
         <a href="/api/characters/${c.id}/export/json" target="_blank"><button>Export JSON</button></a>
       </div>

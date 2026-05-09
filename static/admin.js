@@ -52,7 +52,9 @@ function switchCodexTab(sub) {
 // ---------------------------------------------------------------------------
 async function loadRoster() {
   const chars = await api("GET", "/api/admin/characters");
-  const tbody = chars.map(c => `
+  const tbody = chars.map(c => {
+    const hp = c.hp_max ? `<span class="roster-hp" id="hp-${c.id}">${c.hp_current ?? "?"}/${c.hp_max}</span>` : "—";
+    return `
     <tr>
       <td>${c.id}</td>
       <td><strong>${c.character_name}</strong></td>
@@ -61,22 +63,51 @@ async function loadRoster() {
       <td>${c.class_name || "—"} ${c.level ? "Lv " + c.level : ""}</td>
       <td>${c.background_name || "—"}</td>
       <td>${c.is_complete ? "✅ Done" : `Step ${c.wizard_step}`}</td>
+      <td class="roster-hp-cell">
+        ${hp}
+        ${c.hp_max ? `<div class="hp-adj-row">
+          <input type="number" id="hp-adj-${c.id}" class="hp-adj-input" placeholder="±" style="width:50px">
+          <button onclick="adminAdjHp(${c.id})">±HP</button>
+          <button onclick="adminRest(${c.id})">💤 Rest</button>
+        </div>` : ""}
+      </td>
       <td><div class="actions">
         <button onclick="levelUp(${c.id})">+Lv</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
-        <a href="/api/admin/characters/${c.id}/export/html" target="_blank"><button>👁 View</button></a>
+        <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
         <a href="/api/admin/characters/${c.id}/export/pdf" target="_blank"><button>⬇ PDF</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
       </div></td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
   document.getElementById("roster-table").innerHTML = `
     <table class="data-table">
       <thead><tr>
         <th>#</th><th>Character</th><th>Player</th><th>Species</th>
-        <th>Class</th><th>Background</th><th>Status</th><th>Actions</th>
+        <th>Class</th><th>Background</th><th>Status</th><th>HP</th><th>Actions</th>
       </tr></thead>
-      <tbody>${tbody || '<tr><td colspan="8" class="text-muted">No characters yet.</td></tr>'}</tbody>
+      <tbody>${tbody || '<tr><td colspan="9" class="text-muted">No characters yet.</td></tr>'}</tbody>
     </table>`;
+}
+
+async function adminAdjHp(id) {
+  const input = document.getElementById(`hp-adj-${id}`);
+  const delta = parseInt(input.value, 10);
+  if (isNaN(delta)) { toast("Enter a number (e.g. -5 or +3)"); return; }
+  try {
+    const r = await api("POST", `/api/admin/characters/${id}/hp?delta=${delta}`);
+    document.getElementById(`hp-${id}`).textContent = `${r.hp_current}/${r.hp_max}`;
+    input.value = "";
+    toast(`HP updated: ${r.hp_current}/${r.hp_max}`);
+  } catch(e) { err(e.message); }
+}
+
+async function adminRest(id) {
+  try {
+    const r = await api("POST", `/api/admin/characters/${id}/rest`);
+    toast(`Long rest — HP fully restored (${r.hp_current} HP).`);
+    loadRoster();
+  } catch(e) { err(e.message); }
 }
 
 async function levelUp(id) {

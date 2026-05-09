@@ -6,11 +6,12 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 
 from .config import settings
-from .database import engine, SessionLocal
+from .database import SessionLocal
 from .models import *  # noqa: F401, F403 — ensures all models are registered
-from .database import Base
 from .routers import content, characters, admin
 from .routers.auth import router as auth_router
 from .services.seeder import seed_all
@@ -21,7 +22,8 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    alembic_cfg = AlembicConfig("alembic.ini")
+    alembic_command.upgrade(alembic_cfg, "head")
     db = SessionLocal()
     try:
         from .models.content import Species
@@ -80,3 +82,8 @@ def serve_admin():
 @app.get("/portal")
 def serve_portal():
     return FileResponse(str(static_path / "portal.html"))
+
+
+@app.get("/characters/{char_id}/sheet")
+def serve_sheet(char_id: int):
+    return FileResponse(str(static_path / "sheet.html"))

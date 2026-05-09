@@ -35,6 +35,8 @@ def list_characters(db: Session = Depends(get_db)):
             "is_complete": c.is_complete,
             "wizard_step": c.wizard_step,
             "stat_roll_locked": c.stat_roll_locked,
+            "hp_max": c.hp_max,
+            "hp_current": c.hp_current,
             "created_at": c.created_at,
         })
     return result
@@ -82,6 +84,30 @@ def unlock_stats(char_id: int, db: Session = Depends(get_db)):
     char.stat_roll_locked = False
     db.commit()
     return {"ok": True}
+
+
+@router.post("/characters/{char_id}/rest")
+def long_rest(char_id: int, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    char.hp_current = char.hp_max
+    char.spell_slots_used = {}
+    db.commit()
+    return {"ok": True, "hp_current": char.hp_current}
+
+
+@router.post("/characters/{char_id}/hp")
+def admin_adjust_hp(char_id: int, delta: int | None = None, set_hp: int | None = None, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if set_hp is not None:
+        char.hp_current = max(0, min(set_hp, char.hp_max or 0))
+    elif delta is not None:
+        char.hp_current = max(0, min((char.hp_current or 0) + delta, char.hp_max or 0))
+    db.commit()
+    return {"hp_current": char.hp_current, "hp_max": char.hp_max}
 
 
 @router.post("/characters/{char_id}/level-up")

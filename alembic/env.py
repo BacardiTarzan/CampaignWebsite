@@ -26,11 +26,13 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # Prefer DATABASE_URL from environment (Railway/production).
+    # Railway supplies postgres:// — SQLAlchemy requires postgresql://.
+    from sqlalchemy import create_engine
+    url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    connectable = create_engine(url, poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
