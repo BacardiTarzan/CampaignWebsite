@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -20,10 +21,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    alembic_cfg = AlembicConfig("alembic.ini")
-    alembic_command.upgrade(alembic_cfg, "head")
+def _seed():
     db = SessionLocal()
     try:
         from .models.content import Species
@@ -37,6 +35,18 @@ async def lifespan(app: FastAPI):
         log.error("Seeding failed: %s", e)
     finally:
         db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        alembic_cfg = AlembicConfig("alembic.ini")
+        alembic_command.upgrade(alembic_cfg, "head")
+    except Exception as e:
+        log.error("Alembic migration failed: %s", e)
+
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _seed)
     yield
 
 
