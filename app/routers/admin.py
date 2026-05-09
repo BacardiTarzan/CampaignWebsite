@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Any
 from ..database import get_db
 from ..dependencies import require_admin
-from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment
+from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
 from ..models.character import Character
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
@@ -365,6 +365,36 @@ def import_spells(items: list[SpellIn], db: Session = Depends(get_db)):
             added += 1
     db.commit()
     return {"added": added}
+
+
+# ---------------------------------------------------------------------------
+# Lore management
+# ---------------------------------------------------------------------------
+
+@router.get("/lore")
+def admin_list_lore(db: Session = Depends(get_db)):
+    pages = db.query(LorePage).order_by(LorePage.category, LorePage.title).all()
+    return [{"slug": p.slug, "title": p.title, "category": p.category,
+             "player_visible": p.player_visible} for p in pages]
+
+
+@router.get("/lore/{slug}")
+def admin_get_lore(slug: str, db: Session = Depends(get_db)):
+    page = db.query(LorePage).filter_by(slug=slug).first()
+    if not page:
+        raise HTTPException(404)
+    return {"slug": page.slug, "title": page.title, "category": page.category,
+            "player_visible": page.player_visible, "content_md": page.content_md}
+
+
+@router.patch("/lore/{slug}/visibility")
+def admin_set_lore_visibility(slug: str, visible: bool, db: Session = Depends(get_db)):
+    page = db.query(LorePage).filter_by(slug=slug).first()
+    if not page:
+        raise HTTPException(404)
+    page.player_visible = visible
+    db.commit()
+    return {"ok": True, "player_visible": page.player_visible}
 
 
 # ---------------------------------------------------------------------------

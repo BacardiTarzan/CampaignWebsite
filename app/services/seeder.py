@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment
+from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
 
 REF = Path(settings.reference_dir)
 
@@ -740,7 +740,54 @@ def seed_all(db: Session) -> dict:
             counts["equipment"] += 1
 
     db.commit()
+
+    # Lore pages
+    counts["lore"] = _seed_lore(db)
+    db.commit()
+
     return counts
+
+
+def _seed_lore(db: Session) -> int:
+    lore_dir = REF / "Lore"
+    if not lore_dir.exists():
+        return 0
+
+    existing = {r.slug: r for r in db.query(LorePage).all()}
+    added = 0
+
+    for f in sorted(lore_dir.glob("*.md")):
+        if "Zone.Identifier" in f.name:
+            continue
+        slug = f.stem.lower().replace("_", "-")
+        raw = f.read_text(encoding="utf-8", errors="replace")
+
+        title = slug
+        for line in raw.splitlines():
+            if line.startswith("# "):
+                title = line[2:].strip()
+                break
+
+        stem = f.stem
+        if stem.lower().startswith("species-"):
+            category = "species"
+        elif stem.lower().startswith("campaign-"):
+            category = "campaign"
+        else:
+            category = "world"
+
+        if slug not in existing:
+            db.add(LorePage(slug=slug, title=title, content_md=raw,
+                            player_visible=False, category=category))
+            added += 1
+        else:
+            # Update content/title/category on re-seed; preserve player_visible
+            page = existing[slug]
+            page.title = title
+            page.content_md = raw
+            page.category = category
+
+    return added
 
 
 def _gear_items() -> list[dict]:

@@ -868,6 +868,35 @@ label {
 .shop-qty span { min-width: 18px; text-align: center; font-size: 0.9rem; }
 .shop-note { font-size: 0.75rem; color: var(--color-ink-faded); margin-top: 10px; font-style: italic; }
 
+/* ── Lore / Admin additions ── */
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--color-ink-faded);
+  color: var(--color-ink);
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-secondary:hover { border-color: var(--color-gold); color: var(--color-gold); }
+
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.admin-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border, rgba(255,255,255,0.1)); color: var(--color-ink-faded); font-weight: 400; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.admin-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
+.admin-table tr:last-child td { border-bottom: none; }
+
+.lore-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; font-size: 0.85rem; }
+.lore-toggle input { cursor: pointer; accent-color: var(--color-gold); }
+
+#lore-preview-body .lore-md h1,
+#lore-preview-body .lore-md h2 { color: var(--color-gold); }
+#lore-preview-body .lore-md p { margin: 0 0 14px; }
+#lore-preview-body .lore-md hr { border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 20px 0; }
+#lore-preview-body .lore-md em { opacity: 0.75; }
+#lore-preview-body .lore-md strong { color: var(--color-gold); }
+
 /* ── Responsive ── */
 @media (max-width: 600px) {
   .ability-grid { grid-template-columns: repeat(3, 1fr); }

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models.content import Species, DnDClass, Background, Feat, Spell, Equipment
+from ..dependencies import require_user
+from ..models.content import Species, DnDClass, Background, Feat, Spell, Equipment, LorePage
 
 router = APIRouter(prefix="/api/content", tags=["content"])
 
@@ -111,3 +112,19 @@ def list_equipment(item_type: str | None = None, db: Session = Depends(get_db)):
     if item_type:
         q = q.filter(Equipment.item_type == item_type)
     return q.order_by(Equipment.name).all()
+
+
+@router.get("/lore", dependencies=[Depends(require_user)])
+def list_lore(db: Session = Depends(get_db)):
+    pages = db.query(LorePage).filter(LorePage.player_visible == True) \
+               .order_by(LorePage.category, LorePage.title).all()
+    return [{"slug": p.slug, "title": p.title, "category": p.category} for p in pages]
+
+
+@router.get("/lore/{slug}", dependencies=[Depends(require_user)])
+def get_lore_page(slug: str, db: Session = Depends(get_db)):
+    page = db.query(LorePage).filter_by(slug=slug).first()
+    if not page or not page.player_visible:
+        raise HTTPException(404)
+    return {"slug": page.slug, "title": page.title, "category": page.category,
+            "content_md": page.content_md}

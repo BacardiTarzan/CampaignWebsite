@@ -26,6 +26,7 @@
       <button class="tab-btn active" onclick="switchTab('roster')">⚔ Roster</button>
       <button class="tab-btn" onclick="switchTab('codex')">📜 Codex</button>
       <button class="tab-btn" onclick="switchTab('grimoire')">🔮 Grimoire</button>
+      <button class="tab-btn" onclick="switchTab('lore')">📖 Lore</button>
       <button class="tab-btn" onclick="switchTab('import')">⬆ Import</button>
     </div>
 
@@ -156,6 +157,27 @@
       <div id="grimoire-list"></div>
     </div>
 
+    <!-- Lore -->
+    <div id="tab-lore" class="hidden">
+      <div class="flex-between mb-md mt-md">
+        <h3>Lore Pages</h3>
+        <button class="btn-gold" onclick="loadLore()">↺ Refresh</button>
+      </div>
+      <p class="hint mb-md">Toggle which pages players can see in their Lore Library. Content is loaded from <code>reference/Lore/</code> on seed.</p>
+      <div id="lore-admin-list"></div>
+
+      <!-- Preview modal -->
+      <div id="lore-preview-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;align-items:center;justify-content:center;">
+        <div style="background:var(--color-panel);border:1px solid var(--color-border);border-radius:8px;max-width:720px;width:90%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+          <div class="flex-between" style="padding:16px 20px;border-bottom:1px solid var(--color-border);flex-shrink:0;">
+            <strong id="lore-preview-title"></strong>
+            <button onclick="closeLorePreview()">✕ Close</button>
+          </div>
+          <div id="lore-preview-body" style="overflow-y:auto;padding:20px 24px;line-height:1.7;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Import -->
     <div id="tab-import" class="hidden">
       <h3 class="mt-md">JSON Import</h3>
@@ -187,6 +209,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="/static/admin.js"></script>
 </body>
 </html>

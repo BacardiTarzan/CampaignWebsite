@@ -3,6 +3,16 @@ from sqlalchemy.orm import relationship
 from ..database import Base
 
 
+class LorePage(Base):
+    __tablename__ = "lore_pages"
+    id = Column(Integer, primary_key=True)
+    slug = Column(String, unique=True, nullable=False)
+    title = Column(String, nullable=False)
+    content_md = Column(Text, nullable=False)
+    player_visible = Column(Boolean, default=False, nullable=False)
+    category = Column(String, default="world", nullable=False)
+
+
 class Species(Base):
     __tablename__ = "species"
     id = Column(Integer, primary_key=True)

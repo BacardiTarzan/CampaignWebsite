@@ -30,11 +30,12 @@ function err(msg) { toast("⚠ " + msg, 5000); }
 function switchTab(tab) {
   document.querySelectorAll(".tab-bar > .tab-btn").forEach(b => b.classList.remove("active"));
   event.target.classList.add("active");
-  ["roster", "codex", "grimoire", "import"].forEach(t =>
+  ["roster", "codex", "grimoire", "lore", "import"].forEach(t =>
     document.getElementById(`tab-${t}`).classList.toggle("hidden", t !== tab));
   if (tab === "roster") loadRoster();
   if (tab === "codex") loadCodex();
   if (tab === "grimoire") loadGrimoireSpells();
+  if (tab === "lore") loadLore();
 }
 
 function switchCodexTab(sub) {
@@ -367,6 +368,85 @@ async function triggerSeed() {
     const counts = Object.entries(r.seeded).map(([k,v]) => `${k}: ${v}`).join(", ");
     document.getElementById("seed-result").textContent = `✓ Seeded — ${counts}`;
   } catch(e) { err(e.message); document.getElementById("seed-result").textContent = ""; }
+}
+
+// ---------------------------------------------------------------------------
+// Lore management
+// ---------------------------------------------------------------------------
+
+const LORE_CATEGORY_LABELS = { world: "The World", species: "Species", campaign: "Campaign" };
+
+async function loadLore() {
+  const el = document.getElementById("lore-admin-list");
+  el.innerHTML = `<p class="hint">Loading…</p>`;
+  const pages = await api("GET", "/api/admin/lore");
+  if (!pages || !pages.length) {
+    el.innerHTML = `<p class="hint">No lore pages found. Run Seed Database from the Import tab.</p>`;
+    return;
+  }
+
+  const groups = {};
+  for (const p of pages) {
+    if (!groups[p.category]) groups[p.category] = [];
+    groups[p.category].push(p);
+  }
+
+  const order = ["world", "species", "campaign"];
+  const cats = [...order.filter(c => groups[c]), ...Object.keys(groups).filter(c => !order.includes(c))];
+
+  el.innerHTML = cats.map(cat => `
+    <div class="mb-md">
+      <h4 style="color:var(--color-gold);margin:12px 0 6px">${LORE_CATEGORY_LABELS[cat] || cat}</h4>
+      <table class="admin-table">
+        <thead><tr><th>Title</th><th>Slug</th><th style="width:100px;text-align:center">Player View</th><th style="width:80px"></th></tr></thead>
+        <tbody>
+          ${groups[cat].map(p => `
+            <tr id="lore-row-${p.slug}">
+              <td><strong>${p.title}</strong></td>
+              <td><code style="font-size:0.8em">${p.slug}</code></td>
+              <td style="text-align:center">
+                <label class="lore-toggle">
+                  <input type="checkbox" ${p.player_visible ? "checked" : ""} onchange="setLoreVisibility('${p.slug}', this.checked)">
+                  <span>${p.player_visible ? "Visible" : "Hidden"}</span>
+                </label>
+              </td>
+              <td><button onclick="previewLore('${p.slug}')">Preview</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`).join("");
+}
+
+async function setLoreVisibility(slug, visible) {
+  try {
+    await api("PATCH", `/api/admin/lore/${slug}/visibility?visible=${visible}`);
+    const row = document.getElementById(`lore-row-${slug}`);
+    if (row) {
+      const span = row.querySelector("label.lore-toggle span");
+      if (span) span.textContent = visible ? "Visible" : "Hidden";
+    }
+    toast(visible ? `"${slug}" now visible to players` : `"${slug}" hidden from players`);
+  } catch(e) { err(e.message); }
+}
+
+async function previewLore(slug) {
+  const modal = document.getElementById("lore-preview-modal");
+  const titleEl = document.getElementById("lore-preview-title");
+  const body = document.getElementById("lore-preview-body");
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+  body.innerHTML = `<p class="hint">Loading…</p>`;
+  try {
+    const page = await api("GET", `/api/admin/lore/${slug}`);
+    titleEl.textContent = page.title;
+    body.innerHTML = `<div class="lore-md">${marked.parse(page.content_md)}</div>`;
+  } catch(e) { body.innerHTML = `<p class="hint">Error: ${e.message}</p>`; }
+}
+
+function closeLorePreview() {
+  const modal = document.getElementById("lore-preview-modal");
+  modal.classList.add("hidden");
+  modal.style.display = "none";
 }
 
 // ---------------------------------------------------------------------------

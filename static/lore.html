@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lore Library</title>
+  <link rel="icon" type="image/png" href="/static/d20.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/lore.css">
+</head>
+<body>
+<div class="lore-layout">
+
+  <div class="lore-sidebar">
+    <div class="lore-sidebar-header">
+      <a href="/portal" class="lore-back">← Portal</a>
+      <h2 class="lore-sidebar-title">Lore Library</h2>
+    </div>
+    <div id="lore-nav"><p class="hint" style="padding:12px">Loading…</p></div>
+  </div>
+
+  <div class="lore-main">
+    <div class="lore-topbar">
+      <span id="lore-user-name" class="lore-user"></span>
+    </div>
+    <div id="lore-content" class="lore-content">
+      <div class="lore-welcome">
+        <h1>Campaign Lore</h1>
+        <p class="hint">Select a page from the sidebar to begin reading.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/lore.js"></script>
+</body>
+</html>

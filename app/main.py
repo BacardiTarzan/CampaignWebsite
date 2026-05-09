@@ -94,6 +94,11 @@ def serve_portal():
     return FileResponse(str(static_path / "portal.html"))
 
 
+@app.get("/lore")
+def serve_lore():
+    return FileResponse(str(static_path / "lore.html"))
+
+
 @app.get("/characters/{char_id}/sheet")
 def serve_sheet(char_id: int):
     return FileResponse(str(static_path / "sheet.html"))
