@@ -11,7 +11,7 @@ from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
 from .config import settings
-from .database import SessionLocal
+from .database import SessionLocal, engine
 from .models import *  # noqa: F401, F403 — ensures all models are registered
 from .routers import content, characters, admin
 from .routers.auth import router as auth_router
@@ -46,6 +46,14 @@ async def lifespan(app: FastAPI):
         log.info("Alembic migrations applied.")
     except Exception as e:
         log.error("Alembic migration failed: %s", e, exc_info=True)
+
+    # Safety net: create any tables alembic may have missed (idempotent)
+    try:
+        from .database import Base
+        Base.metadata.create_all(bind=engine)
+        log.info("create_all complete.")
+    except Exception as e:
+        log.error("create_all failed: %s", e, exc_info=True)
 
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _seed)
