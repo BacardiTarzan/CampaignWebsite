@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>D&D Character Creator — My Characters</title>
+  <link rel="icon" type="image/png" href="/static/d20.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-header-row">
+    <div>
+      <h1 class="page-title">My Characters</h1>
+      <p class="page-subtitle">View and manage your adventurers</p>
+    </div>
+    <div class="user-badge" id="user-badge" style="display:none">
+      <span id="user-name"></span>
+      <span id="admin-link" style="display:none"><a href="/admin" class="btn-logout">Admin</a></span>
+      <a href="/auth/logout" class="btn-logout">Sign out</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="flex-between mb-md">
+      <div></div>
+      <a href="/charactercreator"><button class="btn-gold">+ New Character</button></a>
+    </div>
+    <div id="char-roster"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/static/portal.js"></script>
+</body>
+</html>

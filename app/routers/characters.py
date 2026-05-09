@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, HTMLResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Any
@@ -12,7 +12,7 @@ from ..models.character import (
 )
 from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species
 from ..services.export import character_to_dict
-from ..services.pdf import render_character_pdf
+from ..services.pdf import render_character_pdf, render_character_html
 import random
 
 router = APIRouter(prefix="/api/characters", tags=["characters"])
@@ -34,6 +34,8 @@ class StepIdentityIn(BaseModel):
 
 class StepSpeciesIn(BaseModel):
     species_id: int
+    species_lineage: str | None = None
+    species_size_choice: str | None = None
 
 
 class StepBackgroundIn(BaseModel):
@@ -172,6 +174,8 @@ def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db
     char = _get_char(char_id, db)
     _check_owner(char, user)
     char.species_id = data.species_id
+    char.species_lineage = data.species_lineage
+    char.species_size_choice = data.species_size_choice
     species = db.get(Species, data.species_id)
     if species:
         char.speed = species.speed
@@ -395,6 +399,41 @@ def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db), user:
 
 
 # --- Exports ---
+@router.get("")
+def list_my_characters(db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    chars = db.query(Character).filter(Character.owner_email == user["email"]) \
+              .order_by(Character.created_at.desc()).all()
+    result = []
+    for c in chars:
+        cc = c.character_classes[0] if c.character_classes else None
+        result.append({
+            "id": c.id,
+            "character_name": c.character_name,
+            "created_by_display_name": c.created_by_display_name,
+            "species_name": c.species.name if c.species else None,
+            "species_lineage": c.species_lineage,
+            "background_name": c.background.name if c.background else None,
+            "class_name": cc.dnd_class.name if cc and cc.dnd_class else None,
+            "level": cc.level if cc else None,
+            "is_complete": c.is_complete,
+            "wizard_step": c.wizard_step,
+            "hp_max": c.hp_max,
+            "speed": c.speed,
+            "alignment": c.alignment,
+        })
+    return result
+
+
+@router.get("/{char_id}/export/html", response_class=HTMLResponse)
+def export_html(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner(char, user)
+    char_dict = character_to_dict(char, db)
+    cc = char.character_classes[0] if char.character_classes else None
+    class_obj = db.get(DnDClass, cc.class_id) if cc else None
+    return render_character_html(char_dict, class_obj=class_obj, species_obj=char.species, background_obj=char.background)
+
+
 @router.get("/{char_id}/export/json")
 def export_json(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)

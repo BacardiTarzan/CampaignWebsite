@@ -63,6 +63,11 @@ if static_path.exists():
 
 
 @app.get("/")
+def serve_landing():
+    return FileResponse(str(static_path / "landing.html"))
+
+
+@app.get("/charactercreator")
 def serve_index():
     return FileResponse(str(static_path / "index.html"))
 
@@ -70,3 +75,8 @@ def serve_index():
 @app.get("/admin")
 def serve_admin():
     return FileResponse(str(static_path / "admin.html"))
+
+
+@app.get("/portal")
+def serve_portal():
+    return FileResponse(str(static_path / "portal.html"))

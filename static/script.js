@@ -11,6 +11,8 @@ const state = {
   displayName: "",
   charName: "",
   speciesId: null,
+  speciesLineage: null,
+  speciesSizeChoice: null,
   backgroundId: null,
   classId: null,
   selectedRollSet: null,
@@ -165,25 +167,104 @@ function renderSpeciesGrid() {
 
 function selectSpecies(id) {
   state.speciesId = id;
+  state.speciesLineage = null;
+  state.speciesSizeChoice = null;
   document.querySelectorAll("#species-grid .select-card").forEach(c =>
     c.classList.toggle("selected", +c.dataset.id === id));
   const sp = state.allSpecies.find(s => s.id === id);
   if (!sp) return;
   state.currentSpecies = sp;
-  const detail = document.getElementById("species-detail");
+
   document.getElementById("species-detail-name").textContent = sp.name;
   document.getElementById("species-detail-body").innerHTML =
     `<p class="hint mb-sm">${sp.creature_type} · ${(sp.size_options||[]).join(" or ")} · Speed ${sp.speed} ft.</p>` +
     (sp.traits||[]).map(t =>
       `<p class="mb-sm"><strong class="trait-name">${t.name}.</strong> ${t.description}</p>`
     ).join("");
-  detail.classList.add("visible");
-  document.getElementById("btn-species-next").disabled = false;
+
+  // Lineage selector
+  const lineageSec = document.getElementById("species-lineage-section");
+  const lineageSel = document.getElementById("species-lineage-select");
+  const lineageDesc = document.getElementById("species-lineage-desc");
+  if (sp.lineages && sp.lineages.length) {
+    // Determine label from first trait whose name contains a choice keyword
+    const lineageTrait = (sp.traits||[]).find(t =>
+      /lineage|legacy|ancestry/i.test(t.name));
+    document.getElementById("species-lineage-label").textContent =
+      lineageTrait ? `Choose a ${lineageTrait.name}` : "Choose a Lineage";
+    lineageSel.innerHTML = '<option value="">— Select —</option>' +
+      sp.lineages.map(l => `<option value="${l.name}">${l.name}</option>`).join("");
+    lineageDesc.textContent = "";
+    lineageSec.classList.remove("hidden");
+  } else {
+    lineageSec.classList.add("hidden");
+  }
+
+  // Size selector
+  const sizeSec = document.getElementById("species-size-section");
+  if ((sp.size_options||[]).length > 1) {
+    const pills = document.getElementById("species-size-options");
+    pills.innerHTML = sp.size_options.map(sz =>
+      `<button class="pill" onclick="selectSize('${sz}')">${sz}</button>`
+    ).join("");
+    sizeSec.classList.remove("hidden");
+  } else {
+    sizeSec.classList.add("hidden");
+    state.speciesSizeChoice = (sp.size_options||[])[0] || null;
+  }
+
+  document.getElementById("species-detail").classList.add("visible");
+  _updateSpeciesNextBtn();
+}
+
+function onLineageChange() {
+  const sel = document.getElementById("species-lineage-select");
+  state.speciesLineage = sel.value || null;
+  const sp = state.currentSpecies;
+  if (sp && sp.lineages) {
+    const entry = sp.lineages.find(l => l.name === sel.value);
+    const desc = document.getElementById("species-lineage-desc");
+    if (entry) {
+      let text = entry.description || "";
+      if (entry.level3_spell) text += ` · Level 3: ${entry.level3_spell}`;
+      if (entry.level5_spell) text += ` · Level 5: ${entry.level5_spell}`;
+      desc.textContent = text;
+    } else {
+      desc.textContent = "";
+    }
+  }
+  _updateSpeciesNextBtn();
+}
+
+function selectSize(sz) {
+  state.speciesSizeChoice = sz;
+  document.querySelectorAll("#species-size-options .pill").forEach(p =>
+    p.classList.toggle("selected", p.textContent === sz));
+  _updateSpeciesNextBtn();
+}
+
+function _updateSpeciesNextBtn() {
+  const sp = state.currentSpecies;
+  if (!sp) { document.getElementById("btn-species-next").disabled = true; return; }
+  const needsLineage = sp.lineages && sp.lineages.length && !state.speciesLineage;
+  const needsSize = (sp.size_options||[]).length > 1 && !state.speciesSizeChoice;
+  document.getElementById("btn-species-next").disabled = !!(needsLineage || needsSize);
 }
 
 function saveSpecies() {
   if (!state.speciesId) { toast("Pick a species first."); return; }
-  api("POST", `/api/characters/${state.charId}/step/species`, { species_id: state.speciesId })
+  const sp = state.currentSpecies;
+  if (sp && sp.lineages && sp.lineages.length && !state.speciesLineage) {
+    toast("Choose a lineage before continuing."); return;
+  }
+  if (sp && (sp.size_options||[]).length > 1 && !state.speciesSizeChoice) {
+    toast("Choose a size before continuing."); return;
+  }
+  api("POST", `/api/characters/${state.charId}/step/species`, {
+    species_id: state.speciesId,
+    species_lineage: state.speciesLineage,
+    species_size_choice: state.speciesSizeChoice,
+  })
     .then(() => { loadBackgrounds(); showStep(3); })
     .catch(e => err(e.message));
 }
@@ -1322,7 +1403,7 @@ async function exportPDF(e) {
 function startNewCharacter() {
   Object.assign(state, {
     charId: null, step: 1, displayName: "", charName: "",
-    speciesId: null, backgroundId: null, classId: null,
+    speciesId: null, speciesLineage: null, speciesSizeChoice: null, backgroundId: null, classId: null,
     selectedRollSet: null,
     assignedStats: { str: null, dex: null, con: null, int: null, wis: null, cha: null },
     backgroundASI: {}, featuresChoices: [], selectedSkills: [], selectedLanguages: [],
@@ -1358,7 +1439,46 @@ async function boot() {
     state.displayName = nameInput.value;
   }
 
-  showStep(1);
+  // Resume an existing character if ?char=id is in the URL
+  const charParam = new URLSearchParams(window.location.search).get("char");
+  if (charParam) {
+    await resumeCharacter(parseInt(charParam, 10));
+  } else {
+    showStep(1);
+  }
+}
+
+async function resumeCharacter(charId) {
+  try {
+    const char = await api("GET", `/api/characters/${charId}`);
+    if (!char) { showStep(1); return; }
+
+    state.charId = char.id;
+    state.displayName = char.created_by_display_name || "";
+    state.charName = char.character_name || "";
+    const dnInput = document.getElementById("display-name");
+    const cnInput = document.getElementById("char-name");
+    if (dnInput) dnInput.value = state.displayName;
+    if (cnInput) cnInput.value = state.charName;
+
+    const step = char.wizard_step || 1;
+
+    // Pre-load content caches so the grid is ready when the panel shows
+    if (step >= 2) loadSpecies();
+    if (step >= 3) loadBackgrounds();
+    if (step >= 4) loadClasses();
+
+    // For stats/features/skills/equipment/spells, trigger their renderers
+    if (step === 5) { showStep(5); renderStatsStep(); return; }
+    if (step === 6) { showStep(6); renderFeaturesStep(); return; }
+    if (step === 7) { showStep(7); renderSkillsStep(); return; }
+    if (step === 8) { showStep(8); renderEquipmentStep(); return; }
+    if (step === 9) { showStep(9); loadSpellsStep(); return; }
+
+    showStep(step);
+  } catch {
+    showStep(1);
+  }
 }
 
 boot();

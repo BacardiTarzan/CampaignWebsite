@@ -42,7 +42,7 @@ async def callback(request: Request):
         "name": user_info.get("name", email),
         "picture": user_info.get("picture", ""),
     }
-    return RedirectResponse("/")
+    return RedirectResponse("/portal")
 
 
 @router.get("/logout")
@@ -56,4 +56,4 @@ async def me(request: Request):
     user = request.session.get("user")
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    return user
+    return {**user, "is_admin": user["email"] == settings.admin_email.lower()}

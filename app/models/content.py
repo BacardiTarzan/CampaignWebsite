@@ -11,6 +11,7 @@ class Species(Base):
     size_options = Column(JSON)          # ["Medium"] or ["Medium", "Small"]
     speed = Column(Integer, default=30)
     traits = Column(JSON)                # [{"name": "...", "description": "..."}]
+    lineages = Column(JSON)              # [{"name": "...", "description": "...", "level3_spell"?: "...", "level5_spell"?: "..."}]
     source = Column(String, default="PHB 2024")
     is_homebrew = Column(Boolean, default=False)
 

@@ -662,6 +662,34 @@ label {
 .asi-cell-bonus { font-size: 0.8rem; color: var(--color-red); font-family: var(--font-book); }
 .asi-cell input[type="radio"] { accent-color: var(--color-red); margin-right: 4px; }
 
+/* ── Species lineage / size pills ── */
+.pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill {
+  background: rgba(0,0,0,0.07);
+  border: 1px solid var(--color-ink-faded);
+  border-radius: 20px;
+  padding: 6px 18px;
+  font-family: var(--font-book);
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pill:hover { background: rgba(0,0,0,0.12); }
+.pill.selected {
+  background: var(--color-red);
+  border-color: var(--color-red-dark);
+  color: #fff;
+}
+.field-label {
+  display: block;
+  font-family: var(--font-header);
+  font-size: 0.82rem;
+  color: var(--color-ink-faded);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
 /* ── Utility ── */
 .hidden      { display: none !important; }
 .mt-sm       { margin-top: 8px; }
@@ -706,6 +734,103 @@ label {
   border-radius: var(--radius-sm);
 }
 .btn-logout:hover { color: var(--color-light); border-color: var(--color-light); }
+
+/* ── Player Portal ── */
+.char-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.char-card {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid var(--color-ink-faded);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.char-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.char-card-name {
+  font-family: var(--font-header);
+  font-size: 1.35rem;
+  color: var(--color-ink);
+  line-height: 1.2;
+}
+
+.char-card-sub {
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  color: var(--color-ink-faded);
+  margin-top: 3px;
+}
+
+.char-status {
+  font-family: var(--font-book);
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.char-status--done {
+  background: rgba(60, 120, 60, 0.2);
+  color: #2d6b2d;
+  border: 1px solid rgba(60, 120, 60, 0.35);
+}
+.char-status--wip {
+  background: rgba(180, 130, 30, 0.2);
+  color: #7a5500;
+  border: 1px solid rgba(180, 130, 30, 0.35);
+}
+
+.char-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.char-stat {
+  font-family: var(--font-book);
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 48px;
+}
+
+.char-stat-label {
+  font-size: 0.7rem;
+  color: var(--color-ink-faded);
+  font-family: var(--font-header);
+  letter-spacing: 0.5px;
+  margin-bottom: 1px;
+}
+
+.char-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.char-card-actions button {
+  font-size: 0.82rem;
+  padding: 5px 12px;
+}
+
+.char-card-actions a {
+  text-decoration: none;
+}
 
 /* ── Equipment Shop ── */
 .shop-panel { border: 1px solid var(--color-ink-faded); border-radius: var(--radius-md); padding: 16px; margin-top: 8px; background: rgba(0,0,0,0.04); }

@@ -144,6 +144,47 @@ def _parse_single_item(s: str) -> dict | None:
 # Species
 # ---------------------------------------------------------------------------
 
+def _parse_lineage_table(raw: str) -> list[dict]:
+    """Parse a markdown table into a list of lineage option dicts."""
+    lines = [l.strip() for l in raw.split("\n") if l.strip().startswith("|")]
+    if len(lines) < 3:
+        return []
+
+    def parse_row(line: str) -> list[str]:
+        return [c.strip() for c in line.strip("|").split("|")]
+
+    # lines[0] = header, lines[1] = separator, lines[2:] = data
+    result = []
+    for row_line in lines[2:]:
+        cols = parse_row(row_line)
+        if not cols or not cols[0]:
+            continue
+        entry: dict = {"name": cols[0]}
+        if len(cols) >= 4:
+            entry["description"] = cols[1]
+            entry["level3_spell"] = cols[2]
+            entry["level5_spell"] = cols[3]
+        elif len(cols) >= 2:
+            entry["description"] = cols[1]
+        result.append(entry)
+    return result
+
+
+def _parse_lineage_bullets(raw: str) -> list[dict]:
+    """Parse a bullet list of bold-named options into lineage dicts.
+    Handles both '- **Name:** desc' and '- **Name** — desc' formats.
+    """
+    result = []
+    # Match: - **Name:** desc  OR  - **Name:optional** [separator] desc
+    pattern = r"-\s+\*\*([^*]+?):?\*\*\s*[:\-—]?\s*(.+?)(?=\n-\s+\*\*|\Z)"
+    for m in re.finditer(pattern, raw, re.DOTALL):
+        name = m.group(1).strip().rstrip(":")
+        desc = re.sub(r"\s+", " ", m.group(2)).strip()
+        if name and desc:
+            result.append({"name": name, "description": desc})
+    return result
+
+
 def _parse_species_file(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
     name = re.match(r"^#\s+(.+)", text).group(1).strip().title()
@@ -165,14 +206,29 @@ def _parse_species_file(path: Path) -> dict:
     speed_m = re.search(r"(\d+)", speed_raw)
     speed = int(speed_m.group(1)) if speed_m else 30
 
-    # Parse traits
+    # Check for a standalone lineage section (e.g. Dragonborn's ### Draconic Ancestry table)
+    lineages: list[dict] = []
+    standalone_section = re.search(r"### Draconic Ancestry\n+(.*?)(?=\n###|\Z)", text, re.DOTALL)
+    if standalone_section:
+        lineages = _parse_lineage_table(standalone_section.group(1))
+
+    # Parse traits; also extract lineages from choice traits if not already found
     traits = []
     traits_section = re.search(r"### Traits\n+(.*?)(?=\n###|\Z)", text, re.DOTALL)
     if traits_section:
         for block in re.split(r"\n\n(?=\*\*)", traits_section.group(1)):
             m = re.match(r"\*\*([^*]+?):\*\*\s*(.*)", block, re.DOTALL)
             if m:
-                traits.append({"name": m.group(1).strip(), "description": re.sub(r"\s+", " ", m.group(2)).strip()})
+                tname = m.group(1).strip()
+                tdesc_raw = m.group(2)
+                traits.append({"name": tname, "description": re.sub(r"\s+", " ", tdesc_raw).strip()})
+
+                # Parse lineages from traits named with choice keywords
+                if not lineages and any(kw in tname.lower() for kw in ("lineage", "legacy", "ancestry")):
+                    parsed = _parse_lineage_table(tdesc_raw)
+                    if not parsed:
+                        parsed = _parse_lineage_bullets(tdesc_raw)
+                    lineages = parsed
 
     return {
         "name": name,
@@ -180,6 +236,7 @@ def _parse_species_file(path: Path) -> dict:
         "size_options": sizes,
         "speed": speed,
         "traits": traits,
+        "lineages": lineages,
         "source": "PHB 2024",
     }
 
@@ -596,6 +653,11 @@ def seed_all(db: Session) -> dict:
             db.add(Species(**{k: v for k, v in data.items()}))
             existing_species.add(data["name"])
             counts["species"] += 1
+        else:
+            # Update lineages on existing records (added in later migration)
+            sp = db.query(Species).filter_by(name=data["name"]).first()
+            if sp and sp.lineages is None and data.get("lineages"):
+                sp.lineages = data["lineages"]
 
     # Classes
     for f in sorted((REF / "classes").glob("*.md")):

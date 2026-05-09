@@ -17,6 +17,7 @@
     </div>
     <div class="user-badge" id="user-badge" style="display:none">
       <span id="user-name"></span>
+      <a href="/portal" class="btn-logout">My Characters</a>
       <a href="/auth/logout" class="btn-logout">Sign out</a>
     </div>
   </div>
@@ -55,6 +56,17 @@
       <div class="detail-panel" id="species-detail">
         <h3 id="species-detail-name"></h3>
         <div id="species-detail-body"></div>
+        <div id="species-lineage-section" class="hidden mt-md">
+          <label class="field-label" id="species-lineage-label">Choose a Lineage</label>
+          <select id="species-lineage-select" onchange="onLineageChange()">
+            <option value="">— Select —</option>
+          </select>
+          <div id="species-lineage-desc" class="hint mt-sm"></div>
+        </div>
+        <div id="species-size-section" class="hidden mt-md">
+          <label class="field-label">Choose a Size</label>
+          <div id="species-size-options" class="pill-group mt-sm"></div>
+        </div>
       </div>
       <div class="wizard-nav">
         <button onclick="goToStep(1)">← Back</button>
