@@ -185,15 +185,10 @@ function render() {
     <div id="sh-tab-bio" class="sh-tab-panel hidden">${renderBioTab(c)}</div>
   `;
 
-  // Wire up HP buttons after render
-  document.getElementById("hp-minus")?.addEventListener("click", () => adjustHp(-1));
-  document.getElementById("hp-plus")?.addEventListener("click",  () => adjustHp(+1));
-  document.getElementById("hp-apply")?.addEventListener("click", applyHpDelta);
-  document.getElementById("hp-delta")?.addEventListener("keydown", e => { if (e.key === "Enter") applyHpDelta(); });
 }
 
 // ---------------------------------------------------------------------------
-// HP widget
+// HP widget (read-only — HP is managed by the DM via the admin panel)
 // ---------------------------------------------------------------------------
 function renderHpWidget(c) {
   const cur = c.hp_current ?? 0;
@@ -204,50 +199,7 @@ function renderHpWidget(c) {
     <div class="hp-bar-wrap">
       <div class="hp-bar" style="width:${pct}%;background:${barColor}"></div>
     </div>
-    <div class="hp-numbers" id="hp-display">${cur} <span class="hp-max">/ ${max}</span></div>
-    <div class="hp-controls">
-      <button id="hp-minus" class="hp-btn">−</button>
-      <input id="hp-delta" type="number" class="hp-input" placeholder="±" min="-999" max="999">
-      <button id="hp-plus"  class="hp-btn">+</button>
-      <button id="hp-apply" class="hp-btn hp-btn-apply">Apply</button>
-    </div>`;
-}
-
-async function adjustHp(sign) {
-  const input = document.getElementById("hp-delta");
-  const raw = parseInt(input.value, 10);
-  const delta = (isNaN(raw) ? 1 : Math.abs(raw)) * sign;
-  try {
-    const r = await api("POST", `/api/characters/${charId}/hp`, { delta });
-    charData.hp_current = r.hp_current;
-    charData.hp_max = r.hp_max;
-    input.value = "";
-    refreshHpDisplay();
-  } catch(e) { toast("⚠ " + e.message, 4000); }
-}
-
-async function applyHpDelta() {
-  const raw = parseInt(document.getElementById("hp-delta").value, 10);
-  if (isNaN(raw)) return;
-  try {
-    const r = await api("POST", `/api/characters/${charId}/hp`, { delta: raw });
-    charData.hp_current = r.hp_current;
-    charData.hp_max = r.hp_max;
-    document.getElementById("hp-delta").value = "";
-    refreshHpDisplay();
-  } catch(e) { toast("⚠ " + e.message, 4000); }
-}
-
-function refreshHpDisplay() {
-  const cur = charData.hp_current ?? 0;
-  const max = charData.hp_max ?? 1;
-  const pct = max > 0 ? Math.round((cur / max) * 100) : 0;
-  const barColor = pct > 50 ? "#4a8c4a" : pct > 25 ? "#b8860b" : "#8b1a1a";
-  const cell = document.getElementById("hp-cell");
-  if (!cell) return;
-  cell.querySelector(".hp-bar").style.width = pct + "%";
-  cell.querySelector(".hp-bar").style.background = barColor;
-  cell.querySelector("#hp-display").innerHTML = `${cur} <span class="hp-max">/ ${max}</span>`;
+    <div class="hp-numbers">${cur} <span class="hp-max">/ ${max}</span></div>`;
 }
 
 // ---------------------------------------------------------------------------

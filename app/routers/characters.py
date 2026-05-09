@@ -110,6 +110,11 @@ def _check_owner_or_admin(char: Character, user: dict) -> None:
         raise HTTPException(403, "Not authorized")
 
 
+def _require_admin(user: dict) -> None:
+    if user.get("email") != settings.admin_email.lower():
+        raise HTTPException(403, "Admin only")
+
+
 def _compute_hp(char: Character, db: Session) -> int:
     cc = char.character_classes[0] if char.character_classes else None
     if not cc:
@@ -419,7 +424,7 @@ def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db), user:
 @router.post("/{char_id}/hp")
 def adjust_hp(char_id: int, data: HpAdjustIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
-    _check_owner_or_admin(char, user)
+    _require_admin(user)
     if data.set is not None:
         char.hp_current = max(0, min(data.set, char.hp_max or 0))
     elif data.delta is not None:
