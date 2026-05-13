@@ -34,6 +34,7 @@ const state = {
   allBackgrounds: [],
   allClasses: [],
   allSpells: [],
+  ownedSpells: [],
   currentClass: null,
   currentBackground: null,
   currentSpecies: null,
@@ -1260,7 +1261,12 @@ async function saveEquipment() {
 async function loadSpellsStep() {
   const cls = state.currentClass;
   if (!cls) return;
-  state.allSpells = await api("GET", `/api/content/spells?class_name=${encodeURIComponent(cls.name)}`);
+  const [classSpells, ownedSpells] = await Promise.all([
+    api("GET", `/api/content/spells?class_name=${encodeURIComponent(cls.name)}`),
+    api("GET", `/api/characters/${state.charId}/spells`),
+  ]);
+  state.allSpells = classSpells;
+  state.ownedSpells = ownedSpells; // [{id, name, level, source, notes, ...}]
   renderSpellsStep();
 }
 
@@ -1276,14 +1282,35 @@ function renderSpellsStep() {
   const spellCounts = {
     Bard: 4, Cleric: 4, Druid: 4, Sorcerer: 2, Wizard: 6, Warlock: 2, Paladin: 2, Ranger: 2,
   };
+
+  // Species-granted spells already in this character's spell list
+  const ownedIds = new Set((state.ownedSpells || []).map(s => s.id));
+  const speciesSpells = (state.ownedSpells || []).filter(s => s.source === "species");
+
+  // Filter class spell lists — remove anything the character already owns
+  const allCantrips = state.allSpells.filter(s => s.level === 0);
+  const speciesCantripsInClassList = allCantrips.filter(s => ownedIds.has(s.id));
+  const cantrips = allCantrips.filter(s => !ownedIds.has(s.id));
+  const spells1 = state.allSpells.filter(s => s.level === 1 && !ownedIds.has(s.id));
+
   const cantripCount = cantripCounts[cls.name] ?? 0;
   const spellCount = spellCounts[cls.name] || 2;
 
-  const cantrips = state.allSpells.filter(s => s.level === 0);
-  const spells1 = state.allSpells.filter(s => s.level === 1);
+  // Species grants hint
+  if (speciesSpells.length > 0) {
+    const grantLines = speciesSpells.map(s => {
+      const note = s.notes ? ` <em class="species-spell-note">(${s.notes})</em>` : "";
+      return `<span class="species-spell-name">${s.name}</span>${note}`;
+    });
+    document.getElementById("species-spells-granted").innerHTML =
+      `<strong>Your species grants:</strong> ${grantLines.join(", ")}`;
+    document.getElementById("species-spells-granted").classList.remove("hidden");
+  } else {
+    document.getElementById("species-spells-granted").classList.add("hidden");
+  }
 
   const hintParts = [];
-  if (cantripCount > 0) hintParts.push(`${cantripCount} cantrip${cantripCount > 1 ? "s" : ""}`);
+  if (cantripCount > 0) hintParts.push(`Choose ${cantripCount} cantrip${cantripCount > 1 ? "s" : ""}`);
   hintParts.push(`${spellCount} level 1 spell${spellCount > 1 ? "s" : ""}`);
   document.getElementById("spells-hint").textContent = `Choose ${hintParts.join(" and ")}.`;
 

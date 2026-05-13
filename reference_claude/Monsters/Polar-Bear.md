@@ -1,0 +1,36 @@
+# Polar Bear
+
+---
+
+## Stat Block
+
+| | |
+|---|---|
+| **Size / Type** | Large Beast |
+| **Alignment** | Unaligned |
+| **AC** | 12 |
+| **Initiative** | +2 (12) |
+| **HP** | 42 (5d10 + 15) |
+| **Speed** | 40 ft., Swim 40 ft. |
+| **CR** | CR 2 (XP 450; PB +2) |
+
+### Ability Scores
+
+| **STR** | **DEX** | **CON** | **INT** | **WIS** | **CHA** |
+|---|---|---|---|---|---|
+| 20 (+5) | 14 (+2) | 16 (+3) | 2 (-4) | 13 (+1) | 7 (-2) |
+
+### Additional Stats
+
+| | |
+|---|---|
+| **Skills** | Perception +5, Stealth +4 |
+| **Resistances** | Cold |
+| **Senses** | Darkvision 60 ft.; Passive Perception 15 |
+| **Languages** | None |
+
+---
+
+## Actions
+
+**Multiattack.** The bear makes two Rend attacks.

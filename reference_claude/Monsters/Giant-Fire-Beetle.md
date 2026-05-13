@@ -1,0 +1,41 @@
+# Giant Fire Beetle
+
+---
+
+## Stat Block
+
+| | |
+|---|---|
+| **Size / Type** | Small Beast |
+| **Alignment** | Unaligned |
+| **AC** | 13 |
+| **Initiative** | +0 (10) |
+| **HP** | 4 (1d6 + 1) |
+| **Speed** | 30 ft., Climb 30 ft. |
+| **CR** | CR 0 (XP 10; PB +2) |
+
+### Ability Scores
+
+| **STR** | **DEX** | **CON** | **INT** | **WIS** | **CHA** |
+|---|---|---|---|---|---|
+| 8 (-1) | 10 (+0) | 12 (+1) | 1 (-5) | 7 (-2) | 3 (-4) |
+
+### Additional Stats
+
+| | |
+|---|---|
+| **Resistances** | Fire |
+| **Senses** | Blindsight 30 ft.; Passive Perception 8 |
+| **Languages** | None |
+
+---
+
+## Traits
+
+**Illumination.** The beetle sheds Bright Light in a 10-foot
+
+---
+
+## Actions
+
+**Bite.** Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire damage.

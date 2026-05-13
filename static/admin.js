@@ -76,7 +76,7 @@ async function loadRoster() {
         <button onclick="levelUp(${c.id})">+Lv</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
         <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
-        <a href="/api/admin/characters/${c.id}/export/pdf" target="_blank"><button>⬇ PDF</button></a>
+        <a href="/api/admin/characters/${c.id}/export/json" target="_blank"><button>⬇ JSON</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
       </div></td>
     </tr>`;

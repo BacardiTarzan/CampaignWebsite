@@ -165,8 +165,20 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             if f.get("level", 1) <= level:
                 features.append({"name": f["name"], "description": f.get("description", ""), "level": f["level"]})
 
-    # Species traits
-    species_traits = (char.species.traits or []) if char.species else []
+    # Species traits — filter the parent lineage/legacy/ancestry descriptor and
+    # replace it with the selected lineage's specific description as its own entry.
+    species_traits = []
+    if char.species:
+        selected = char.species_lineage
+        for trait in (char.species.traits or []):
+            if selected and re.search(r'lineage|legacy|ancestry', trait.get('name', ''), re.IGNORECASE):
+                continue
+            species_traits.append(trait)
+        if selected and char.species.lineages:
+            for lin in char.species.lineages:
+                if lin.get('name') == selected:
+                    species_traits.insert(0, {"name": selected, "description": lin.get('description', '')})
+                    break
 
     # Feats with descriptions
     feats = []

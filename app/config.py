@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     database_url: str = f"sqlite:///{BASE_DIR}/campaign.db"
-    reference_dir: str = str(BASE_DIR / "reference")
+    reference_dir: str = str(BASE_DIR / "reference_claude")
     static_dir: str = str(BASE_DIR / "static")
     templates_dir: str = str(BASE_DIR / "app" / "templates")
     debug: bool = False

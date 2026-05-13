@@ -15,8 +15,53 @@ from ..services.export import character_to_dict, character_to_sheet_dict
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
 import random
+import re
+from sqlalchemy import func
 
 router = APIRouter(prefix="/api/characters", tags=["characters"])
+
+
+# ---------------------------------------------------------------------------
+# Species spell-grant parser
+# ---------------------------------------------------------------------------
+
+_CANTRIP_RE = re.compile(
+    r'\bknow(?:\s+the)?\s+([A-Z][A-Za-z ]+?)(?:\s+and\s+([A-Z][A-Za-z ]+?))?\s*(?:cantrips?|\(([^)]+)\)|(?=[.,;\n]|$))',
+    re.IGNORECASE,
+)
+_PREPARED_RE = re.compile(
+    r'Always have\s+([A-Z][A-Za-z ]+?)\s+prepared[;,.]?\s*(.*)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _parse_species_spell_grants(species, lineage_name: str | None) -> list[dict]:
+    """Return [{"name": str, "notes": str|None}] for each spell the species grants."""
+    grants: list[dict] = []
+
+    def extract(text: str):
+        if not text:
+            return
+        for m in _CANTRIP_RE.finditer(text):
+            note = f"({m.group(3)})" if m.group(3) else None
+            grants.append({"name": m.group(1).strip(), "notes": note})
+            if m.group(2):
+                grants.append({"name": m.group(2).strip(), "notes": None})
+        for m in _PREPARED_RE.finditer(text):
+            note_text = m.group(2).strip().rstrip('.')
+            grants.append({"name": m.group(1).strip(), "notes": note_text or None})
+
+    for trait in (species.traits or []):
+        if not re.search(r'lineage|legacy|ancestry', trait.get('name', ''), re.IGNORECASE):
+            extract(trait.get('description', ''))
+
+    if lineage_name and species.lineages:
+        for lineage in species.lineages:
+            if lineage.get('name') == lineage_name:
+                extract(lineage.get('description', ''))
+                break
+
+    return grants
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +246,23 @@ def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db
     species = db.get(Species, data.species_id)
     if species:
         char.speed = species.speed
+        # Clear previous species spell grants and re-derive from new selection
+        for cs in list(char.spells):
+            if cs.source == "species":
+                db.delete(cs)
+        db.flush()
+        for grant in _parse_species_spell_grants(species, data.species_lineage):
+            spell = db.query(Spell).filter(
+                func.lower(Spell.name) == grant["name"].lower()
+            ).first()
+            if spell:
+                db.add(CharacterSpell(
+                    character_id=char.id,
+                    spell_id=spell.id,
+                    prepared=True,
+                    source="species",
+                    notes=grant["notes"],
+                ))
     char.wizard_step = max(char.wizard_step, 3)
     db.commit()
     return {"ok": True}
@@ -388,7 +450,8 @@ def save_spells(char_id: int, data: StepSpellsIn, db: Session = Depends(get_db),
     char = _get_char(char_id, db)
     _check_owner(char, user)
     for cs in list(char.spells):
-        db.delete(cs)
+        if cs.source != "species":
+            db.delete(cs)
     db.flush()
 
     cc = char.character_classes[0] if char.character_classes else None
@@ -399,12 +462,34 @@ def save_spells(char_id: int, data: StepSpellsIn, db: Session = Depends(get_db),
             character_id=char.id,
             spell_id=sid,
             prepared=True,
+            source="class",
             source_class_id=src_class_id,
         ))
 
     char.wizard_step = max(char.wizard_step, 10)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/{char_id}/spells")
+def get_character_spells(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    return [
+        {
+            "id": cs.spell.id,
+            "name": cs.spell.name,
+            "level": cs.spell.level,
+            "source": cs.source,
+            "notes": cs.notes,
+            "school": cs.spell.school,
+            "description": cs.spell.description,
+            "casting_time": cs.spell.casting_time,
+            "concentration": cs.spell.concentration,
+            "ritual": cs.spell.ritual,
+        }
+        for cs in char.spells
+    ]
 
 
 # --- Step 10: Bio ---

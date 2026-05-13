@@ -53,6 +53,14 @@ def admin_view_character(char_id: int, db: Session = Depends(get_db)):
     return render_character_html(char_dict, class_obj=class_obj, species_obj=char.species, background_obj=char.background)
 
 
+@router.get("/characters/{char_id}/export/json")
+def admin_export_json(char_id: int, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    return character_to_dict(char, db)
+
+
 @router.get("/characters/{char_id}/export/pdf")
 def admin_export_pdf(char_id: int, db: Session = Depends(get_db)):
     char = db.get(Character, char_id)

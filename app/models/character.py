@@ -96,6 +96,8 @@ class CharacterSpell(Base):
     spell_id = Column(Integer, ForeignKey("spells.id"), nullable=False)
     prepared = Column(Boolean, default=True)
     source_class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    source = Column(String, nullable=True)   # "class" | "species"
+    notes = Column(Text, nullable=True)      # special casting rules (e.g. limited no-slot casts)
 
     character = relationship("Character", back_populates="spells")
     spell = relationship("Spell")

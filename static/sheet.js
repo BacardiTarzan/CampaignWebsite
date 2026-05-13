@@ -130,7 +130,7 @@ function render() {
 
   const identity = [
     c.class_name ? `${c.class_name} ${c.level}` : null,
-    c.species_lineage ? `${c.species_lineage} ${c.species_name}` : c.species_name,
+    c.species_lineage || c.species_name,
     c.background_name,
     c.alignment,
   ].filter(Boolean).join(" · ");

@@ -68,7 +68,7 @@ async function loadRoster() {
 }
 
 function renderCard(c) {
-  const speciesDisplay = [c.species_name, c.species_lineage].filter(Boolean).join(" · ");
+  const speciesDisplay = c.species_lineage || c.species_name || "";
   const classDisplay = c.class_name ? `${c.class_name}${c.level ? ` Lv ${c.level}` : ""}` : null;
   const subtitle = [speciesDisplay, classDisplay, c.background_name].filter(Boolean).join(" &nbsp;·&nbsp; ");
 
@@ -83,9 +83,19 @@ function renderCard(c) {
       ${c.alignment ? `<span class="char-stat"><span class="char-stat-label">Alignment</span>${c.alignment}</span>` : ""}
     </div>` : "";
 
-  const continueBtn = !c.is_complete
-    ? `<a href="/?char=${c.id}"><button class="btn-primary">Continue →</button></a>`
-    : "";
+  if (c.is_complete) {
+    return `
+      <div class="char-card char-card--clickable" onclick="window.location.href='/characters/${c.id}/sheet'">
+        <div class="char-card-header">
+          <div>
+            <div class="char-card-name">${c.character_name}</div>
+            <div class="char-card-sub">${subtitle || "&nbsp;"}</div>
+          </div>
+          ${statusBadge}
+        </div>
+        ${stats}
+      </div>`;
+  }
 
   return `
     <div class="char-card">
@@ -98,10 +108,7 @@ function renderCard(c) {
       </div>
       ${stats}
       <div class="char-card-actions">
-        ${continueBtn}
-        ${c.is_complete ? `<a href="/characters/${c.id}/sheet"><button class="btn-primary">View Sheet</button></a>` : ""}
-        ${c.is_complete ? `<a href="/api/characters/${c.id}/export/pdf" target="_blank"><button>Download PDF</button></a>` : ""}
-        <a href="/api/characters/${c.id}/export/json" target="_blank"><button>Export JSON</button></a>
+        <a href="/charactercreator?char=${c.id}"><button class="btn-primary">Continue →</button></a>
       </div>
     </div>`;
 }
