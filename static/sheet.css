@@ -579,38 +579,67 @@
 }
 
 .spell-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   padding: 8px 12px;
   background: rgba(255,255,255,0.05);
   user-select: none;
 }
 .spell-card:hover .spell-card-header { background: rgba(255,255,255,0.09); }
 
+.spell-header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .spell-name {
   font-family: var(--font-header);
   font-size: 0.95rem;
   color: var(--color-light);
   flex-shrink: 0;
-  min-width: 120px;
 }
 
-.spell-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  flex: 1;
-}
-
-.spell-tag {
+.spell-level-label {
   font-family: var(--font-book);
   font-size: 0.72rem;
-  color: var(--color-light-dim);
-  background: rgba(0,0,0,0.25);
-  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--color-ink-faded);
+  flex-shrink: 0;
+}
+
+.spell-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 6px;
+}
+
+.spell-stat {
+  font-family: var(--font-book);
+  font-size: 0.82rem;
+  color: var(--color-light);
+  margin-right: 18px;
+  margin-bottom: 2px;
+}
+
+.spell-stat-label {
+  font-family: var(--font-header);
+  font-size: 0.62rem;
+  letter-spacing: 0.6px;
+  color: var(--color-ink-faded);
+  margin-right: 4px;
+}
+
+.spell-flag {
+  font-family: var(--font-book);
+  font-size: 0.68rem;
+  color: #8ab4e0;
+  border: 1px solid rgba(138,180,224,0.25);
+  background: rgba(138,180,224,0.07);
   border-radius: 10px;
   padding: 1px 7px;
+  flex-shrink: 0;
 }
 
 .spell-badges {

@@ -562,15 +562,6 @@ function renderSpellsTab(c, prof, attrs) {
   const renderSpell = (s) => {
     const isSpecies = s.source === "species";
     const levelLabel = s.level === 0 ? "Cantrip" : `${ORDINAL[s.level]} Level`;
-    const tags = [
-      levelLabel,
-      s.school,
-      s.casting_time,
-      s.range ? s.range + " range" : null,
-      s.duration,
-      s.concentration ? "Concentration" : null,
-      s.ritual ? "Ritual" : null,
-    ].filter(Boolean).map(t => `<span class="spell-tag">${t}</span>`).join("");
 
     // Preparation / source badges
     let prepBadge = "";
@@ -585,19 +576,39 @@ function renderSpellsTab(c, prof, attrs) {
       prepBadge = `<span class="spell-badge spell-badge--prepared">Prepared</span>`;
     }
 
-    const notesLine = (isSpecies && s.notes) ? `<div class="spell-notes">${s.notes}</div>` : "";
-    const compLine = s.components ? `<div class="spell-meta">Components: ${s.components}</div>` : "";
-    const desc = s.description ? `<div class="spell-desc">${s.description}</div>` : "";
+    const flags = [
+      s.concentration ? "Concentration" : null,
+      s.ritual ? "Ritual" : null,
+    ].filter(Boolean).map(t => `<span class="spell-flag">${t}</span>`).join("");
+
+    const stats = [
+      { label: "School",    value: s.school },
+      { label: "Cast Time", value: s.casting_time },
+      { label: "Range",     value: s.range },
+      { label: "Duration",  value: s.duration },
+      { label: "Components",value: s.components },
+    ].filter(r => r.value).map(r =>
+      `<div class="spell-stat"><span class="spell-stat-label">${r.label}</span>${r.value}</div>`
+    ).join("");
+
+    const notesLine = (isSpecies && s.notes)
+      ? `<div class="spell-notes">${s.notes}</div>` : "";
+    const desc = s.description
+      ? `<div class="spell-desc">${s.description}</div>` : "";
 
     return `<div class="spell-card" onclick="this.classList.toggle('open')">
       <div class="spell-card-header">
-        <span class="spell-name">${s.name}</span>
-        <span class="spell-tags">${tags}</span>
-        ${prepBadge ? `<span class="spell-badges">${prepBadge}</span>` : ""}
-        <span class="spell-chevron">▶</span>
+        <div class="spell-header-top">
+          <span class="spell-name">${s.name}</span>
+          <span class="spell-level-label">${levelLabel}</span>
+          ${prepBadge ? `<span class="spell-badges">${prepBadge}</span>` : ""}
+          ${flags}
+          <span class="spell-chevron">▶</span>
+        </div>
+        ${stats ? `<div class="spell-stats-row">${stats}</div>` : ""}
       </div>
       <div class="spell-card-body">
-        ${notesLine}${compLine}${desc}
+        ${notesLine}${desc}
       </div>
     </div>`;
   };
