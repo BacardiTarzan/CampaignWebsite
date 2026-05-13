@@ -477,7 +477,7 @@ async function saveJournal() {
 // Tab 3: Equipment
 // ---------------------------------------------------------------------------
 function renderEquipmentTab(c) {
-  const items = c.equipment || [];
+  const items = (c.equipment || []).filter(e => e.name?.toLowerCase() !== "gold");
   const weapons = items.filter(e => e.item_type === "weapon");
   const armor = items.filter(e => e.item_type === "armor" || e.item_type === "shield");
   const gear = items.filter(e => !["weapon","armor","shield"].includes(e.item_type));

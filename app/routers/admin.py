@@ -477,6 +477,51 @@ def backfill_species_spells(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Convert gold equipment rows → currency.gp
+# ---------------------------------------------------------------------------
+
+@router.post("/convert-gold")
+def convert_gold(db: Session = Depends(get_db)):
+    """Move custom 'Gold' equipment rows into character currency.gp. Idempotent."""
+    from ..models.character import CharacterEquipment
+    rows = db.query(CharacterEquipment).filter(
+        CharacterEquipment.equipment_id.is_(None),
+        CharacterEquipment.custom_name == "Gold",
+    ).all()
+    converted = 0
+    for row in rows:
+        char = row.character
+        if not char:
+            continue
+        cur = dict(char.currency or {})
+        cur.setdefault("pp", 0); cur.setdefault("gp", 0)
+        cur.setdefault("sp", 0); cur.setdefault("cp", 0)
+        cur["gp"] = cur["gp"] + (row.quantity or 0)
+        char.currency = cur
+        db.delete(row)
+        converted += 1
+    db.commit()
+    return {"ok": True, "converted": converted}
+
+
+# ---------------------------------------------------------------------------
+# Force-refresh spell descriptions
+# ---------------------------------------------------------------------------
+
+@router.post("/refresh-spells")
+def refresh_spells(db: Session = Depends(get_db)):
+    """Re-parse all spell markdown files and update any spells with empty descriptions."""
+    import traceback
+    try:
+        from ..services.seeder import seed_all
+        counts = seed_all(db)
+        return {"refreshed": counts.get("spells", 0)}
+    except Exception as e:
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{e}\n\n{tb}")
+
+
+# ---------------------------------------------------------------------------
 # Seed trigger
 # ---------------------------------------------------------------------------
 

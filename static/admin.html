@@ -205,6 +205,16 @@
       <button class="btn-gold" onclick="triggerSeed()">↺ Seed Database</button>
       <div id="seed-result" class="hint mt-sm"></div>
       <hr class="divider">
+      <h3>Convert Gold to Currency</h3>
+      <p class="hint mb-sm">Moves "Gold" gear rows into each character's currency.gp field. Safe to re-run.</p>
+      <button class="btn-secondary" onclick="convertGold()">💰 Convert Gold</button>
+      <div id="gold-result" class="hint mt-sm"></div>
+      <hr class="divider">
+      <h3>Refresh Spell Descriptions</h3>
+      <p class="hint mb-sm">Re-parses spell markdown and fills in any spells with empty descriptions.</p>
+      <button class="btn-secondary" onclick="refreshSpells()">📖 Refresh Spells</button>
+      <div id="spell-refresh-result" class="hint mt-sm"></div>
+      <hr class="divider">
       <h3>Repair Schema</h3>
       <p class="hint mb-sm">Adds missing columns if alembic migrations didn't apply. Safe to re-run.</p>
       <button class="btn-secondary" onclick="repairSchema()">🔧 Repair Schema</button>

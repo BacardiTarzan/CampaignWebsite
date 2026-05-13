@@ -702,7 +702,8 @@ def seed_all(db: Session) -> dict:
                 existing_feats.add(data["name"])
                 counts["feats"] += 1
 
-    # Spells
+    # Spells — insert new rows; also refresh description+metadata if currently empty
+    existing_spell_rows = {r.name: r for r in db.query(Spell)}
     for lvl in range(10):
         spell_dir = REF / "spells" / f"level-{lvl}"
         if not spell_dir.exists():
@@ -711,10 +712,16 @@ def seed_all(db: Session) -> dict:
             if "Zone.Identifier" in f.name:
                 continue
             data = _parse_spell_file(f, lvl)
-            if data["name"] not in existing_spells:
+            if data["name"] not in existing_spell_rows:
                 db.add(Spell(**data))
-                existing_spells.add(data["name"])
+                existing_spell_rows[data["name"]] = None
                 counts["spells"] += 1
+            else:
+                row = existing_spell_rows[data["name"]]
+                if row and not row.description:
+                    for k, v in data.items():
+                        setattr(row, k, v)
+                    counts["spells"] += 1
 
     # Equipment
     weapons_file = REF / "equipment" / "weapons.md"

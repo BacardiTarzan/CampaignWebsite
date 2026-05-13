@@ -370,6 +370,26 @@ async function triggerSeed() {
   } catch(e) { err(e.message); document.getElementById("seed-result").textContent = ""; }
 }
 
+async function convertGold() {
+  const el = document.getElementById("gold-result");
+  el.textContent = "Converting…";
+  try {
+    const r = await api("POST", "/api/admin/convert-gold");
+    el.textContent = `✓ Converted ${r.converted} Gold row(s) to currency.gp`;
+  } catch(e) { err(e.message); el.textContent = ""; }
+}
+
+async function refreshSpells() {
+  const el = document.getElementById("spell-refresh-result");
+  el.textContent = "Refreshing…";
+  try {
+    const r = await api("POST", "/api/admin/refresh-spells");
+    el.textContent = r.refreshed > 0
+      ? `✓ Updated ${r.refreshed} spell(s)`
+      : "✓ All spells already have descriptions — nothing to update";
+  } catch(e) { err(e.message); el.textContent = ""; }
+}
+
 async function repairSchema() {
   const el = document.getElementById("repair-result");
   el.textContent = "Repairing…";
