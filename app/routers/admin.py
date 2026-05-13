@@ -408,6 +408,24 @@ def admin_set_lore_visibility(slug: str, visible: bool, db: Session = Depends(ge
 
 
 # ---------------------------------------------------------------------------
+# Schema repair — add missing columns if alembic didn't apply them
+# ---------------------------------------------------------------------------
+
+@router.post("/repair-schema")
+def repair_schema(db: Session = Depends(get_db)):
+    """Add source/notes columns to character_spells if missing. Safe to re-run."""
+    from sqlalchemy import text
+    stmts = [
+        "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS source VARCHAR",
+        "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS notes TEXT",
+    ]
+    for stmt in stmts:
+        db.execute(text(stmt))
+    db.commit()
+    return {"ok": True, "applied": stmts}
+
+
+# ---------------------------------------------------------------------------
 # Backfill species spell grants
 # ---------------------------------------------------------------------------
 

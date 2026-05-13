@@ -370,6 +370,15 @@ async function triggerSeed() {
   } catch(e) { err(e.message); document.getElementById("seed-result").textContent = ""; }
 }
 
+async function repairSchema() {
+  const el = document.getElementById("repair-result");
+  el.textContent = "Repairing…";
+  try {
+    const r = await api("POST", "/api/admin/repair-schema");
+    el.textContent = `✓ Done — ${r.applied.join("; ")}`;
+  } catch(e) { err(e.message); el.textContent = ""; }
+}
+
 async function backfillSpeciesSpells() {
   const el = document.getElementById("backfill-result");
   el.textContent = "Running backfill…";
