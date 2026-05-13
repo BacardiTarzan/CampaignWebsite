@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Any
 from ..database import get_db
 from ..dependencies import require_admin
 from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
-from ..models.character import Character
+from ..models.character import Character, CharacterSpell
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
 from ..services.pdf import render_character_html, render_character_pdf
+from .characters import _parse_species_spell_grants
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -403,6 +405,52 @@ def admin_set_lore_visibility(slug: str, visible: bool, db: Session = Depends(ge
     page.player_visible = visible
     db.commit()
     return {"ok": True, "player_visible": page.player_visible}
+
+
+# ---------------------------------------------------------------------------
+# Backfill species spell grants
+# ---------------------------------------------------------------------------
+
+@router.post("/backfill-species-spells")
+def backfill_species_spells(db: Session = Depends(get_db)):
+    """Add missing species spell grants to existing characters. Idempotent."""
+    import traceback
+    try:
+        chars = db.query(Character).filter(Character.species_id.isnot(None)).all()
+        total_added = 0
+        results = []
+        for char in chars:
+            if not char.species:
+                continue
+            grants = _parse_species_spell_grants(char.species, char.species_lineage)
+            added = 0
+            for grant in grants:
+                spell = db.query(Spell).filter(
+                    func.lower(Spell.name) == grant["name"].lower()
+                ).first()
+                if not spell:
+                    continue
+                already = db.query(CharacterSpell).filter_by(
+                    character_id=char.id,
+                    spell_id=spell.id,
+                    source="species",
+                ).first()
+                if already:
+                    continue
+                db.add(CharacterSpell(
+                    character_id=char.id,
+                    spell_id=spell.id,
+                    source="species",
+                    notes=grant.get("notes"),
+                ))
+                added += 1
+            total_added += added
+            results.append({"character": char.character_name, "added": added})
+        db.commit()
+        return {"total_added": total_added, "characters": results}
+    except Exception as e:
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{e}\n\n{tb}")
 
 
 # ---------------------------------------------------------------------------

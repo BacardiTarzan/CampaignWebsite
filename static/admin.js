@@ -370,6 +370,16 @@ async function triggerSeed() {
   } catch(e) { err(e.message); document.getElementById("seed-result").textContent = ""; }
 }
 
+async function backfillSpeciesSpells() {
+  const el = document.getElementById("backfill-result");
+  el.textContent = "Running backfill…";
+  try {
+    const r = await api("POST", "/api/admin/backfill-species-spells");
+    const lines = r.characters.filter(c => c.added > 0).map(c => `${c.character}: +${c.added}`).join(", ");
+    el.textContent = `✓ Total added: ${r.total_added}${lines ? ` (${lines})` : " — nothing new to add"}`;
+  } catch(e) { err(e.message); el.textContent = ""; }
+}
+
 // ---------------------------------------------------------------------------
 // Lore management
 // ---------------------------------------------------------------------------

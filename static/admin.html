@@ -204,6 +204,11 @@
       <p class="hint mb-sm">Re-parses all reference/ markdown files. Only inserts new records (safe to re-run).</p>
       <button class="btn-gold" onclick="triggerSeed()">↺ Seed Database</button>
       <div id="seed-result" class="hint mt-sm"></div>
+      <hr class="divider">
+      <h3>Backfill Species Spell Grants</h3>
+      <p class="hint mb-sm">Adds missing species-granted spells to existing characters. Safe to re-run.</p>
+      <button class="btn-secondary" onclick="backfillSpeciesSpells()">⚗ Backfill Species Spells</button>
+      <div id="backfill-result" class="hint mt-sm"></div>
     </div>
   </div>
 </div>
