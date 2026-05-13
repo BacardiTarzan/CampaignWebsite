@@ -123,6 +123,13 @@ class StepBioIn(BaseModel):
     bio: str | None = None
 
 
+class BioUpdateIn(BaseModel):
+    height: str | None = None
+    weight: str | None = None
+    deity: str | None = None
+    journal: str | None = None
+
+
 class HpAdjustIn(BaseModel):
     delta: int | None = None   # relative: +5 or -3
     set: int | None = None     # absolute override
@@ -535,6 +542,22 @@ def update_spell_slots(char_id: int, data: SpellSlotsIn, db: Session = Depends(g
     char.spell_slots_used = data.used
     db.commit()
     return {"spell_slots_used": char.spell_slots_used}
+
+
+@router.patch("/{char_id}/bio")
+def update_bio(char_id: int, data: BioUpdateIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner(char, user)
+    if data.height is not None:
+        char.height = data.height
+    if data.weight is not None:
+        char.weight = data.weight
+    if data.deity is not None:
+        char.deity = data.deity
+    if data.journal is not None:
+        char.journal = data.journal
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/{char_id}/sheet-data")

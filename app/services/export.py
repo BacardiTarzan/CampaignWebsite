@@ -125,6 +125,45 @@ def _calc_ac(formula: str, attrs: dict) -> int:
     return 10 + dex
 
 
+def _calc_attacks(char, attrs: dict, prof: int) -> list:
+    str_mod = _mod(attrs.get("str", 10))
+    dex_mod = _mod(attrs.get("dex", 10))
+    attacks = []
+    for ce in char.equipment:
+        item = ce.equipment_item
+        if not item or item.item_type != "weapon":
+            continue
+        props = [p.lower() for p in (item.properties or [])]
+        cat = (item.category or "").lower()
+        is_finesse = "finesse" in props
+        is_ranged = "ranged" in cat
+        stat_mod = max(str_mod, dex_mod) if is_finesse else (dex_mod if is_ranged else str_mod)
+        attack_bonus = prof + stat_mod
+        dmg = item.damage or "1"
+        dmg_type = item.damage_type or ""
+        dmg_str = (f"{dmg}+{stat_mod}" if stat_mod >= 0 else f"{dmg}{stat_mod}") + (f" {dmg_type}" if dmg_type else "")
+        attacks.append({
+            "name": item.name,
+            "attack_bonus": attack_bonus,
+            "damage": dmg_str,
+            "properties": item.properties or [],
+            "mastery_property": item.mastery_property,
+            "category": item.category or "",
+        })
+    # Unarmed strike always available
+    unarmed_dmg = f"1+{str_mod}" if str_mod >= 0 else f"1{str_mod}"
+    attacks.append({
+        "name": "Unarmed Strike",
+        "attack_bonus": prof + str_mod,
+        "damage": f"{unarmed_dmg} bludgeoning",
+        "properties": [],
+        "mastery_property": None,
+        "category": "Melee",
+        "is_unarmed": True,
+    })
+    return attacks
+
+
 def character_to_sheet_dict(char: Character, db: Session) -> dict:
     cc = char.character_classes[0] if char.character_classes else None
     cls: DnDClass | None = db.get(DnDClass, cc.class_id) if cc else None
@@ -197,6 +236,8 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             "name": sp.name,
             "level": sp.level,
             "prepared": cs.prepared,
+            "source": cs.source or "class",
+            "notes": cs.notes,
             "school": sp.school or "",
             "casting_time": sp.casting_time or "",
             "range": sp.spell_range or "",
@@ -233,10 +274,16 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "owner_email": char.owner_email,
         "species_name": char.species.name if char.species else None,
         "species_lineage": char.species_lineage,
+        "species_size": (char.species.size_options[0] if char.species and char.species.size_options else "Medium"),
         "species_traits": species_traits,
         "background_name": char.background.name if char.background else None,
         "alignment": char.alignment,
         "bio": char.bio,
+        "height": char.height,
+        "weight": char.weight,
+        "deity": char.deity,
+        "journal": char.journal,
+        "currency": char.currency or {"pp": 0, "gp": 0, "sp": 0, "cp": 0},
         "class_name": cls.name if cls else None,
         "class_hit_die": cls.hit_die if cls else None,
         "class_saving_throws": list(save_profs),
@@ -261,5 +308,6 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "feats": feats,
         "spells": spells,
         "equipment": equipment,
+        "attacks": _calc_attacks(char, attrs, prof),
         "is_complete": char.is_complete,
     }

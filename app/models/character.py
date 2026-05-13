@@ -23,6 +23,11 @@ class Character(Base):
     species_size_choice = Column(String, nullable=True)      # "Medium" or "Small" when species offers a choice
     spell_slots_used = Column(JSON, nullable=True)           # {"1": 2, "2": 0} slots expended per level
     owner_email = Column(String, nullable=True)
+    height = Column(String, nullable=True)
+    weight = Column(String, nullable=True)
+    deity = Column(String, nullable=True)
+    journal = Column(Text, nullable=True)
+    currency = Column(JSON, nullable=True)                   # {"pp":0,"gp":0,"sp":0,"cp":0}
     stat_roll_locked = Column(Boolean, default=False)
     wizard_step = Column(Integer, default=1)
     is_complete = Column(Boolean, default=False)

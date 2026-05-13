@@ -418,6 +418,11 @@ def repair_schema(db: Session = Depends(get_db)):
     stmts = [
         "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS source VARCHAR",
         "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS notes TEXT",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS height VARCHAR",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS weight VARCHAR",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS deity VARCHAR",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS journal TEXT",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS currency JSON",
     ]
     for stmt in stmts:
         db.execute(text(stmt))

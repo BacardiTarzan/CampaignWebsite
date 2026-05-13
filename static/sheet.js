@@ -21,7 +21,6 @@ const HALF_SLOTS = {
   16:[4,3,3,2,0,0,0,0,0],17:[4,3,3,3,1,0,0,0,0],18:[4,3,3,3,1,0,0,0,0],
   19:[4,3,3,3,2,0,0,0,0],20:[4,3,3,3,2,0,0,0,0],
 };
-// Warlock pact magic: {count, level} per character level
 const PACT_SLOTS = {
   1:{c:1,l:1},2:{c:2,l:1},3:{c:2,l:2},4:{c:2,l:2},5:{c:2,l:3},
   6:{c:2,l:3},7:{c:2,l:4},8:{c:2,l:4},9:{c:2,l:5},10:{c:2,l:5},
@@ -38,6 +37,7 @@ const SKILL_ABILITY = {
 };
 
 const ORDINAL = ["","1st","2nd","3rd","4th","5th","6th","7th","8th","9th"];
+const SPELL_AB_KEY = { "Intelligence":"int","Wisdom":"wis","Charisma":"cha" };
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -63,7 +63,7 @@ function toast(msg, ms = 3000) {
 }
 
 // ---------------------------------------------------------------------------
-// Slot calculation
+// Slot reference (read-only)
 // ---------------------------------------------------------------------------
 function getSlots(char) {
   const type = char.class_spellcasting_type;
@@ -114,7 +114,7 @@ async function pollHp() {
     if (!cell) return;
     const label = cell.querySelector(".sh-combat-label").outerHTML;
     cell.innerHTML = label + renderHpWidget(charData);
-  } catch (_) { /* ignore poll errors */ }
+  } catch (_) { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -125,8 +125,6 @@ function render() {
   const prof = c.proficiency_bonus || 2;
   const attrs = c.attributes || {};
   const profSkills = new Set(c.prof_skills || []);
-  const expertSkills = new Set(c.expert_skills || []);
-  const saveProfs = new Set(c.save_profs || []);
 
   const identity = [
     c.class_name ? `${c.class_name} ${c.level}` : null,
@@ -137,6 +135,7 @@ function render() {
 
   const initiative = fmtMod(mod(attrs.dex || 10));
   const passivePerc = 10 + mod(attrs.wis || 10) + (profSkills.has("Perception") ? prof : 0);
+  const isCaster = !!c.class_spellcasting_type;
 
   document.getElementById("sheet-root").innerHTML = `
     <div class="sh-header">
@@ -174,36 +173,24 @@ function render() {
       </div>
     </div>
 
-    ${c.class_spellcasting_type ? renderSlotBar(c) : ""}
-
-    <div class="sh-main">
-      <div class="sh-col-left">
-        ${renderAbilityScores(attrs)}
-        ${renderSavingThrows(attrs, saveProfs, prof)}
-        ${renderSkills(attrs, profSkills, expertSkills, prof)}
-      </div>
-      <div class="sh-col-right">
-        ${renderProficiencies(c)}
-      </div>
-    </div>
-
     <div class="sh-tabs">
-      ${c.spells.length ? '<button class="sh-tab-btn active" onclick="switchSheetTab(\'spells\',this)">Spells</button>' : ""}
-      <button class="sh-tab-btn ${c.spells.length ? "" : "active"}" onclick="switchSheetTab('features',this)">Features &amp; Traits</button>
-      <button class="sh-tab-btn" onclick="switchSheetTab('equipment',this)">Equipment</button>
+      <button class="sh-tab-btn active" onclick="switchSheetTab('stats',this)">Stats &amp; Attacks</button>
       <button class="sh-tab-btn" onclick="switchSheetTab('bio',this)">Biography</button>
+      <button class="sh-tab-btn" onclick="switchSheetTab('equipment',this)">Equipment</button>
+      ${isCaster ? `<button class="sh-tab-btn" onclick="switchSheetTab('spells',this)">Spells</button>` : ""}
     </div>
 
-    ${c.spells.length ? `<div id="sh-tab-spells" class="sh-tab-panel">${renderSpellsTab(c)}</div>` : ""}
-    <div id="sh-tab-features" class="sh-tab-panel ${c.spells.length ? "hidden" : ""}">${renderFeaturesTab(c)}</div>
-    <div id="sh-tab-equipment" class="sh-tab-panel hidden">${renderEquipmentTab(c)}</div>
+    <div id="sh-tab-stats" class="sh-tab-panel">${renderStatsTab(c, prof, attrs)}</div>
     <div id="sh-tab-bio" class="sh-tab-panel hidden">${renderBioTab(c)}</div>
+    <div id="sh-tab-equipment" class="sh-tab-panel hidden">${renderEquipmentTab(c)}</div>
+    ${isCaster ? `<div id="sh-tab-spells" class="sh-tab-panel hidden">${renderSpellsTab(c, prof, attrs)}</div>` : ""}
   `;
 
+  attachBioSave();
 }
 
 // ---------------------------------------------------------------------------
-// HP widget (read-only — HP is managed by the DM via the admin panel)
+// HP widget
 // ---------------------------------------------------------------------------
 function renderHpWidget(c) {
   const cur = c.hp_current ?? 0;
@@ -218,62 +205,27 @@ function renderHpWidget(c) {
 }
 
 // ---------------------------------------------------------------------------
-// Spell slot bar
+// Tab 1: Stats & Attacks
 // ---------------------------------------------------------------------------
-function renderSlotBar(c) {
-  const slots = getSlots(c);
-  if (!slots.length) return "";
-  const used = charData.spell_slots_used || {};
-  const pips = slots.map(s => {
-    const expended = parseInt(used[String(s.level)] || 0, 10);
-    const bubbles = Array.from({length: s.total}, (_, i) => {
-      const isUsed = i < expended;
-      return `<button class="slot-pip ${isUsed ? "used" : ""}" onclick="toggleSlot(${s.level},${i})" title="${ORDINAL[s.level]} level slot"></button>`;
-    }).join("");
-    return `<div class="slot-group">
-      <span class="slot-label">${s.pact ? "Pact" : ORDINAL[s.level]}</span>
-      <div class="slot-pips">${bubbles}</div>
-    </div>`;
-  }).join("");
-  return `<div class="sh-slot-bar"><span class="slot-bar-title">Spell Slots</span>${pips}</div>`;
-}
+function renderStatsTab(c, prof, attrs) {
+  const profSkills = new Set(c.prof_skills || []);
+  const expertSkills = new Set(c.expert_skills || []);
+  const saveProfs = new Set(c.save_profs || []);
 
-async function toggleSlot(level, index) {
-  const used = { ...(charData.spell_slots_used || {}) };
-  const key = String(level);
-  const slots = getSlots(charData);
-  const slotGroup = slots.find(s => s.level === level);
-  if (!slotGroup) return;
-  const curUsed = parseInt(used[key] || 0, 10);
-  // If clicking the last used pip, unuse it; otherwise use the next available pip
-  if (index === curUsed - 1) {
-    used[key] = curUsed - 1;
-  } else {
-    used[key] = Math.min(index + 1, slotGroup.total);
-  }
-  try {
-    const r = await api("POST", `/api/characters/${charId}/spell-slots`, { used });
-    charData.spell_slots_used = r.spell_slots_used;
-    refreshSlotBar();
-  } catch(e) { toast("⚠ " + e.message, 4000); }
-}
-
-function refreshSlotBar() {
-  const container = document.querySelector(".sh-slot-bar");
-  if (!container) return;
-  container.outerHTML = renderSlotBar(charData);
-  // re-query after DOM update
-  document.querySelector(".sh-slot-bar")?.querySelectorAll(".slot-pip").forEach((btn, i) => {
-    // onclick already inline in renderSlotBar
-  });
-  // Easier: just re-render the whole slot bar
-  const newHtml = renderSlotBar(charData);
-  const wrapper = document.querySelector(".sh-slot-bar")?.parentElement;
-  if (wrapper) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = newHtml;
-    document.querySelector(".sh-slot-bar").replaceWith(tmp.firstElementChild || document.createElement("div"));
-  }
+  return `
+    <div class="sh-main">
+      <div class="sh-col-left">
+        ${renderAbilityScores(attrs)}
+        ${renderSavingThrows(attrs, saveProfs, prof)}
+        ${renderSkills(attrs, profSkills, expertSkills, prof)}
+      </div>
+      <div class="sh-col-right">
+        ${renderProficiencies(c, prof, attrs)}
+        ${renderAttackCards(c)}
+      </div>
+    </div>
+    ${renderFeaturesSection(c)}
+  `;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,12 +288,28 @@ function renderSkills(attrs, profSkills, expertSkills, prof) {
 }
 
 // ---------------------------------------------------------------------------
-// Proficiencies panel (right column)
+// Proficiencies + Spellcasting info
 // ---------------------------------------------------------------------------
-function renderProficiencies(c) {
+function renderProficiencies(c, prof, attrs) {
   const languages = (c.language_proficiencies || []).join(", ") || "—";
   const tools = (c.tool_proficiencies || []).join(", ") || "—";
   const masteries = (c.weapon_mastery_unlocks || []).join(", ") || "—";
+
+  let spellSection = "";
+  if (c.class_spellcasting_type) {
+    const ab = c.class_spellcasting_ability || "";
+    const abKey = SPELL_AB_KEY[ab] || "int";
+    const abMod = mod((attrs || {})[abKey] || 10);
+    const dc = 8 + prof + abMod;
+    const atk = fmtMod(prof + abMod);
+    spellSection = `<div class="sh-section">
+      <h4 class="sh-section-title">Spellcasting</h4>
+      <p class="sh-prose">Ability: <strong>${ab || "—"}</strong></p>
+      <p class="sh-prose">Save DC: <strong>${dc}</strong></p>
+      <p class="sh-prose">Attack: <strong>${atk}</strong></p>
+    </div>`;
+  }
+
   return `
     <div class="sh-section">
       <h4 class="sh-section-title">Languages</h4>
@@ -355,68 +323,43 @@ function renderProficiencies(c) {
       <h4 class="sh-section-title">Weapon Masteries</h4>
       <p class="sh-prose">${masteries}</p>
     </div>` : ""}
-    ${c.class_spellcasting_type ? `<div class="sh-section">
-      <h4 class="sh-section-title">Spellcasting</h4>
-      <p class="sh-prose">Ability: <strong>${c.class_spellcasting_ability || "—"}</strong></p>
-      <p class="sh-prose">Save DC: <strong>${8 + (c.proficiency_bonus||2) + mod((c.attributes||{})[SPELL_AB_KEY[c.class_spellcasting_ability]] || 10)}</strong></p>
-      <p class="sh-prose">Attack: <strong>${fmtMod((c.proficiency_bonus||2) + mod((c.attributes||{})[SPELL_AB_KEY[c.class_spellcasting_ability]] || 10))}</strong></p>
-    </div>` : ""}
+    ${spellSection}
   `;
 }
 
-const SPELL_AB_KEY = {
-  "Intelligence":"int","Wisdom":"wis","Charisma":"cha"
-};
-
 // ---------------------------------------------------------------------------
-// Spells tab
+// Attack cards
 // ---------------------------------------------------------------------------
-function renderSpellsTab(c) {
-  const cantrips = c.spells.filter(s => s.level === 0);
-  const leveled = c.spells.filter(s => s.level > 0);
+function renderAttackCards(c) {
+  const attacks = c.attacks || [];
+  if (!attacks.length) return "";
 
-  const renderSpell = (s) => {
-    const tags = [
-      s.level === 0 ? "Cantrip" : `${ORDINAL[s.level]} Level`,
-      s.school,
-      s.casting_time,
-      s.range ? s.range + " range" : null,
-      s.duration,
-      s.concentration ? "Concentration" : null,
-      s.ritual ? "Ritual" : null,
-    ].filter(Boolean).map(t => `<span class="spell-tag">${t}</span>`).join("");
-
-    const compLine = s.components ? `<div class="spell-meta">Components: ${s.components}</div>` : "";
-    const desc = s.description ? `<div class="spell-desc">${s.description}</div>` : "";
-
-    return `<div class="spell-card" onclick="this.classList.toggle('open')">
-      <div class="spell-card-header">
-        <span class="spell-name">${s.name}</span>
-        <span class="spell-tags">${tags}</span>
-        <span class="spell-chevron">▶</span>
+  const cards = attacks.map(a => {
+    const propTags = (a.properties || []).slice(0, 4)
+      .map(p => `<span class="attack-prop">${p}</span>`).join("");
+    const masteryTag = a.mastery_property
+      ? `<span class="attack-mastery">${a.mastery_property}</span>` : "";
+    const unarmedClass = a.is_unarmed ? " attack-card--unarmed" : "";
+    return `<div class="attack-card${unarmedClass}">
+      <div class="attack-name">${a.name}</div>
+      <div class="attack-stats">
+        <div class="attack-stat"><span class="attack-label">ATK</span>${fmtMod(a.attack_bonus)}</div>
+        <div class="attack-stat"><span class="attack-label">DMG</span>${a.damage}</div>
       </div>
-      <div class="spell-card-body">
-        ${compLine}
-        ${desc}
-      </div>
+      ${(propTags || masteryTag) ? `<div class="attack-props">${propTags}${masteryTag}</div>` : ""}
     </div>`;
-  };
+  }).join("");
 
-  const cantripHtml = cantrips.length ? `
-    <h4 class="sh-section-title">Cantrips</h4>
-    ${cantrips.map(renderSpell).join("")}` : "";
-
-  const leveledHtml = leveled.length ? `
-    <h4 class="sh-section-title mt-md">Leveled Spells</h4>
-    ${leveled.map(renderSpell).join("")}` : "";
-
-  return `<div class="sh-section">${cantripHtml}${leveledHtml}</div>`;
+  return `<div class="sh-section">
+    <h4 class="sh-section-title">Attacks</h4>
+    <div class="attack-cards">${cards}</div>
+  </div>`;
 }
 
 // ---------------------------------------------------------------------------
-// Features tab
+// Features & Traits (below the two-column layout)
 // ---------------------------------------------------------------------------
-function renderFeaturesTab(c) {
+function renderFeaturesSection(c) {
   const renderEntry = (name, desc, badge) => `
     <div class="feature-card">
       <div class="feature-card-header">
@@ -426,45 +369,249 @@ function renderFeaturesTab(c) {
       ${desc ? `<div class="feature-desc">${desc}</div>` : ""}
     </div>`;
 
-  const classFeatures = (c.class_features || []).map(f => renderEntry(f.name, f.description, `${c.class_name} Lv ${f.level}`)).join("");
-  const speciesTraits = (c.species_traits || []).map(t => renderEntry(t.name, t.description, c.species_name)).join("");
-  const feats = (c.feats || []).map(f => renderEntry(f.name, f.description, "Feat")).join("");
+  const classFeatures = (c.class_features || []).map(f =>
+    renderEntry(f.name, f.description, `${c.class_name} Lv ${f.level}`)).join("");
+  const speciesTraits = (c.species_traits || []).map(t =>
+    renderEntry(t.name, t.description, c.species_lineage || c.species_name)).join("");
+  const feats = (c.feats || []).map(f =>
+    renderEntry(f.name, f.description, "Feat")).join("");
 
-  return `<div class="sh-section">
-    ${classFeatures.length ? `<h4 class="sh-section-title">Class Features</h4>${classFeatures}` : ""}
-    ${speciesTraits.length ? `<h4 class="sh-section-title mt-md">Species Traits</h4>${speciesTraits}` : ""}
-    ${feats.length ? `<h4 class="sh-section-title mt-md">Feats</h4>${feats}` : ""}
+  if (!classFeatures && !speciesTraits && !feats) return "";
+
+  return `<div class="sh-features-section">
+    <div class="sh-features-inner">
+      ${classFeatures ? `<h4 class="sh-section-title">Class Features</h4>${classFeatures}` : ""}
+      ${speciesTraits ? `<h4 class="sh-section-title ${classFeatures ? "mt-md" : ""}">Species Traits</h4>${speciesTraits}` : ""}
+      ${feats ? `<h4 class="sh-section-title mt-md">Feats</h4>${feats}` : ""}
+    </div>
   </div>`;
 }
 
 // ---------------------------------------------------------------------------
-// Equipment tab
+// Tab 2: Biography
 // ---------------------------------------------------------------------------
-function renderEquipmentTab(c) {
-  if (!c.equipment.length) return `<p class="hint">No equipment recorded.</p>`;
-  const rows = c.equipment.map(e => {
-    const detail = [
-      e.damage ? `${e.damage} ${e.damage_type || ""}`.trim() : null,
-      e.ac_formula ? `AC ${e.ac_formula}` : null,
-      (e.properties || []).join(", ") || null,
-      e.mastery_property ? `Mastery: ${e.mastery_property}` : null,
-    ].filter(Boolean).join(" · ");
-    return `<tr>
-      <td>${e.quantity > 1 ? `${e.quantity}×` : ""} <strong>${e.name}</strong></td>
-      <td class="text-muted">${e.item_type || ""}</td>
-      <td class="text-muted">${detail}</td>
-    </tr>`;
-  }).join("");
-  return `<table class="data-table sh-equip-table"><tbody>${rows}</tbody></table>`;
+function renderBioTab(c) {
+  const sizeHint = c.species_size ? ` <span class="bio-hint">(${c.species_size})</span>` : "";
+
+  return `<div class="bio-grid">
+    <div class="bio-details-col">
+      <div class="sh-section">
+        <h4 class="sh-section-title">Identity</h4>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Alignment</label>
+          <span class="bio-field-value">${c.alignment || "—"}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Background</label>
+          <span class="bio-field-value">${c.background_name || "—"}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Height${sizeHint}</label>
+          <input class="bio-input" id="bio-height" type="text" placeholder="e.g. 5'8&quot;" value="${c.height || ""}" data-field="height">
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Weight</label>
+          <input class="bio-input" id="bio-weight" type="text" placeholder="e.g. 160 lbs" value="${c.weight || ""}" data-field="weight">
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Deity / Patron</label>
+          <input class="bio-input" id="bio-deity" type="text" placeholder="None" value="${c.deity || ""}" data-field="deity">
+        </div>
+      </div>
+
+      ${c.bio ? `<div class="sh-section">
+        <h4 class="sh-section-title">Backstory</h4>
+        <div class="sh-prose bio-text">${c.bio.replace(/\n/g,"<br>")}</div>
+      </div>` : ""}
+    </div>
+
+    <div class="bio-journal-col">
+      <div class="sh-section" style="height:100%">
+        <h4 class="sh-section-title">Journal <span class="bio-hint">(your notes)</span></h4>
+        <textarea id="bio-journal" class="bio-journal" placeholder="Write anything here — session notes, character thoughts, reminders…" data-field="journal">${c.journal || ""}</textarea>
+        <div class="bio-save-row">
+          <span id="bio-save-status" class="bio-save-status"></span>
+          <button class="btn-secondary btn-sm" onclick="saveJournal()">Save Journal</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+let _journalTimer = null;
+function attachBioSave() {
+  document.querySelectorAll(".bio-input").forEach(input => {
+    input.addEventListener("blur", async () => {
+      const field = input.dataset.field;
+      const value = input.value.trim();
+      try {
+        await api("PATCH", `/api/characters/${charId}/bio`, { [field]: value });
+        charData[field] = value;
+      } catch(e) { toast("⚠ Save failed: " + e.message, 4000); }
+    });
+  });
+
+  const journal = document.getElementById("bio-journal");
+  if (journal) {
+    journal.addEventListener("input", () => {
+      clearTimeout(_journalTimer);
+      document.getElementById("bio-save-status").textContent = "Unsaved…";
+      _journalTimer = setTimeout(saveJournal, 2000);
+    });
+  }
+}
+
+async function saveJournal() {
+  const el = document.getElementById("bio-journal");
+  if (!el) return;
+  const status = document.getElementById("bio-save-status");
+  try {
+    await api("PATCH", `/api/characters/${charId}/bio`, { journal: el.value });
+    charData.journal = el.value;
+    status.textContent = "Saved";
+    setTimeout(() => { if (status) status.textContent = ""; }, 2000);
+  } catch(e) { toast("⚠ Could not save journal: " + e.message, 4000); }
 }
 
 // ---------------------------------------------------------------------------
-// Bio tab
+// Tab 3: Equipment
 // ---------------------------------------------------------------------------
-function renderBioTab(c) {
+function renderEquipmentTab(c) {
+  const items = c.equipment || [];
+  const weapons = items.filter(e => e.item_type === "weapon");
+  const armor = items.filter(e => e.item_type === "armor" || e.item_type === "shield");
+  const gear = items.filter(e => !["weapon","armor","shield"].includes(e.item_type));
+
+  const renderRow = (e) => {
+    const detail = [
+      e.damage ? `${e.damage}${e.damage_type ? " " + e.damage_type : ""}` : null,
+      e.ac_formula ? `AC ${e.ac_formula}` : null,
+      (e.properties || []).join(", ") || null,
+    ].filter(Boolean).join(" · ");
+    return `<tr>
+      <td>${e.quantity > 1 ? `<span class="equip-qty">${e.quantity}×</span> ` : ""}<strong>${e.name}</strong></td>
+      <td class="text-muted">${e.category || e.item_type || ""}</td>
+      <td class="text-muted">${detail}</td>
+    </tr>`;
+  };
+
+  const renderSection = (title, rows) => rows.length ? `
+    <h4 class="sh-section-title ${title !== "Weapons" ? "mt-md" : ""}">${title}</h4>
+    <table class="data-table sh-equip-table"><tbody>${rows.map(renderRow).join("")}</tbody></table>` : "";
+
+  const cur = c.currency || {pp:0,gp:0,sp:0,cp:0};
+  const currencyHtml = `
+    <div class="sh-section mt-md">
+      <h4 class="sh-section-title">Currency</h4>
+      <div class="currency-row">
+        <div class="currency-coin currency-pp"><span class="currency-val">${cur.pp ?? 0}</span><span class="currency-label">PP</span></div>
+        <div class="currency-coin currency-gp"><span class="currency-val">${cur.gp ?? 0}</span><span class="currency-label">GP</span></div>
+        <div class="currency-coin currency-sp"><span class="currency-val">${cur.sp ?? 0}</span><span class="currency-label">SP</span></div>
+        <div class="currency-coin currency-cp"><span class="currency-val">${cur.cp ?? 0}</span><span class="currency-label">CP</span></div>
+      </div>
+    </div>`;
+
+  if (!items.length) return `<p class="hint">No equipment recorded.</p>${currencyHtml}`;
+
   return `<div class="sh-section">
-    ${c.alignment ? `<p class="sh-prose"><strong>Alignment:</strong> ${c.alignment}</p>` : ""}
-    ${c.bio ? `<div class="sh-prose bio-text">${c.bio.replace(/\n/g, "<br>")}</div>` : '<p class="hint">No backstory recorded.</p>'}
+    ${renderSection("Weapons", weapons)}
+    ${renderSection("Armor & Shields", armor)}
+    ${renderSection("Gear", gear)}
+  </div>${currencyHtml}`;
+}
+
+// ---------------------------------------------------------------------------
+// Tab 4: Spells
+// ---------------------------------------------------------------------------
+function renderSpellsTab(c, prof, attrs) {
+  const ab = c.class_spellcasting_ability || "";
+  const abKey = SPELL_AB_KEY[ab] || "int";
+  const abMod = mod((attrs || {})[abKey] || 10);
+  const dc = 8 + prof + abMod;
+  const atk = fmtMod(prof + abMod);
+
+  const isWizard = (c.class_name || "").toLowerCase() === "wizard";
+  const isPact = c.class_spellcasting_type === "pact";
+
+  const slots = getSlots(c);
+  const slotRef = slots.length ? `
+    <div class="slot-ref-bar">
+      <span class="slot-ref-title">Spell Slots</span>
+      ${slots.map(s => `<div class="slot-ref-group">
+        <div class="slot-ref-label">${s.pact ? "Pact" : ORDINAL[s.level]}</div>
+        <div class="slot-ref-count">${s.total}</div>
+      </div>`).join("")}
+    </div>` : "";
+
+  const spells = c.spells || [];
+  if (!spells.length) return `
+    <div class="sh-section">
+      <p class="spell-cast-line"><strong>${ab}</strong> · Save DC <strong>${dc}</strong> · Atk <strong>${atk}</strong></p>
+      ${slotRef}
+      <p class="hint mt-md">No spells recorded.</p>
+    </div>`;
+
+  // Group by level
+  const byLevel = {};
+  spells.forEach(s => {
+    const key = s.level;
+    if (!byLevel[key]) byLevel[key] = [];
+    byLevel[key].push(s);
+  });
+
+  const renderSpell = (s) => {
+    const isSpecies = s.source === "species";
+    const levelLabel = s.level === 0 ? "Cantrip" : `${ORDINAL[s.level]} Level`;
+    const tags = [
+      levelLabel,
+      s.school,
+      s.casting_time,
+      s.range ? s.range + " range" : null,
+      s.duration,
+      s.concentration ? "Concentration" : null,
+      s.ritual ? "Ritual" : null,
+    ].filter(Boolean).map(t => `<span class="spell-tag">${t}</span>`).join("");
+
+    // Preparation / source badges
+    let prepBadge = "";
+    if (isSpecies) {
+      prepBadge = `<span class="spell-badge spell-badge--species">Species</span>`;
+    } else if (isWizard) {
+      prepBadge = `<span class="spell-badge spell-badge--spellbook">Spellbook</span>`;
+      if (s.level > 0 && s.prepared) {
+        prepBadge += `<span class="spell-badge spell-badge--prepared">Prepared</span>`;
+      }
+    } else if (!isPact && s.level > 0 && s.prepared) {
+      prepBadge = `<span class="spell-badge spell-badge--prepared">Prepared</span>`;
+    }
+
+    const notesLine = (isSpecies && s.notes) ? `<div class="spell-notes">${s.notes}</div>` : "";
+    const compLine = s.components ? `<div class="spell-meta">Components: ${s.components}</div>` : "";
+    const desc = s.description ? `<div class="spell-desc">${s.description}</div>` : "";
+
+    return `<div class="spell-card" onclick="this.classList.toggle('open')">
+      <div class="spell-card-header">
+        <span class="spell-name">${s.name}</span>
+        <span class="spell-tags">${tags}</span>
+        ${prepBadge ? `<span class="spell-badges">${prepBadge}</span>` : ""}
+        <span class="spell-chevron">▶</span>
+      </div>
+      <div class="spell-card-body">
+        ${notesLine}${compLine}${desc}
+      </div>
+    </div>`;
+  };
+
+  const levelGroups = Object.keys(byLevel).sort((a,b) => a-b).map(lvl => {
+    const levelName = lvl === "0" ? "Cantrips" : `${ORDINAL[lvl]} Level`;
+    return `<h4 class="sh-section-title mt-md">${levelName}</h4>
+      ${byLevel[lvl].map(renderSpell).join("")}`;
+  }).join("");
+
+  return `<div class="sh-section">
+    <p class="spell-cast-line"><strong>${ab}</strong> · Save DC <strong>${dc}</strong> · Atk <strong>${atk}</strong></p>
+    ${slotRef}
+    ${levelGroups}
   </div>`;
 }
 
@@ -472,7 +619,7 @@ function renderBioTab(c) {
 // Tab switching
 // ---------------------------------------------------------------------------
 function switchSheetTab(tab, btn) {
-  ["spells","features","equipment","bio"].forEach(t => {
+  ["stats","bio","equipment","spells"].forEach(t => {
     const el = document.getElementById(`sh-tab-${t}`);
     if (el) el.classList.toggle("hidden", t !== tab);
   });
