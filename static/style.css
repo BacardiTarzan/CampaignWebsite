@@ -911,6 +911,20 @@ label {
 #lore-preview-body .lore-md em { opacity: 0.75; }
 #lore-preview-body .lore-md strong { color: var(--color-gold); }
 
+/* ── Grimoire expanded rows ── */
+.grimoire-main-row:hover td { background: rgba(255,255,255,0.04); }
+.grimoire-desc-row td { padding: 0 !important; }
+.grimoire-desc {
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  color: var(--color-light-dim);
+  line-height: 1.6;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: rgba(0,0,0,0.15);
+  white-space: pre-wrap;
+}
+
 /* ── Responsive ── */
 @media (max-width: 600px) {
   .ability-grid { grid-template-columns: repeat(3, 1fr); }

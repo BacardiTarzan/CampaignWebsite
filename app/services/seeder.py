@@ -718,7 +718,7 @@ def seed_all(db: Session) -> dict:
                 counts["spells"] += 1
             else:
                 row = existing_spell_rows[data["name"]]
-                if row and not row.description:
+                if row and not (row.description and row.casting_time and row.spell_range and row.duration):
                     for k, v in data.items():
                         setattr(row, k, v)
                     counts["spells"] += 1

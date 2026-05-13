@@ -295,25 +295,38 @@ async function deleteFeat(id) {
 // ---------------------------------------------------------------------------
 async function loadGrimoireSpells() {
   const level = document.getElementById("spell-filter-level")?.value;
-  const url = level !== "" && level !== null ? `/api/admin/grimoire/spells?level=${level}` : "/api/admin/grimoire/spells";
-  // Admin uses the grimoire endpoint but we can proxy through content for now
   const items = await api("GET", `/api/content/spells${level ? "?level=" + level : ""}`);
   document.getElementById("grimoire-list").innerHTML = `
-    <table class="data-table">
-      <thead><tr><th>Name</th><th>Level</th><th>School</th><th>Classes</th><th>Homebrew</th><th>Actions</th></tr></thead>
-      <tbody>${items.map(s => `
-        <tr>
-          <td>${s.name}</td>
+    <table class="data-table grimoire-table">
+      <thead><tr>
+        <th>Name</th><th>Level</th><th>School</th>
+        <th>Cast Time</th><th>Range</th><th>Duration</th><th>Components</th>
+        <th>Classes</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${items.map(s => {
+        const tags = [s.concentration ? "Concentration" : null, s.ritual ? "Ritual" : null].filter(Boolean).map(t => `<span class="feature-badge">${t}</span>`).join(" ");
+        const descRow = s.description ? `<tr class="grimoire-desc-row" id="gdesc-${s.id}" style="display:none"><td colspan="9"><div class="grimoire-desc">${s.description.replace(/\n/g,"<br>")}</div></td></tr>` : "";
+        return `<tr class="grimoire-main-row" onclick="toggleGrimoireDesc(${s.id})" style="cursor:pointer">
+          <td><strong>${s.name}</strong> ${tags}</td>
           <td>${s.level === 0 ? "Cantrip" : s.level}</td>
-          <td>${s.school}</td>
-          <td>${(s.classes||[]).join(", ")}</td>
-          <td>${s.is_homebrew ? "✅" : "—"}</td>
+          <td>${s.school || "—"}</td>
+          <td>${s.casting_time || "—"}</td>
+          <td>${s.spell_range || "—"}</td>
+          <td>${s.duration || "—"}</td>
+          <td style="font-size:0.8rem">${s.components || "—"}</td>
+          <td style="font-size:0.8rem">${(s.classes||[]).join(", ") || "—"}</td>
           <td><div class="actions">
-            ${s.is_homebrew ? `<button class="btn-danger" onclick="deleteSpell(${s.id})">✕</button>` : "—"}
+            ${s.is_homebrew ? `<button class="btn-danger" onclick="event.stopPropagation();deleteSpell(${s.id})">✕</button>` : "—"}
           </div></td>
-        </tr>`).join("") || '<tr><td colspan="6" class="text-muted">No spells loaded yet.</td></tr>'}
+        </tr>${descRow}`;
+      }).join("") || '<tr><td colspan="9" class="text-muted">No spells loaded yet.</td></tr>'}
       </tbody>
     </table>`;
+}
+
+function toggleGrimoireDesc(id) {
+  const row = document.getElementById(`gdesc-${id}`);
+  if (row) row.style.display = row.style.display === "none" ? "table-row" : "none";
 }
 
 function showSpellForm() { document.getElementById("spell-form").classList.remove("hidden"); }
