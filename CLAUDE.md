@@ -9,9 +9,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 On first start the server auto-seeds from `reference/`. If you need to reseed, delete `campaign.db` and restart.
 
-## Current status (as of 2026-05-13)
+## Current status (as of 2026-05-14)
 
-**Phase 1 is complete. Phase 2 character sheet overhaul is done.**
+**Phase 1 is complete. Phase 2 character sheet overhaul is done. Physical lock feature in progress.**
 
 ### Phase 1 — Wizard (complete)
 The full 10-step wizard runs end-to-end:
@@ -24,7 +24,7 @@ Google OAuth live, Railway deployed, PostgreSQL running.
 4-tab live character sheet at `/characters/{id}/sheet`:
 
 - **Stats & Attacks** — ability scores, saves, skills (left); languages, weapon attack cards, spellcasting info (right); class features + species traits below
-- **Biography** — height/weight/deity editable by player (autosave on blur); backstory read-only; journal textarea with 2s autosave → `PATCH /api/characters/{id}/bio`
+- **Biography** — height dropdown + weight counter + deity text (autosave on change/blur); backstory read-only; journal textarea with 2s autosave → `PATCH /api/characters/{id}/bio`; physical details can be locked by player (see below)
 - **Equipment** — inventory grouped by type; currency widget (PP/GP/SP/CP)
 - **Spells** (casters only) — read-only slot reference panel; spell cards show School, Cast Time, Range, Duration, Components without clicking; click to expand full description; Prepared/Spellbook/Species badges
 
@@ -33,6 +33,25 @@ Spell slot interactive toggles removed — use physical tokens at the table.
 
 ### Species spell grants (complete)
 Species-granted spells (e.g. Gnome Mending/Prestidigitation, Forest Gnome Speak with Animals) are parsed from markdown at species-selection time and saved to `character_spells` with `source="species"`. They appear in the Spells tab with a gold "Species" badge and any special casting notes. They are filtered out of the class spell picker so players don't double-select. Admin Import tab has a "Backfill Species Spells" button for existing characters.
+
+### Physical lock (in progress as of 2026-05-14)
+Player can lock their height/weight/deity on the Biography tab once they've set them. After locking, those fields become read-only and only the DM can unlock. Also: wizard completion screen now links to the character sheet instead of showing JSON/PDF download buttons.
+
+**What's done:**
+- `physical_locked` Boolean on `Character` model + migration `3f9a2b1c4d5e`
+- `POST /api/characters/{id}/bio/lock` — player locks (requires height + weight set)
+- `POST /api/admin/characters/{id}/unlock-physical` — DM unlocks
+- `PATCH /bio` respects the lock (blocks height/weight/deity saves when locked, journal still editable)
+- `sheet.js` `renderBioTab`: locked state shows read-only fields; unlocked state uses height dropdown (per-species ranges in `SPECIES_RANGES`) + weight +/− counter + deity text input
+- `saveAndLockPhysical()` saves all three fields then calls lock endpoint, re-renders bio tab in-place
+- Admin roster shows "🔓 Physical" button when `physical_locked` is true
+- Repair Schema updated to add `physical_locked` column on Railway
+- `_check_owner_or_admin` used on bio PATCH so DM can edit even when locked
+
+**Remaining:**
+- `sheet-data` endpoint may not be returning `physical_locked` — verify `GET /api/characters/{id}/sheet-data` includes it (check `characters.py` `sheet_data`)
+- Visual QA: test lock/unlock flow end-to-end in browser
+- Deploy to Railway and run Repair Schema if not yet done
 
 ## Known issues / next steps
 
@@ -69,6 +88,7 @@ Species-granted spells (e.g. Gnome Mending/Prestidigitation, Forest Gnome Speak 
 - All theming via CSS variables in `static/style.css` `:root {}`.
 - Equipment options are JSON arrays of `{label, items[], gold?}` on `DnDClass.equipment_options` and `Background.equipment_options`.
 - `stat_roll_locked` on `Character` prevents re-rolling; DM unlocks via `POST /api/admin/characters/{id}/unlock-stats`.
+- `physical_locked` on `Character` locks height/weight/deity edits; player locks via `POST /api/characters/{id}/bio/lock`; DM unlocks via `POST /api/admin/characters/{id}/unlock-physical`. Added in migration `3f9a2b1c4d5e`.
 - Seeder is idempotent for inserts; also refreshes spells missing `casting_time`/`range`/`duration`.
 - `CharacterSpell` has `source` ("class" | "species") and `notes` columns. Species spells are parsed at step 2 and preserved across spell saves.
 - `Character` has `height`, `weight`, `deity`, `journal`, `currency` (JSON) columns added in migration `18da8cfaf343`.

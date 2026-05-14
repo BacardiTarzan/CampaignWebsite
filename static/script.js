@@ -1400,32 +1400,11 @@ function renderDoneStep() {
   const bg = state.currentBackground?.name || "—";
   document.getElementById("done-summary").textContent =
     `${state.charName} · ${sp} ${cls} · ${bg} · Created by ${state.displayName}`;
+  if (state.charId) {
+    document.getElementById("btn-view-sheet").href = `/characters/${state.charId}/sheet`;
+  }
 }
 
-async function exportJSON(e) {
-  e.preventDefault();
-  const data = await api("GET", `/api/characters/${state.charId}/export/json`);
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${state.charName || "character"}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function exportPDF(e) {
-  e.preventDefault();
-  const res = await fetch(`/api/characters/${state.charId}/export/pdf`);
-  if (!res.ok) { err("PDF generation failed."); return; }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${state.charName || "character"}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function startNewCharacter() {
   Object.assign(state, {

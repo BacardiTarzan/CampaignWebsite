@@ -75,6 +75,7 @@ async function loadRoster() {
       <td><div class="actions">
         <button onclick="levelUp(${c.id})">+Lv</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
+        ${c.physical_locked ? `<button onclick="unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
         <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
         <a href="/api/admin/characters/${c.id}/export/json" target="_blank"><button>⬇ JSON</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
@@ -123,6 +124,14 @@ async function unlockStats(id) {
   try {
     await api("POST", `/api/admin/characters/${id}/unlock-stats`);
     toast("Stats unlocked for re-rolling.");
+    loadRoster();
+  } catch(e) { err(e.message); }
+}
+
+async function unlockPhysical(id) {
+  try {
+    await api("POST", `/api/admin/characters/${id}/unlock-physical`);
+    toast("Physical details unlocked for editing.");
     loadRoster();
   } catch(e) { err(e.message); }
 }

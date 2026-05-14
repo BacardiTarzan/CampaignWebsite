@@ -388,10 +388,126 @@ function renderFeaturesSection(c) {
 }
 
 // ---------------------------------------------------------------------------
+// Species height/weight ranges — height in total inches, weight in lbs
+// ---------------------------------------------------------------------------
+const SPECIES_RANGES = {
+  "halfling":        { hMin: 24,  hMax: 36,  wMin: 30,  wMax: 50  },
+  "gnome":           { hMin: 36,  hMax: 48,  wMin: 40,  wMax: 80  },
+  "dwarf":           { hMin: 48,  hMax: 60,  wMin: 130, wMax: 200 },
+  "elf":             { hMin: 60,  hMax: 72,  wMin: 100, wMax: 160 },
+  "dragonborn":      { hMin: 60,  hMax: 84,  wMin: 200, wMax: 400 },
+  "orc":             { hMin: 72,  hMax: 84,  wMin: 180, wMax: 330 },
+  "goliath":         { hMin: 84,  hMax: 96,  wMin: 280, wMax: 450 },
+  "human_medium":    { hMin: 48,  hMax: 84,  wMin: 100, wMax: 280 },
+  "tiefling_medium": { hMin: 48,  hMax: 84,  wMin: 100, wMax: 250 },
+  "aasimar_medium":  { hMin: 48,  hMax: 84,  wMin: 100, wMax: 260 },
+  "human_small":     { hMin: 24,  hMax: 48,  wMin: 30,  wMax: 100 },
+  "tiefling_small":  { hMin: 36,  hMax: 48,  wMin: 60,  wMax: 120 },
+  "aasimar_small":   { hMin: 24,  hMax: 48,  wMin: 30,  wMax: 100 },
+};
+const SIZE_CHOICE_SPECIES = ["human", "tiefling", "aasimar"];
+const DEFAULT_RANGE = { hMin: 24, hMax: 108, wMin: 20, wMax: 500 };
+
+function getSpeciesRange(speciesName, speciesSize) {
+  const name = (speciesName || "").toLowerCase();
+  const small = (speciesSize || "Medium").toLowerCase() === "small";
+  const key = SIZE_CHOICE_SPECIES.includes(name)
+    ? `${name}_${small ? "small" : "medium"}`
+    : name;
+  return SPECIES_RANGES[key] || DEFAULT_RANGE;
+}
+
+function parseHeight(val) {
+  if (!val) return { ft: null, in: 0 };
+  const m = val.match(/(\d+)[''′]?\s*(\d*)/);
+  if (m && m[1]) return { ft: parseInt(m[1]), in: m[2] ? parseInt(m[2]) : 0 };
+  return { ft: null, in: 0 };
+}
+
+function parseWeight(val) {
+  if (!val) return null;
+  const m = val.match(/(\d+)/);
+  return m ? parseInt(m[1]) : null;
+}
+
+// ---------------------------------------------------------------------------
 // Tab 2: Biography
 // ---------------------------------------------------------------------------
+function buildHeightOptions(range, currentVal) {
+  const parsed = parseHeight(currentVal);
+  const currentTotal = parsed.ft !== null ? parsed.ft * 12 + parsed.in : -1;
+  let opts = `<option value="">— select —</option>`;
+  for (let total = range.hMin; total <= range.hMax; total++) {
+    const ft  = Math.floor(total / 12);
+    const inc = total % 12;
+    const val = `${ft}'${inc}"`;
+    const label = inc === 0 ? `${ft}' 0"` : `${ft}' ${inc}"`;
+    const sel = total === currentTotal ? " selected" : "";
+    opts += `<option value="${val}"${sel}>${label}</option>`;
+  }
+  return opts;
+}
+
 function renderBioTab(c) {
   const sizeHint = c.species_size ? ` <span class="bio-hint">(${c.species_size})</span>` : "";
+  const range    = getSpeciesRange(c.species_name, c.species_size);
+  const parsedW  = parseWeight(c.weight);
+  const locked   = c.physical_locked;
+
+  if (locked) {
+    // Read-only physical details — same style as Alignment/Background
+    const heightDisplay = c.height || "—";
+    const weightDisplay = c.weight ? `${c.weight} lbs` : "—";
+    const deityDisplay  = c.deity  || "None";
+
+    return `<div class="bio-grid">
+    <div class="bio-details-col">
+      <div class="sh-section">
+        <h4 class="sh-section-title">Identity</h4>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Alignment</label>
+          <span class="bio-field-value">${c.alignment || "—"}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Background</label>
+          <span class="bio-field-value">${c.background_name || "—"}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Height${sizeHint}</label>
+          <span class="bio-field-value">${heightDisplay}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Weight</label>
+          <span class="bio-field-value">${weightDisplay}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Deity / Patron</label>
+          <span class="bio-field-value">${deityDisplay}</span>
+        </div>
+      </div>
+
+      ${c.bio ? `<div class="sh-section">
+        <h4 class="sh-section-title">Backstory</h4>
+        <div class="sh-prose bio-text">${c.bio.replace(/\n/g,"<br>")}</div>
+      </div>` : ""}
+    </div>
+
+    <div class="bio-journal-col">
+      <div class="sh-section" style="height:100%">
+        <h4 class="sh-section-title">Journal <span class="bio-hint">(your notes)</span></h4>
+        <textarea id="bio-journal" class="bio-journal" placeholder="Write anything here — session notes, character thoughts, reminders…">${c.journal || ""}</textarea>
+        <div class="bio-save-row">
+          <span id="bio-save-status" class="bio-save-status"></span>
+          <button class="btn-secondary btn-sm" onclick="saveJournal()">Save Journal</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  }
+
+  // Editable — dropdown height, counter weight, text deity
+  const heightOpts = buildHeightOptions(range, c.height);
+  const initW = parsedW !== null ? parsedW : range.wMin;
 
   return `<div class="bio-grid">
     <div class="bio-details-col">
@@ -407,15 +523,30 @@ function renderBioTab(c) {
         </div>
         <div class="bio-field-row">
           <label class="bio-field-label">Height${sizeHint}</label>
-          <input class="bio-input" id="bio-height" type="text" placeholder="e.g. 5'8&quot;" value="${c.height || ""}" data-field="height">
+          <select id="bio-height-sel" class="bio-select">
+            ${heightOpts}
+          </select>
         </div>
         <div class="bio-field-row">
           <label class="bio-field-label">Weight</label>
-          <input class="bio-input" id="bio-weight" type="text" placeholder="e.g. 160 lbs" value="${c.weight || ""}" data-field="weight">
+          <div class="bio-counter">
+            <button class="bio-counter-btn" onclick="adjustWeight(-1)" type="button">−</button>
+            <input id="bio-weight-val" class="bio-counter-input" type="number"
+                   min="${range.wMin}" max="${range.wMax}" step="1" value="${initW}">
+            <button class="bio-counter-btn" onclick="adjustWeight(1)" type="button">+</button>
+            <span class="bio-unit">lbs</span>
+            <span class="bio-range-hint">${range.wMin}–${range.wMax}</span>
+          </div>
         </div>
         <div class="bio-field-row">
           <label class="bio-field-label">Deity / Patron</label>
-          <input class="bio-input" id="bio-deity" type="text" placeholder="None" value="${c.deity || ""}" data-field="deity">
+          <input class="bio-input" id="bio-deity" type="text" placeholder="None" value="${c.deity || ""}">
+        </div>
+        <div class="bio-lock-row">
+          <button class="btn-gold bio-lock-btn" onclick="saveAndLockPhysical()" type="button">
+            Save &amp; Lock Physical Details
+          </button>
+          <span class="bio-lock-hint">Once saved, only the DM can edit height, weight &amp; deity.</span>
         </div>
       </div>
 
@@ -440,17 +571,47 @@ function renderBioTab(c) {
 
 let _journalTimer = null;
 function attachBioSave() {
-  document.querySelectorAll(".bio-input").forEach(input => {
-    input.addEventListener("blur", async () => {
-      const field = input.dataset.field;
-      const value = input.value.trim();
+  // Height dropdown — save on change
+  const heightSel = document.getElementById("bio-height-sel");
+  if (heightSel) {
+    heightSel.addEventListener("change", async () => {
+      const val = heightSel.value;
+      if (!val) return;
       try {
-        await api("PATCH", `/api/characters/${charId}/bio`, { [field]: value });
-        charData[field] = value;
+        await api("PATCH", `/api/characters/${charId}/bio`, { height: val });
+        charData.height = val;
       } catch(e) { toast("⚠ Save failed: " + e.message, 4000); }
     });
-  });
+  }
 
+  // Weight counter input — save on blur
+  const weightInput = document.getElementById("bio-weight-val");
+  if (weightInput) {
+    weightInput.addEventListener("blur", async () => {
+      const range = getSpeciesRange(charData.species_name, charData.species_size);
+      let lbs = parseInt(weightInput.value) || range.wMin;
+      lbs = Math.max(range.wMin, Math.min(range.wMax, lbs));
+      weightInput.value = lbs;
+      try {
+        await api("PATCH", `/api/characters/${charId}/bio`, { weight: String(lbs) });
+        charData.weight = String(lbs);
+      } catch(e) { toast("⚠ Save failed: " + e.message, 4000); }
+    });
+  }
+
+  // Deity — save on blur
+  const deity = document.getElementById("bio-deity");
+  if (deity) {
+    deity.addEventListener("blur", async () => {
+      const value = deity.value.trim();
+      try {
+        await api("PATCH", `/api/characters/${charId}/bio`, { deity: value });
+        charData.deity = value;
+      } catch(e) { toast("⚠ Save failed: " + e.message, 4000); }
+    });
+  }
+
+  // Journal — autosave on keystroke
   const journal = document.getElementById("bio-journal");
   if (journal) {
     journal.addEventListener("input", () => {
@@ -459,6 +620,42 @@ function attachBioSave() {
       _journalTimer = setTimeout(saveJournal, 2000);
     });
   }
+}
+
+function adjustWeight(delta) {
+  const el = document.getElementById("bio-weight-val");
+  if (!el) return;
+  const range = getSpeciesRange(charData.species_name, charData.species_size);
+  let val = (parseInt(el.value) || range.wMin) + delta;
+  val = Math.max(range.wMin, Math.min(range.wMax, val));
+  el.value = val;
+  el.dispatchEvent(new Event("blur"));
+}
+
+async function saveAndLockPhysical() {
+  const heightSel  = document.getElementById("bio-height-sel");
+  const weightEl   = document.getElementById("bio-weight-val");
+  const deityEl    = document.getElementById("bio-deity");
+
+  if (!heightSel?.value) { toast("Please select a height before locking.", 3000); return; }
+  if (!weightEl?.value)  { toast("Please enter a weight before locking.", 3000); return; }
+
+  const height = heightSel.value;
+  const weight = String(parseInt(weightEl.value) || 0);
+  const deity  = deityEl?.value.trim() || "";
+
+  try {
+    await api("PATCH", `/api/characters/${charId}/bio`, { height, weight, deity });
+    await api("POST", `/api/characters/${charId}/bio/lock`);
+    charData.height = height;
+    charData.weight = weight;
+    charData.deity  = deity;
+    charData.physical_locked = true;
+    // Re-render bio tab in locked state
+    document.getElementById("sh-tab-bio").innerHTML = renderBioTab(charData);
+    attachBioSave();
+    toast("Physical details saved and locked.");
+  } catch(e) { toast("⚠ " + e.message, 4000); }
 }
 
 async function saveJournal() {

@@ -29,8 +29,9 @@
 
 /* ── Header ── */
 .sh-header {
-  background: rgba(0,0,0,0.25);
+  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.2) 100%);
   border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid rgba(255,255,255,0.04);
   padding: 20px var(--container-pad, 16px);
   max-width: 960px;
   margin: 0 auto;
@@ -39,8 +40,9 @@
 .sh-char-name {
   font-family: var(--font-header);
   font-size: 2rem;
-  color: var(--color-light);
+  color: #e8d48a;
   letter-spacing: 0.5px;
+  text-shadow: 0 0 20px rgba(200,150,20,0.3);
 }
 
 .sh-identity {
@@ -62,11 +64,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 1px;
-  background: rgba(0,0,0,0.3);
-  border-top: 1px solid rgba(255,255,255,0.08);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.4);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
   max-width: 960px;
   margin: 0 auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
 .sh-combat-cell {
@@ -401,7 +404,7 @@
   font-family: var(--font-header);
   font-size: 0.72rem;
   letter-spacing: 0.6px;
-  color: var(--color-ink-faded);
+  color: #b8a888;
   min-width: 110px;
   flex-shrink: 0;
 }
@@ -409,15 +412,15 @@
 .bio-field-value {
   font-family: var(--font-book);
   font-size: 0.9rem;
-  color: var(--color-light);
+  color: #f0eadc;
 }
 
 .bio-input {
   flex: 1;
-  background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.18);
   border-radius: var(--radius-sm);
-  color: var(--color-light);
+  color: #f0eadc;
   font-family: var(--font-book);
   font-size: 0.9rem;
   padding: 4px 8px;
@@ -425,12 +428,131 @@
 }
 .bio-input:focus {
   outline: none;
-  border-color: rgba(255,255,255,0.3);
+  border-color: rgba(255,255,255,0.4);
+  background: rgba(0,0,0,0.3);
+}
+
+/* ── Height dropdown ── */
+.bio-select {
+  flex: 1;
+  max-width: 120px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: var(--radius-sm);
+  color: #f0eadc;
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  height: 30px;
+  cursor: pointer;
+}
+.bio-select:focus {
+  outline: none;
+  border-color: rgba(255,255,255,0.4);
+}
+.bio-select option {
+  background: #1e1a14;
+  color: #f0eadc;
+}
+
+/* ── Weight counter ── */
+.bio-counter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.bio-counter-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  background: rgba(255,255,255,0.08) !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow: none !important;
+  border-radius: var(--radius-sm);
+  color: #f0eadc !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-book);
+  letter-spacing: 0;
+  text-transform: none;
+  flex-shrink: 0;
+}
+.bio-counter-btn:hover {
+  background: rgba(255,255,255,0.15) !important;
+}
+.bio-counter-btn:active { transform: none; }
+
+.bio-counter-input {
+  width: 48px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: var(--radius-sm);
+  color: #f0eadc;
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  padding: 4px 4px;
+  height: 30px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+.bio-counter-input::-webkit-outer-spin-button,
+.bio-counter-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.bio-counter-input:focus {
+  outline: none;
+  border-color: rgba(255,255,255,0.4);
+}
+
+.bio-unit {
+  font-family: var(--font-book);
+  font-size: 0.82rem;
+  color: #8a8070;
+}
+
+.bio-range-hint {
+  font-family: var(--font-book);
+  font-size: 0.7rem;
+  color: #706050;
+  font-style: italic;
+  margin-left: 2px;
+}
+
+/* ── Save & Lock row ── */
+.bio-lock-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.bio-lock-btn {
+  font-size: 0.78rem !important;
+  padding: 6px 14px !important;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.bio-lock-hint {
+  font-family: var(--font-book);
+  font-size: 0.75rem;
+  color: #706050;
+  font-style: italic;
 }
 
 .bio-hint {
   font-size: 0.78rem;
-  color: var(--color-ink-faded);
+  color: #8a8070;
   font-family: var(--font-book);
 }
 

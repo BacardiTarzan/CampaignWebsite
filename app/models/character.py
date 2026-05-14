@@ -29,6 +29,7 @@ class Character(Base):
     journal = Column(Text, nullable=True)
     currency = Column(JSON, nullable=True)                   # {"pp":0,"gp":0,"sp":0,"cp":0}
     stat_roll_locked = Column(Boolean, default=False)
+    physical_locked = Column(Boolean, default=False)
     wizard_step = Column(Integer, default=1)
     is_complete = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())

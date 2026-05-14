@@ -37,6 +37,7 @@ def list_characters(db: Session = Depends(get_db)):
             "is_complete": c.is_complete,
             "wizard_step": c.wizard_step,
             "stat_roll_locked": c.stat_roll_locked,
+            "physical_locked": bool(c.physical_locked),
             "hp_max": c.hp_max,
             "hp_current": c.hp_current,
             "created_at": c.created_at,
@@ -92,6 +93,16 @@ def unlock_stats(char_id: int, db: Session = Depends(get_db)):
     if not char:
         raise HTTPException(404)
     char.stat_roll_locked = False
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/characters/{char_id}/unlock-physical")
+def unlock_physical(char_id: int, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    char.physical_locked = False
     db.commit()
     return {"ok": True}
 
@@ -423,6 +434,7 @@ def repair_schema(db: Session = Depends(get_db)):
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS deity VARCHAR",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS journal TEXT",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS currency JSON",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS physical_locked BOOLEAN DEFAULT FALSE",
     ]
     for stmt in stmts:
         db.execute(text(stmt))

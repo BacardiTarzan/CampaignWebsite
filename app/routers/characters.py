@@ -547,17 +547,31 @@ def update_spell_slots(char_id: int, data: SpellSlotsIn, db: Session = Depends(g
 @router.patch("/{char_id}/bio")
 def update_bio(char_id: int, data: BioUpdateIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
-    _check_owner(char, user)
-    if data.height is not None:
+    _check_owner_or_admin(char, user)
+    is_admin = user.get("is_admin", False)
+    physical_blocked = bool(char.physical_locked) and not is_admin
+    if data.height is not None and not physical_blocked:
         char.height = data.height
-    if data.weight is not None:
+    if data.weight is not None and not physical_blocked:
         char.weight = data.weight
-    if data.deity is not None:
+    if data.deity is not None and not physical_blocked:
         char.deity = data.deity
     if data.journal is not None:
         char.journal = data.journal
     db.commit()
     return {"ok": True}
+
+
+@router.post("/{char_id}/bio/lock")
+def lock_physical(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    from fastapi import HTTPException
+    char = _get_char(char_id, db)
+    _check_owner(char, user)
+    if not char.height or not char.weight:
+        raise HTTPException(status_code=400, detail="Height and weight must be set before locking.")
+    char.physical_locked = True
+    db.commit()
+    return {"physical_locked": True}
 
 
 @router.get("/{char_id}/sheet-data")
