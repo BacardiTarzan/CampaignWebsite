@@ -12,7 +12,7 @@ html { scroll-behavior: smooth; }
   --bg-card:         #e8d9b0;
   --bg-card-dark:    #d9c99a;
   --color-ink:       #1c130a;
-  --color-ink-faded: #7a6448;
+  --color-ink-faded: #a89878;
   --color-red:       #8b1a1a;
   --color-red-hover: #a02222;
   --color-red-dark:  #5a0a0a;
@@ -20,7 +20,7 @@ html { scroll-behavior: smooth; }
   --color-gray:      #2a2a2a;
   --color-gray-mid:  #444444;
   --color-light:     #e0d8cc;
-  --color-light-dim: #998870;
+  --color-light-dim: #c4b090;
 
   /* ── Typography ── */
   --font-header: 'Cinzel', serif;

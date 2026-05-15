@@ -517,13 +517,13 @@
 .bio-unit {
   font-family: var(--font-book);
   font-size: 0.82rem;
-  color: #8a8070;
+  color: #a89878;
 }
 
 .bio-range-hint {
   font-family: var(--font-book);
   font-size: 0.7rem;
-  color: #706050;
+  color: #9a8868;
   font-style: italic;
   margin-left: 2px;
 }
@@ -549,13 +549,13 @@
 .bio-lock-hint {
   font-family: var(--font-book);
   font-size: 0.75rem;
-  color: #706050;
+  color: #9a8868;
   font-style: italic;
 }
 
 .bio-hint {
   font-size: 0.78rem;
-  color: #8a8070;
+  color: #a89878;
   font-family: var(--font-book);
 }
 
