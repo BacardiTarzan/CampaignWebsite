@@ -40,6 +40,7 @@ def list_characters(db: Session = Depends(get_db)):
             "physical_locked": bool(c.physical_locked),
             "hp_max": c.hp_max,
             "hp_current": c.hp_current,
+            "bio": c.bio,
             "created_at": c.created_at,
         })
     return result

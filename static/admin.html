@@ -229,6 +229,22 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Bio edit modal -->
+<div id="bio-edit-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#1e1a14;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:24px;width:680px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <strong id="bio-edit-title" style="font-family:'Cinzel',serif;font-size:1rem;color:#d4af70;">Edit Backstory</strong>
+      <button onclick="closeBioModal()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer;">✕</button>
+    </div>
+    <textarea id="bio-edit-text" style="flex:1;min-height:400px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#f0eadc;font-family:'Crimson Pro',serif;font-size:0.95rem;padding:10px;resize:vertical;"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button onclick="closeBioModal()">Cancel</button>
+      <button onclick="saveBio()" style="background:#8b1a1a;color:#f0eadc;border-color:#a02020;">Save Backstory</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="/static/admin.js"></script>
 </body>

@@ -76,6 +76,7 @@ async function loadRoster() {
         <button onclick="levelUp(${c.id})">+Lv</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
         ${c.physical_locked ? `<button onclick="unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
+        <button onclick="editBio(${c.id}, ${JSON.stringify(c.bio || '')})">📜 Bio</button>
         <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
         <a href="/api/admin/characters/${c.id}/export/json" target="_blank"><button>⬇ JSON</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
@@ -132,6 +133,33 @@ async function unlockPhysical(id) {
   try {
     await api("POST", `/api/admin/characters/${id}/unlock-physical`);
     toast("Physical details unlocked for editing.");
+    loadRoster();
+  } catch(e) { err(e.message); }
+}
+
+async function editBio(id, currentBio) {
+  const modal = document.getElementById("bio-edit-modal");
+  const textarea = document.getElementById("bio-edit-text");
+  const title = document.getElementById("bio-edit-title");
+  title.textContent = `Edit Backstory — Character #${id}`;
+  textarea.value = currentBio || "";
+  modal.dataset.charId = id;
+  modal.classList.remove("hidden");
+  textarea.focus();
+}
+
+function closeBioModal() {
+  document.getElementById("bio-edit-modal").classList.add("hidden");
+}
+
+async function saveBio() {
+  const modal = document.getElementById("bio-edit-modal");
+  const id = modal.dataset.charId;
+  const bio = document.getElementById("bio-edit-text").value;
+  try {
+    await api("PATCH", `/api/characters/${id}/bio`, { bio });
+    toast("Backstory saved.");
+    closeBioModal();
     loadRoster();
   } catch(e) { err(e.message); }
 }
