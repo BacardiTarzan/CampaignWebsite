@@ -77,7 +77,7 @@ async function loadRoster() {
         </div>` : ""}
       </td>
       <td><div class="actions">
-        <button onclick="levelUp(${c.id})">+Lv</button>
+        <button onclick="levelUp(${c.id})" title="Grant level (current: ${c.level}, granted: ${c.level_granted ?? c.level})">+Lv ${c.level_granted != null && c.level_granted > c.level ? `<span style="color:#8fc88f">(${c.level}→${c.level_granted})</span>` : ""}</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
         ${c.physical_locked ? `<button onclick="unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
         <button onclick="editBio(${c.id})">📜 Bio</button>

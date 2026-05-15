@@ -10,7 +10,7 @@ from ..models.character import (
     CharacterFeat, CharacterSpell, CharacterEquipment,
     SkillProficiency, ToolProficiency, LanguageProficiency, WeaponMasteryUnlock,
 )
-from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species
+from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species, Subclass
 from ..services.export import character_to_dict, character_to_sheet_dict
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
@@ -587,6 +587,139 @@ def sheet_data(char_id: int, db: Session = Depends(get_db), user: dict = Depends
     return character_to_sheet_dict(char, db)
 
 
+# ---------------------------------------------------------------------------
+# Level-up
+# ---------------------------------------------------------------------------
+
+_CANTRIP_GAINS: dict[str, dict[int, int]] = {
+    "Bard":     {4: 1, 10: 1},
+    "Cleric":   {4: 1, 10: 1},
+    "Druid":    {4: 1, 10: 1},
+    "Sorcerer": {4: 1, 10: 1},
+    "Wizard":   {4: 1, 10: 1},
+    "Warlock":  {4: 1, 10: 1},
+}
+
+_SPELL_GAINS: dict[str, dict[int, int]] = {
+    "Wizard":   {l: 2 for l in range(2, 21)},
+    "Bard":     {l: 1 for l in range(2, 21)},
+    "Sorcerer": {l: 1 for l in range(2, 21)},
+    "Warlock":  {l: 1 for l in range(2, 21)},
+    "Ranger":   {2: 2, 3: 1, 5: 1, 7: 1, 9: 1, 11: 1, 13: 1, 15: 1, 17: 1, 19: 1},
+}
+
+
+def _max_spell_level(spellcasting_type: str, char_level: int) -> int:
+    if spellcasting_type == "full":
+        return min(9, max(1, (char_level + 1) // 2))
+    if spellcasting_type == "half":
+        return min(5, max(1, (char_level + 3) // 4))
+    if spellcasting_type == "pact":
+        return min(5, max(1, (char_level + 1) // 2))
+    return 0
+
+
+class LevelUpIn(BaseModel):
+    subclass_id: int | None = None
+    cantrip_ids: list[int] = []
+    spell_ids: list[int] = []
+
+
+@router.get("/{char_id}/levelup-options")
+def levelup_options(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    cc = char.character_classes[0] if char.character_classes else None
+    if not cc:
+        raise HTTPException(400, "No class assigned")
+
+    level_granted = cc.level_granted if cc.level_granted is not None else cc.level
+    next_level = cc.level + 1
+    if next_level > level_granted:
+        raise HTTPException(400, "No level-up available")
+
+    cls = cc.dnd_class
+    new_features = [f for f in (cls.features or []) if f.get("level") == next_level]
+
+    subclass_features: list[dict] = []
+    if cc.subclass:
+        subclass_features = [f for f in (cc.subclass.features or []) if f.get("level") == next_level]
+
+    subclass_options = [
+        {"id": s.id, "name": s.name, "description": s.description,
+         "features": [f for f in (s.features or []) if f.get("level") == next_level]}
+        for s in cls.subclasses if s.unlock_level == next_level
+    ]
+    subclass_needed = bool(subclass_options) and cc.subclass_id is None
+
+    cantrip_gains = _CANTRIP_GAINS.get(cls.name, {}).get(next_level, 0)
+    spell_gains = _SPELL_GAINS.get(cls.name, {}).get(next_level, 0)
+    max_sl = _max_spell_level(cls.spellcasting_type or "", next_level)
+
+    base_attrs = char.base_attributes or {}
+    con_mod = (base_attrs.get("con", 10) - 10) // 2
+    hp_increase = (cls.hit_die // 2 + 1) + con_mod
+
+    owned_ids = [cs.spell_id for cs in char.spells]
+
+    return {
+        "character_name": char.character_name,
+        "class_name": cls.name,
+        "current_level": cc.level,
+        "next_level": next_level,
+        "new_features": new_features,
+        "subclass_features": subclass_features,
+        "subclass_needed": subclass_needed,
+        "subclass_options": subclass_options,
+        "cantrip_gains": cantrip_gains,
+        "spell_gains": spell_gains,
+        "max_spell_level": max_sl,
+        "hp_increase": hp_increase,
+        "hp_increase_detail": f"d{cls.hit_die} avg ({cls.hit_die // 2 + 1}) + CON {con_mod:+d} = {hp_increase}",
+        "class_spellcasting": cls.spellcasting_type,
+        "owned_spell_ids": owned_ids,
+    }
+
+
+@router.post("/{char_id}/levelup")
+def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    cc = char.character_classes[0] if char.character_classes else None
+    if not cc:
+        raise HTTPException(400, "No class assigned")
+
+    level_granted = cc.level_granted if cc.level_granted is not None else cc.level
+    next_level = cc.level + 1
+    if next_level > level_granted:
+        raise HTTPException(400, "No level-up available")
+
+    cls = cc.dnd_class
+
+    if data.subclass_id:
+        sub = db.get(Subclass, data.subclass_id)
+        if not sub or sub.class_id != cc.class_id:
+            raise HTTPException(400, "Invalid subclass for this class")
+        cc.subclass_id = data.subclass_id
+
+    owned_ids = {cs.spell_id for cs in char.spells}
+    for spell_id in data.cantrip_ids + data.spell_ids:
+        if spell_id not in owned_ids:
+            db.add(CharacterSpell(character_id=char.id, spell_id=spell_id, source="class"))
+            owned_ids.add(spell_id)
+
+    base_attrs = char.base_attributes or {}
+    con_mod = (base_attrs.get("con", 10) - 10) // 2
+    hp_increase = (cls.hit_die // 2 + 1) + con_mod
+    char.hp_max = (char.hp_max or 0) + hp_increase
+    char.hp_current = (char.hp_current or 0) + hp_increase
+
+    cc.level = next_level
+    cc.hit_dice_remaining = (cc.hit_dice_remaining or 0) + 1
+    db.commit()
+    return {"ok": True, "new_level": next_level, "hp_max": char.hp_max}
+
+
 # --- Exports ---
 @router.get("")
 def list_my_characters(db: Session = Depends(get_db), user: dict = Depends(require_user)):
@@ -604,6 +737,7 @@ def list_my_characters(db: Session = Depends(get_db), user: dict = Depends(requi
             "background_name": c.background.name if c.background else None,
             "class_name": cc.dnd_class.name if cc and cc.dnd_class else None,
             "level": cc.level if cc else None,
+            "level_granted": cc.level_granted if cc else None,
             "is_complete": c.is_complete,
             "wizard_step": c.wizard_step,
             "hp_max": c.hp_max,

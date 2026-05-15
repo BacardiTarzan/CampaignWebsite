@@ -112,3 +112,8 @@ def serve_lore():
 @app.get("/characters/{char_id}/sheet")
 def serve_sheet(char_id: int):
     return FileResponse(str(static_path / "sheet.html"))
+
+
+@app.get("/characters/{char_id}/levelup")
+def serve_levelup(char_id: int):
+    return FileResponse(str(static_path / "levelup.html"))

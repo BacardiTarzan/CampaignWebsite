@@ -876,6 +876,24 @@ label {
   text-decoration: none;
 }
 
+button.btn-levelup {
+  background: linear-gradient(180deg, #2a6e3a 0%, #1e5a2c 55%, #154d23 100%);
+  border-color: #0e3a1a;
+  box-shadow: 0 3px 0 #0e3a1a, 0 6px 16px rgba(0,0,0,0.45);
+  color: #d4f0dc;
+  font-family: var(--font-header);
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border-width: 1px;
+  border-style: solid;
+}
+button.btn-levelup:hover {
+  background: linear-gradient(180deg, #348248 0%, #2a6e3a 55%, #1e5a2c 100%);
+}
+
 /* ── Equipment Shop ── */
 .shop-panel { border: 1px solid var(--color-ink-faded); border-radius: var(--radius-md); padding: 16px; margin-top: 8px; background: rgba(0,0,0,0.04); }
 .shop-budget { margin-bottom: 12px; }

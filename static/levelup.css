@@ -1,0 +1,354 @@
+/* Level-Up Wizard */
+
+.lu-page {
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-book);
+}
+
+.lu-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+}
+.lu-loading-text {
+  font-family: var(--font-header);
+  font-size: 1.2rem;
+  color: var(--color-ink-faded);
+  letter-spacing: 1px;
+}
+
+/* ── Header ── */
+.lu-header {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 0;
+  text-align: center;
+}
+
+.lu-title {
+  font-family: var(--font-header);
+  font-size: 2rem;
+  color: var(--color-gold);
+  letter-spacing: 1px;
+}
+
+.lu-subtitle {
+  font-family: var(--font-book);
+  font-size: 1rem;
+  color: var(--color-ink-faded);
+  margin-top: 4px;
+  margin-bottom: 20px;
+}
+
+/* ── Step pips ── */
+.lu-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.lu-pip {
+  font-family: var(--font-header);
+  font-size: 0.65rem;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-faded);
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.lu-pip--active {
+  color: var(--color-gold);
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.1);
+}
+.lu-pip--done {
+  color: #6a8f6a;
+  border-color: #3a5a3a;
+}
+.lu-pip-sep {
+  color: var(--color-ink-faded);
+  font-size: 0.7rem;
+}
+
+/* ── Panels ── */
+.lu-panel {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+.lu-step-heading {
+  font-family: var(--font-header);
+  font-size: 1.3rem;
+  color: var(--color-gold);
+  letter-spacing: 0.5px;
+  margin: 0 0 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.lu-step-desc {
+  font-family: var(--font-book);
+  font-size: 0.95rem;
+  color: var(--color-ink-faded);
+  margin: 0 0 20px;
+}
+
+/* ── Feature cards ── */
+.lu-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.lu-feature-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.lu-feature-name {
+  font-family: var(--font-header);
+  font-size: 1rem;
+  color: var(--color-gold);
+  margin-bottom: 6px;
+}
+
+.lu-feature-desc {
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  color: var(--color-light-dim);
+  line-height: 1.6;
+}
+
+.lu-feature-choice {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--color-ink-faded);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lu-choice-tag {
+  background: rgba(212,175,80,0.12);
+  border: 1px solid rgba(212,175,80,0.3);
+  color: var(--color-gold);
+  font-family: var(--font-header);
+  font-size: 0.7rem;
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+
+.lu-no-features {
+  color: var(--color-ink-faded);
+  font-style: italic;
+  padding: 20px 0;
+}
+
+/* ── Subclass cards ── */
+.lu-subclass-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.lu-subclass-card {
+  background: rgba(255,255,255,0.03);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lu-subclass-card:hover {
+  border-color: rgba(212,175,80,0.4);
+  background: rgba(212,175,80,0.05);
+}
+
+.lu-subclass-card.chosen {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.1);
+}
+
+.lu-subclass-name {
+  font-family: var(--font-header);
+  font-size: 1rem;
+  color: var(--color-gold);
+  margin-bottom: 6px;
+}
+
+.lu-subclass-desc {
+  font-family: var(--font-book);
+  font-size: 0.85rem;
+  color: var(--color-light-dim);
+  line-height: 1.5;
+}
+
+.lu-subclass-features {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.lu-sub-feat {
+  font-size: 0.82rem;
+  color: var(--color-ink-faded);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+/* ── Spell grid ── */
+.lu-spell-filter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.lu-filter-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--color-ink-faded);
+  font-family: var(--font-header);
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.lu-filter-btn.active,
+.lu-filter-btn:hover {
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+  background: rgba(212,175,80,0.1);
+}
+
+.lu-spell-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 28px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.lu-spell-card {
+  background: rgba(255,255,255,0.03);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lu-spell-card:hover {
+  border-color: rgba(212,175,80,0.3);
+}
+
+.lu-spell-card.chosen {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.08);
+}
+
+.lu-spell-name {
+  font-family: var(--font-header);
+  font-size: 0.85rem;
+  color: var(--color-ink);
+}
+
+.lu-spell-meta {
+  font-family: var(--font-book);
+  font-size: 0.75rem;
+  color: var(--color-ink-faded);
+  margin-top: 3px;
+}
+
+/* ── Confirm ── */
+.lu-confirm-summary {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lu-confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  font-size: 0.95rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  padding-bottom: 12px;
+}
+.lu-confirm-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.lu-confirm-label {
+  font-family: var(--font-header);
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-faded);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.lu-confirm-level {
+  margin-top: 4px;
+}
+.lu-confirm-level span:last-child {
+  font-family: var(--font-header);
+  font-size: 1.4rem;
+  color: var(--color-gold);
+}
+
+/* ── Done ── */
+.lu-done {
+  text-align: center;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lu-done-title {
+  font-family: var(--font-header);
+  font-size: 1.8rem;
+  color: var(--color-gold);
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.lu-done-sub {
+  font-family: var(--font-book);
+  font-size: 1rem;
+  color: var(--color-ink-faded);
+}
+
+/* ── Nav row ── */
+.lu-nav {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}

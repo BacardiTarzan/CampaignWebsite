@@ -56,6 +56,7 @@ class CharacterClass(Base):
     character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
     level = Column(Integer, default=1)
+    level_granted = Column(Integer, nullable=True)
     subclass_id = Column(Integer, ForeignKey("subclasses.id"), nullable=True)
     hit_dice_remaining = Column(Integer, default=1)
 

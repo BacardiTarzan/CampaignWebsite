@@ -40,6 +40,7 @@ def list_characters(db: Session = Depends(get_db)):
             "physical_locked": bool(c.physical_locked),
             "hp_max": c.hp_max,
             "hp_current": c.hp_current,
+            "level_granted": cc.level_granted if cc else None,
             "bio": c.bio,
             "created_at": c.created_at,
         })
@@ -133,16 +134,18 @@ def admin_adjust_hp(char_id: int, delta: int | None = None, set_hp: int | None =
 
 
 @router.post("/characters/{char_id}/level-up")
-def level_up(char_id: int, db: Session = Depends(get_db)):
+def grant_level(char_id: int, db: Session = Depends(get_db)):
     char = db.get(Character, char_id)
     if not char:
         raise HTTPException(404)
     cc = char.character_classes[0] if char.character_classes else None
     if not cc:
         raise HTTPException(400, "No class assigned")
-    cc.level += 1
+    if cc.level_granted is None:
+        cc.level_granted = cc.level
+    cc.level_granted += 1
     db.commit()
-    return {"ok": True, "new_level": cc.level}
+    return {"ok": True, "level_granted": cc.level_granted}
 
 
 # ---------------------------------------------------------------------------

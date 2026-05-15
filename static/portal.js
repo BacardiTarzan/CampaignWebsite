@@ -86,8 +86,12 @@ function renderCard(c) {
     </div>` : "";
 
   if (c.is_complete) {
+    const canLevelUp = c.level_granted != null && c.level < c.level_granted;
+    const levelUpBtn = canLevelUp
+      ? `<div class="char-card-actions"><a href="/characters/${c.id}/levelup"><button class="btn-levelup">⬆ Level Up to ${c.level_granted}</button></a></div>`
+      : "";
     return `
-      <div class="char-card char-card--clickable" onclick="window.location.href='/characters/${c.id}/sheet'">
+      <div class="char-card ${canLevelUp ? "" : "char-card--clickable"}" ${canLevelUp ? "" : `onclick="window.location.href='/characters/${c.id}/sheet'"`}>
         <div class="char-card-header">
           <div>
             <div class="char-card-name">${c.character_name}</div>
@@ -96,6 +100,7 @@ function renderCard(c) {
           ${statusBadge}
         </div>
         ${stats}
+        ${levelUpBtn}
       </div>`;
   }
 
