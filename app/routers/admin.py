@@ -440,6 +440,7 @@ def repair_schema(db: Session = Depends(get_db)):
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS currency JSON",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS physical_locked BOOLEAN DEFAULT FALSE",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS age INTEGER",
+        "ALTER TABLE character_classes ADD COLUMN IF NOT EXISTS level_granted INTEGER",
     ]
     for stmt in stmts:
         db.execute(text(stmt))
