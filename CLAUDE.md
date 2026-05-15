@@ -9,56 +9,123 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 On first start the server auto-seeds from `reference/`. If you need to reseed, delete `campaign.db` and restart.
 
-## Current status (as of 2026-05-14)
+## Current status (as of 2026-05-15)
 
-**Phase 1 is complete. Phase 2 character sheet overhaul is done. Physical lock feature in progress.**
+**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Next: Phase 4 — Sheet Spellcasting Tracking.**
 
-### Phase 1 — Wizard (complete)
+### Phase 1 — Character Creation Wizard (complete)
 The full 10-step wizard runs end-to-end:
 1. Identity · 2. Species · 3. Background · 4. Class · 5. Stats · 6. Class features · 7. Skills + languages · 8. Equipment · 9. Spells · 10. Bio → complete
 
 ### Phase 1.5 — Auth + Railway hosting (complete)
 Google OAuth live, Railway deployed, PostgreSQL running.
 
-### Phase 2 — Character sheet overhaul (complete as of 2026-05-13)
+### Phase 2 — Character sheet overhaul (complete)
 4-tab live character sheet at `/characters/{id}/sheet`:
 
 - **Stats & Attacks** — ability scores, saves, skills (left); languages, weapon attack cards, spellcasting info (right); class features + species traits below
-- **Biography** — height dropdown + weight counter + deity text (autosave on change/blur); backstory read-only; journal textarea with 2s autosave → `PATCH /api/characters/{id}/bio`; physical details can be locked by player (see below)
+- **Biography** — height dropdown + weight counter + deity text (autosave); backstory read-only; journal with 2s autosave; physical details lockable by player
 - **Equipment** — inventory grouped by type; currency widget (PP/GP/SP/CP)
-- **Spells** (casters only) — read-only slot reference panel; spell cards show School, Cast Time, Range, Duration, Components without clicking; click to expand full description; Prepared/Spellbook/Species badges
+- **Spells** (casters only) — read-only slot reference panel; spell cards with School/Cast Time/Range/Duration/Components; click to expand description; Prepared/Spellbook/Species badges
 
-HP polled every 15 seconds from the server (DM controls HP via admin).
-Spell slot interactive toggles removed — use physical tokens at the table.
+HP polled every 15 seconds. Spell slot toggles removed — use physical tokens.
 
-### Species spell grants (complete)
-Species-granted spells (e.g. Gnome Mending/Prestidigitation, Forest Gnome Speak with Animals) are parsed from markdown at species-selection time and saved to `character_spells` with `source="species"`. They appear in the Spells tab with a gold "Species" badge and any special casting notes. They are filtered out of the class spell picker so players don't double-select. Admin Import tab has a "Backfill Species Spells" button for existing characters.
+### Phase 2.5 — Physical lock (complete)
+Player can lock height/weight/deity once set. DM unlocks via admin panel.
+- `physical_locked` Boolean on `Character` + migration `3f9a2b1c4d5e`
+- `POST /api/characters/{id}/bio/lock` (player) · `POST /api/admin/characters/{id}/unlock-physical` (DM)
+- `PATCH /bio` blocks height/weight/deity when locked; journal always editable
+- Admin roster shows unlock button when locked
 
-### Physical lock (in progress as of 2026-05-14)
-Player can lock their height/weight/deity on the Biography tab once they've set them. After locking, those fields become read-only and only the DM can unlock. Also: wizard completion screen now links to the character sheet instead of showing JSON/PDF download buttons.
+### Phase 3 — Level-Up Wizard Overhaul (complete as of 2026-05-15)
+Full dynamic level-up wizard replacing the old 3-choice flow. Every D&D 2024 decision point is now wired.
 
-**What's done:**
-- `physical_locked` Boolean on `Character` model + migration `3f9a2b1c4d5e`
-- `POST /api/characters/{id}/bio/lock` — player locks (requires height + weight set)
-- `POST /api/admin/characters/{id}/unlock-physical` — DM unlocks
-- `PATCH /bio` respects the lock (blocks height/weight/deity saves when locked, journal still editable)
-- `sheet.js` `renderBioTab`: locked state shows read-only fields; unlocked state uses height dropdown (per-species ranges in `SPECIES_RANGES`) + weight +/− counter + deity text input
-- `saveAndLockPhysical()` saves all three fields then calls lock endpoint, re-renders bio tab in-place
-- Admin roster shows "🔓 Physical" button when `physical_locked` is true
-- Repair Schema updated to add `physical_locked` column on Railway
-- `_check_owner_or_admin` used on bio PATCH so DM can edit even when locked
+**What was built:**
+- `app/services/levelup_rules.py` — rules engine: `required_steps()`, `auto_grants()`, `subclass_auto_grants()`, `max_spell_level()`. Encodes all 12 classes' per-level decision tables from `level-up-wizard/*.md`.
+- Migration `a1b2c3d4e5f6` — adds `character_spells.always_prepared`, `character_choices.level`, `characters.hp_roll_log`
+- `app/models/character.py` — three new columns above
+- `app/routers/characters.py` — `GET /api/characters/{id}/levelup-options` returns full step list; `POST /api/characters/{id}/levelup` applies all choices, audits to `CharacterChoice`, updates HP/ASI/feats/spells
+- `static/levelup.js` — full rewrite: dynamic step runner, one renderer per step kind (`hp`, `subclass`, `asi`, `epic_boon`, `fighting_style`, `fighting_style_swap`, `expertise`, `cantrips_new`, `spells_new`, `wizard_spellbook`, `spell_swap`, `cantrip_swap`, `metamagic`, `invocations_new`, `invocation_swap`, `mystic_arcanum`, `feature_choice`)
+- `static/levelup.css` — all new step-type styles; `--color-ink` overridden to light on dark background
+- `static/levelup.html` — stripped fixed panels, single `#lu-step-host` dynamic host
+- Admin Repair Schema updated with the three new columns
 
-**Remaining:**
-- `sheet-data` endpoint may not be returning `physical_locked` — verify `GET /api/characters/{id}/sheet-data` includes it (check `characters.py` `sheet_data`)
-- Visual QA: test lock/unlock flow end-to-end in browser
-- Deploy to Railway and run Repair Schema if not yet done
+**Flow:**
+1. DM clicks LVL+ in admin → sets `cc.level_granted += 1` (does NOT bump `cc.level`)
+2. Portal shows "⬆ Level Up to N" button when `level_granted > level`
+3. Player clicks → wizard at `/characters/{id}/levelup`
+4. Wizard fetches options, renders steps one at a time, collects choices
+5. On confirm: `POST /levelup` → bumps `cc.level`, applies all choices, returns `{ok, new_level, hp_max, hp_gained, auto_added_spells}`
+6. Done panel shows result and links to character sheet
 
-## Known issues / next steps
+**Step types covered:**
+| Step | Classes | Notes |
+|---|---|---|
+| HP (roll/average/manual) | All | Server floors roll at average; CON mod applied |
+| Subclass | All (L3) | Auto-grants domain/patron/oath spells |
+| ASI (+2/+1+1/feat) | All ASI levels | Retroactive CON HP recompute |
+| Epic Boon | All (L19) | Picks from epic_boon feat category |
+| Fighting Style | Paladin/Ranger L2 | Also optional swap for Fighter every level |
+| Expertise | Bard/Ranger/Rogue | Picks from owned non-expertise skills |
+| Cantrips | All casters at gain levels | |
+| Spells (known) | Bard/Sorcerer/Warlock/Ranger | |
+| Wizard Spellbook | Wizard (+2/level) | saved as `prepared=False` |
+| Spell swap | Known-spell casters | Optional each level |
+| Cantrip swap | Known-spell casters | Optional each level |
+| Metamagic | Sorcerer (L2/10/17) | Hard-coded 10 options |
+| Invocations | Warlock | Gains + optional swap each level |
+| Mystic Arcanum | Warlock (L9/11/13/15) | 6th/7th/8th/9th spell, 1/long rest |
+| Feature choices | All | Parsed from `choice_required=True` features |
 
-- **End-to-end testing not yet done for all 12 classes.** Do a full run before calling Phase 1 done.
+**Audit trail:** Every choice stored in `CharacterChoice` with `level=next_level` and `feature_key="lvlup:{level}:{step_id}"`.
+
+## Next: Phase 4 — Sheet Spellcasting Tracking
+
+The Spells tab shows spells but has no way to manage prepared spells per long rest, no Wizard spellbook/prepared split, no Pact Magic block, no Mystic Arcanum section, and no always-prepared badges for domain/patron/oath spells.
+
+### What to build
+
+**Backend:**
+- `PATCH /api/characters/{id}/prepared-spells` — body: `{spell_ids: [int]}`. Validates caster type, spell levels, prepared max formula. Sets `prepared=True` on listed rows + always-prepared; `False` on rest. Wizard spellbook spells stay in DB but `prepared=False`.
+- Add to `sheet-data` response: `prepared_max` (formula per class), `always_prepared_ids`, `spellbook_ids` (Wizard), `prepared_count`
+
+**Prepared max formulas (by class):**
+- Cleric: `wisdom_mod + cleric_level`
+- Druid: `wisdom_mod + druid_level`
+- Paladin: `charisma_mod + floor(paladin_level / 2)`
+- Ranger: `wisdom_mod + floor(ranger_level / 2)`
+- Wizard: `intelligence_mod + wizard_level`
+
+**Frontend (sheet.js `renderSpellsTab`):**
+Restructure into sections:
+1. Spellcasting header (already exists — keep)
+2. Slot reference bar (already exists — keep)
+3. Class resource blocks (new — Warlock Pact Magic note, Mystic Arcanum list, Paladin Lay on Hands pool, Wizard Arcane Recovery note, etc.)
+4. "Prepared X / Y — ✎ Prepare Spells" row (for prep casters: Cleric/Druid/Paladin/Ranger/Wizard)
+5. Spell groups with new badges:
+   - `Always Prepared` silver (domain/patron/oath/subclass)
+   - `Spellbook` blue (Wizard — always visible)
+   - `Prepared` green (prepared=True; for Wizard means spellbook AND prepared)
+6. Warlock: no prep button; known spells always available; Mystic Arcanum group at top with "1/long rest" badge
+7. Bard/Sorcerer: no prep button; "Known Spells" header with note
+
+**Prepare Spells modal:**
+- Header: "Prepare Spells — Long Rest · X of Y"
+- Locked always-prepared section (doesn't count against max)
+- Selectable section: class list (or spellbook for Wizard), filtered by max slot level; checkboxes; disable at max
+- Cantrips listed below (no checkbox)
+- Save → `PATCH /prepared-spells` → re-render
+
+**Known issues / gaps to fix in Phase 4:**
+- Sheet Spells tab currently shows a static "Prepared" badge on all class spells — this is incorrect for prepared casters; Phase 4 replaces it with real prep state
+- `always_prepared` rows exist in DB (added by Phase 3 level-up) but the sheet doesn't display them differently yet
+- Mystic Arcanum spells (source="arcanum") need their own section on the Warlock sheet
+
+## Known issues
+
+- **End-to-end testing not done for all 12 classes at all levels** — spot-tested a few classes; full matrix check still needed before calling Phase 3 production-ready
 - **PDF export** — `app/templates/character_sheet.html` exists but visual QA not done. PDF button removed from player side; admin still has export.
 - **Bard skill list** — falls back to full 18-skill list (correct behavior).
-- **Phase 2 major items not yet started** — see `Next Phase.md` for full list.
 
 ## Bugs fixed (cumulative)
 
@@ -90,9 +157,11 @@ Player can lock their height/weight/deity on the Biography tab once they've set 
 - `stat_roll_locked` on `Character` prevents re-rolling; DM unlocks via `POST /api/admin/characters/{id}/unlock-stats`.
 - `physical_locked` on `Character` locks height/weight/deity edits; player locks via `POST /api/characters/{id}/bio/lock`; DM unlocks via `POST /api/admin/characters/{id}/unlock-physical`. Added in migration `3f9a2b1c4d5e`.
 - Seeder is idempotent for inserts; also refreshes spells missing `casting_time`/`range`/`duration`.
-- `CharacterSpell` has `source` ("class" | "species") and `notes` columns. Species spells are parsed at step 2 and preserved across spell saves.
-- `Character` has `height`, `weight`, `deity`, `journal`, `currency` (JSON) columns added in migration `18da8cfaf343`.
-- Admin Import tab has one-shot maintenance buttons: Repair Schema, Convert Gold, Refresh Spells, Backfill Species Spells.
+- `CharacterSpell` has `source` ("class" | "species" | "subclass" | "arcanum"), `notes`, and `always_prepared` (Boolean) columns. Species spells preserved across spell saves. Subclass/arcanum spells added by level-up wizard.
+- `Character` has `height`, `weight`, `deity`, `journal`, `currency` (JSON), `hp_roll_log` (JSON — level-up HP audit) columns.
+- `CharacterChoice` has `level` (Integer) column — all level-up choices stored with `feature_key="lvlup:{level}:{step_id}"`.
+- `app/services/levelup_rules.py` — pure rules engine for level-up wizard. No DB writes; only reads class/subclass/char data.
+- Admin Import tab has one-shot maintenance buttons: Repair Schema, Convert Gold, Refresh Spells, Backfill Species Spells. Repair Schema covers all columns through migration `a1b2c3d4e5f6`.
 
 ## Project structure
 

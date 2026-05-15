@@ -3,6 +3,8 @@
 .lu-page {
   min-height: 100vh;
   background: var(--color-bg);
+  /* Override --color-ink so dark-background elements don't render as brown */
+  --color-ink: #e8dfc8;
   color: var(--color-ink);
   font-family: var(--font-book);
 }
@@ -351,4 +353,483 @@
   justify-content: flex-end;
   padding-top: 16px;
   border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── Feature choice note ── */
+.lu-feature-choice-note {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── HP Step ── */
+.lu-hp-ref {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+}
+
+.lu-hp-die {
+  font-family: var(--font-header);
+  font-size: 1.2rem;
+  color: var(--color-gold);
+  background: rgba(212,175,80,0.12);
+  border: 1px solid rgba(212,175,80,0.3);
+  border-radius: var(--radius-sm);
+  padding: 4px 14px;
+  letter-spacing: 1px;
+}
+
+.lu-hp-detail {
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  color: var(--color-light-dim);
+}
+
+.lu-hp-bonus {
+  font-size: 0.85rem;
+  color: #8abf8a;
+  margin-left: 8px;
+}
+
+.lu-hp-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.lu-hp-method {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lu-hp-method:hover {
+  border-color: rgba(212,175,80,0.3);
+}
+
+.lu-hp-method.selected {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.08);
+}
+
+.lu-hp-method input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--color-gold);
+  flex-shrink: 0;
+}
+
+.lu-hp-method-body {
+  flex: 1;
+}
+
+.lu-hp-method-title {
+  font-family: var(--font-header);
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  margin-bottom: 4px;
+}
+
+.lu-hp-method-desc {
+  font-family: var(--font-book);
+  font-size: 0.85rem;
+  color: var(--color-light-dim);
+}
+
+.lu-hp-floor {
+  font-family: var(--font-book);
+  font-size: 0.8rem;
+  color: var(--color-ink-faded);
+  font-style: normal;
+}
+
+.lu-hp-roll-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.lu-roll-btn {
+  font-size: 0.85rem !important;
+  padding: 6px 14px !important;
+}
+
+.lu-roll-result {
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  color: var(--color-light-dim);
+}
+
+.lu-manual-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  font-family: var(--font-book);
+  font-size: 1rem;
+  padding: 6px 10px;
+  width: 90px;
+  outline: none;
+}
+
+.lu-manual-input:focus {
+  border-color: var(--color-gold);
+}
+
+.lu-hp-total {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(212,175,80,0.06);
+  border: 1px solid rgba(212,175,80,0.2);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+}
+
+.lu-hp-total-label {
+  font-family: var(--font-header);
+  font-size: 1rem;
+  color: var(--color-gold);
+}
+
+.lu-hp-total-detail {
+  font-family: var(--font-book);
+  font-size: 0.85rem;
+  color: var(--color-ink-faded);
+}
+
+/* ── ASI Step ── */
+.lu-asi-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.lu-asi-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lu-asi-mode:hover {
+  border-color: rgba(212,175,80,0.3);
+}
+
+.lu-asi-mode.active {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.06);
+}
+
+.lu-asi-mode input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--color-gold);
+  flex-shrink: 0;
+}
+
+.lu-asi-sub {
+  padding: 14px 16px 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: -4px;
+  margin-bottom: 10px;
+}
+
+.lu-ability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.lu-ability-btn {
+  background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  cursor: pointer;
+  padding: 10px 8px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.lu-ability-btn:hover:not(.capped) {
+  border-color: rgba(212,175,80,0.4);
+}
+
+.lu-ability-btn.chosen {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.1);
+}
+
+.lu-ability-btn.capped {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: rgba(255,255,255,0.05);
+}
+
+.lu-ab-name {
+  font-family: var(--font-header);
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-faded);
+}
+
+.lu-ab-val {
+  font-family: var(--font-header);
+  font-size: 1.1rem;
+  color: var(--color-ink);
+}
+
+.lu-ab-new {
+  font-family: var(--font-book);
+  font-size: 0.78rem;
+  color: #8abf8a;
+}
+
+/* ── Feat / Card grid ── */
+.lu-feat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.lu-feat-card {
+  background: rgba(255,255,255,0.03);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lu-feat-card:hover {
+  border-color: rgba(212,175,80,0.3);
+}
+
+.lu-feat-card.chosen {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.08);
+}
+
+.lu-feat-name {
+  font-family: var(--font-header);
+  font-size: 0.9rem;
+  color: var(--color-gold);
+  margin-bottom: 5px;
+}
+
+.lu-feat-desc {
+  font-family: var(--font-book);
+  font-size: 0.82rem;
+  color: var(--color-light-dim);
+  line-height: 1.5;
+}
+
+.lu-feat-cost {
+  font-family: var(--font-book);
+  font-size: 0.78rem;
+  color: var(--color-ink-faded);
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+.lu-feat-prereq {
+  font-family: var(--font-book);
+  font-size: 0.75rem;
+  color: var(--color-ink-faded);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── Skill grid (expertise) ── */
+.lu-skill-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.lu-skill-btn {
+  background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  color: var(--color-ink);
+  cursor: pointer;
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  padding: 6px 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lu-skill-btn:hover {
+  border-color: rgba(212,175,80,0.4);
+}
+
+.lu-skill-btn.chosen {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.1);
+  color: var(--color-gold);
+}
+
+/* ── Spell stats (spell cards) ── */
+.lu-spell-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.lu-spell-stats span {
+  font-family: var(--font-book);
+  font-size: 0.7rem;
+  color: var(--color-ink-faded);
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.lu-spell-desc {
+  font-family: var(--font-book);
+  font-size: 0.8rem;
+  color: var(--color-light-dim);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ── Spell count ── */
+.lu-spell-count {
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  color: var(--color-ink-faded);
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* ── Swap layout ── */
+.lu-swap-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 540px) {
+  .lu-swap-cols { grid-template-columns: 1fr; }
+}
+
+.lu-swap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lu-swap-label {
+  font-family: var(--font-header);
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-faded);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.lu-swap-grid {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 0;
+}
+
+.lu-swap-feat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ── Owned tags ── */
+.lu-owned-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  color: var(--color-ink-faded);
+}
+
+/* ── Done — auto spells ── */
+#lu-done-auto-spells {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  max-width: 480px;
+}
+
+.lu-auto-spell-label {
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-book);
+  font-size: 0.9rem;
+  color: var(--color-ink-faded);
+  margin-bottom: 4px;
+}
+
+/* ── Level-up apply button ── */
+.btn-levelup {
+  background: linear-gradient(135deg, var(--color-gold) 0%, #c8a040 100%);
+  color: #1a1410;
+  font-family: var(--font-header);
+  font-size: 1rem;
+  letter-spacing: 1px;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 28px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.btn-levelup:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-levelup:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

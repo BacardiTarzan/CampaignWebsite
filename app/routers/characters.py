@@ -12,6 +12,9 @@ from ..models.character import (
 )
 from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species, Subclass
 from ..services.export import character_to_dict, character_to_sheet_dict
+from ..services.levelup_rules import (
+    required_steps, auto_grants, subclass_auto_grants, max_spell_level, METAMAGIC_OPTIONS, ELDRITCH_INVOCATIONS,
+)
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
 import random
@@ -591,38 +594,48 @@ def sheet_data(char_id: int, db: Session = Depends(get_db), user: dict = Depends
 # Level-up
 # ---------------------------------------------------------------------------
 
-_CANTRIP_GAINS: dict[str, dict[int, int]] = {
-    "Bard":     {4: 1, 10: 1},
-    "Cleric":   {4: 1, 10: 1},
-    "Druid":    {4: 1, 10: 1},
-    "Sorcerer": {4: 1, 10: 1},
-    "Wizard":   {4: 1, 10: 1},
-    "Warlock":  {4: 1, 10: 1},
-}
-
-_SPELL_GAINS: dict[str, dict[int, int]] = {
-    "Wizard":   {l: 2 for l in range(2, 21)},
-    "Bard":     {l: 1 for l in range(2, 21)},
-    "Sorcerer": {l: 1 for l in range(2, 21)},
-    "Warlock":  {l: 1 for l in range(2, 21)},
-    "Ranger":   {2: 2, 3: 1, 5: 1, 7: 1, 9: 1, 11: 1, 13: 1, 15: 1, 17: 1, 19: 1},
-}
-
-
-def _max_spell_level(spellcasting_type: str, char_level: int) -> int:
-    if spellcasting_type == "full":
-        return min(9, max(1, (char_level + 1) // 2))
-    if spellcasting_type == "half":
-        return min(5, max(1, (char_level + 3) // 4))
-    if spellcasting_type == "pact":
-        return min(5, max(1, (char_level + 1) // 2))
-    return 0
-
+class HpChoice(BaseModel):
+    method: str = "average"    # "roll" | "manual" | "average"
+    die_value: int | None = None   # the raw die roll (before CON mod)
+    draconic_bonus: int = 0
 
 class LevelUpIn(BaseModel):
-    subclass_id: int | None = None
-    cantrip_ids: list[int] = []
-    spell_ids: list[int] = []
+    hp: HpChoice = HpChoice()
+    choices: dict[str, Any] = {}   # step_id → payload
+
+
+def _apply_hp(char, cc, cls, hp: HpChoice, next_level: int) -> int:
+    """Compute HP gain, log it, and update char.hp_max/hp_current. Returns total gain."""
+    base_attrs = char.base_attributes or {}
+    bg_asi = char.background_asi or {}
+    con_total = base_attrs.get("con", 10) + bg_asi.get("con", 0)
+    con_mod = (con_total - 10) // 2
+    average = cls.hit_die // 2 + 1
+    draconic = hp.draconic_bonus or 0
+
+    if hp.method == "manual" and hp.die_value is not None:
+        die_value = max(1, min(hp.die_value, cls.hit_die))
+    elif hp.method == "roll" and hp.die_value is not None:
+        die_value = max(average, max(1, min(hp.die_value, cls.hit_die)))  # floor at average
+    else:
+        die_value = average
+
+    total = die_value + con_mod + draconic
+
+    log = list(char.hp_roll_log or [])
+    log.append({"level": next_level, "method": hp.method, "die_value": die_value,
+                 "con_mod": con_mod, "draconic_bonus": draconic, "total": total})
+    char.hp_roll_log = log
+
+    char.hp_max = (char.hp_max or 0) + total
+    char.hp_current = (char.hp_current or 0) + total
+    return total
+
+
+def _audit(char, db, feature_key: str, value: Any, level: int):
+    """Save a CharacterChoice audit row."""
+    db.add(CharacterChoice(character_id=char.id, feature_key=feature_key,
+                           choice_value=value, level=level))
 
 
 @router.get("/{char_id}/levelup-options")
@@ -639,45 +652,57 @@ def levelup_options(char_id: int, db: Session = Depends(get_db), user: dict = De
         raise HTTPException(400, "No level-up available")
 
     cls = cc.dnd_class
-    new_features = [f for f in (cls.features or []) if f.get("level") == next_level]
+    sp_type = cls.spellcasting_type or ""
+    max_sl = max_spell_level(sp_type, next_level) if sp_type else 0
 
+    # New features text for the "features" info step
+    new_features = [f for f in (cls.features or []) if f.get("level") == next_level]
     subclass_features: list[dict] = []
     if cc.subclass:
         subclass_features = [f for f in (cc.subclass.features or []) if f.get("level") == next_level]
 
-    subclass_options = [
-        {"id": s.id, "name": s.name, "description": s.description,
-         "features": [f for f in (s.features or []) if f.get("level") == next_level]}
-        for s in cls.subclasses if s.unlock_level == next_level
+    # Build dynamic steps
+    steps = required_steps(char, cc, cls, db)
+
+    # Fighting-style feats for the frontend
+    fighting_styles = [
+        {"id": f.id, "name": f.name, "description": f.description}
+        for f in db.query(Feat).filter(Feat.category == "fighting_style").order_by(Feat.name).all()
     ]
-    subclass_needed = bool(subclass_options) and cc.subclass_id is None
 
-    cantrip_gains = _CANTRIP_GAINS.get(cls.name, {}).get(next_level, 0)
-    spell_gains = _SPELL_GAINS.get(cls.name, {}).get(next_level, 0)
-    max_sl = _max_spell_level(cls.spellcasting_type or "", next_level)
+    # General feats for ASI picker
+    general_feats = [
+        {"id": f.id, "name": f.name, "description": f.description, "prerequisites": f.prerequisites}
+        for f in db.query(Feat).filter(Feat.category == "general").order_by(Feat.name).all()
+    ]
 
+    # Epic boon feats
+    epic_boons = [
+        {"id": f.id, "name": f.name, "description": f.description}
+        for f in db.query(Feat).filter(Feat.category == "epic_boon").order_by(Feat.name).all()
+    ]
+
+    owned_spell_ids = [cs.spell_id for cs in char.spells]
     base_attrs = char.base_attributes or {}
-    con_mod = (base_attrs.get("con", 10) - 10) // 2
-    hp_increase = (cls.hit_die // 2 + 1) + con_mod
-
-    owned_ids = [cs.spell_id for cs in char.spells]
+    bg_asi = char.background_asi or {}
 
     return {
         "character_name": char.character_name,
         "class_name": cls.name,
         "current_level": cc.level,
         "next_level": next_level,
+        "hit_die": cls.hit_die,
+        "class_spellcasting": sp_type,
+        "max_spell_level": max_sl,
+        "steps": steps,
         "new_features": new_features,
         "subclass_features": subclass_features,
-        "subclass_needed": subclass_needed,
-        "subclass_options": subclass_options,
-        "cantrip_gains": cantrip_gains,
-        "spell_gains": spell_gains,
-        "max_spell_level": max_sl,
-        "hp_increase": hp_increase,
-        "hp_increase_detail": f"d{cls.hit_die} avg ({cls.hit_die // 2 + 1}) + CON {con_mod:+d} = {hp_increase}",
-        "class_spellcasting": cls.spellcasting_type,
-        "owned_spell_ids": owned_ids,
+        "current_attributes": {k: base_attrs.get(k, 10) + bg_asi.get(k, 0)
+                                for k in ["str", "dex", "con", "int", "wis", "cha"]},
+        "owned_spell_ids": owned_spell_ids,
+        "fighting_styles": fighting_styles,
+        "general_feats": general_feats,
+        "epic_boons": epic_boons,
     }
 
 
@@ -695,29 +720,245 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
         raise HTTPException(400, "No level-up available")
 
     cls = cc.dnd_class
+    choices = data.choices
+    auto_added_spells: list[str] = []   # names of auto-granted always-prepared spells
 
-    if data.subclass_id:
-        sub = db.get(Subclass, data.subclass_id)
-        if not sub or sub.class_id != cc.class_id:
-            raise HTTPException(400, "Invalid subclass for this class")
-        cc.subclass_id = data.subclass_id
+    # ── HP ──────────────────────────────────────────────────────────────────
+    hp_gain = _apply_hp(char, cc, cls, data.hp, next_level)
+    _audit(char, db, f"lvlup:{next_level}:hp", data.hp.dict(), next_level)
 
+    # ── Subclass selection ───────────────────────────────────────────────────
+    sub_step_id = f"subclass_l{next_level}"
+    if sub_step_id in choices:
+        subclass_id = choices[sub_step_id].get("subclass_id")
+        if subclass_id:
+            sub = db.get(Subclass, subclass_id)
+            if not sub or sub.class_id != cc.class_id:
+                raise HTTPException(400, "Invalid subclass")
+            cc.subclass_id = subclass_id
+            db.flush()   # so cc.subclass is accessible below
+            # Auto-grant all subclass spells earned at/before this level
+            grant_ids = subclass_auto_grants(char, cc, cls, cc.subclass, db)
+            owned_ids = {cs.spell_id for cs in char.spells}
+            for sid in grant_ids:
+                if sid not in owned_ids:
+                    db.add(CharacterSpell(character_id=char.id, spell_id=sid,
+                                          source="subclass", always_prepared=True, prepared=True))
+                    owned_ids.add(sid)
+                    spell = db.get(Spell, sid)
+                    if spell:
+                        auto_added_spells.append(spell.name)
+            _audit(char, db, f"lvlup:{next_level}:subclass", {"subclass_id": subclass_id}, next_level)
+            # Draconic Sorcery: +3 HP at L3
+            if cc.subclass and cc.subclass.name == "Draconic Sorcery" and next_level == 3:
+                char.hp_max = (char.hp_max or 0) + 3
+                char.hp_current = (char.hp_current or 0) + 3
+
+    # ── ASI ─────────────────────────────────────────────────────────────────
+    asi_step_id = f"asi_l{next_level}"
+    if asi_step_id in choices:
+        asi = choices[asi_step_id]
+        mode = asi.get("mode", "")
+        base = dict(char.base_attributes or {})
+        bg = char.background_asi or {}
+
+        if mode == "+2":
+            ab = asi.get("ability")
+            if ab and ab in base:
+                cur_total = base.get(ab, 10) + bg.get(ab, 0)
+                gain = min(2, 20 - cur_total)
+                base[ab] = base.get(ab, 10) + gain
+                if ab == "con" and gain > 0:
+                    con_delta = gain // 2
+                    extra_hp = con_delta * (next_level - 1)
+                    char.hp_max = (char.hp_max or 0) + extra_hp
+                    char.hp_current = (char.hp_current or 0) + extra_hp
+        elif mode == "+1+1":
+            for ab in asi.get("abilities", [])[:2]:
+                if ab in base:
+                    cur_total = base.get(ab, 10) + bg.get(ab, 0)
+                    gain = min(1, 20 - cur_total)
+                    base[ab] = base.get(ab, 10) + gain
+                    if ab == "con" and gain > 0:
+                        extra_hp = (gain // 2) * (next_level - 1)
+                        char.hp_max = (char.hp_max or 0) + extra_hp
+                        char.hp_current = (char.hp_current or 0) + extra_hp
+        elif mode == "feat":
+            feat_id = asi.get("feat_id")
+            if feat_id:
+                feat = db.get(Feat, feat_id)
+                if feat:
+                    db.add(CharacterFeat(character_id=char.id, feat_id=feat_id, source="asi"))
+
+        char.base_attributes = base
+        _audit(char, db, f"lvlup:{next_level}:asi", asi, next_level)
+
+    # ── Epic Boon ────────────────────────────────────────────────────────────
+    epic_step_id = f"epic_boon_l{next_level}"
+    if epic_step_id in choices:
+        feat_id = choices[epic_step_id].get("feat_id")
+        if feat_id:
+            feat = db.get(Feat, feat_id)
+            if feat:
+                db.add(CharacterFeat(character_id=char.id, feat_id=feat_id, source="epic_boon"))
+        _audit(char, db, f"lvlup:{next_level}:epic_boon", choices[epic_step_id], next_level)
+
+    # ── Fighting Style ───────────────────────────────────────────────────────
+    for prefix in [f"fighting_style_l{next_level}", f"fighter_style_swap_l{next_level}"]:
+        if prefix in choices:
+            feat_id = choices[prefix].get("feat_id")
+            if feat_id:
+                feat = db.get(Feat, feat_id)
+                if feat:
+                    # For fighter swap, remove old fighting style feat first
+                    if "swap" in prefix:
+                        for cf in list(char.feats):
+                            if cf.source == "fighting_style":
+                                db.delete(cf)
+                                break
+                    db.add(CharacterFeat(character_id=char.id, feat_id=feat_id, source="fighting_style"))
+                    db.add(CharacterChoice(character_id=char.id, feature_key="fighting_style",
+                                           choice_value={"feat_id": feat_id, "name": feat.name},
+                                           level=next_level))
+            break
+
+    # ── Expertise ────────────────────────────────────────────────────────────
+    exp_step_id = f"expertise_l{next_level}"
+    if exp_step_id in choices:
+        skill_names = choices[exp_step_id].get("skills", [])
+        for skill_name in skill_names:
+            sp = next((s for s in char.skill_proficiencies if s.skill_name == skill_name), None)
+            if sp:
+                sp.expertise = True
+        _audit(char, db, f"lvlup:{next_level}:expertise", {"skills": skill_names}, next_level)
+
+    # ── Cantrips (new) ───────────────────────────────────────────────────────
+    cantrip_step_id = f"cantrips_l{next_level}"
     owned_ids = {cs.spell_id for cs in char.spells}
-    for spell_id in data.cantrip_ids + data.spell_ids:
-        if spell_id not in owned_ids:
-            db.add(CharacterSpell(character_id=char.id, spell_id=spell_id, source="class"))
-            owned_ids.add(spell_id)
+    if cantrip_step_id in choices:
+        for sid in choices[cantrip_step_id].get("spell_ids", []):
+            if sid not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=sid, source="class"))
+                owned_ids.add(sid)
+        _audit(char, db, f"lvlup:{next_level}:cantrips", choices[cantrip_step_id], next_level)
 
-    base_attrs = char.base_attributes or {}
-    con_mod = (base_attrs.get("con", 10) - 10) // 2
-    hp_increase = (cls.hit_die // 2 + 1) + con_mod
-    char.hp_max = (char.hp_max or 0) + hp_increase
-    char.hp_current = (char.hp_current or 0) + hp_increase
+    # ── Spells / Spellbook (new) ─────────────────────────────────────────────
+    spell_step_id = f"spells_l{next_level}"
+    if spell_step_id in choices:
+        is_wizard = cls.name == "Wizard"
+        for sid in choices[spell_step_id].get("spell_ids", []):
+            if sid not in owned_ids:
+                # Wizard spells go to spellbook (prepared=False); others are known (prepared=True)
+                db.add(CharacterSpell(character_id=char.id, spell_id=sid, source="class",
+                                      prepared=not is_wizard))
+                owned_ids.add(sid)
+        _audit(char, db, f"lvlup:{next_level}:spells", choices[spell_step_id], next_level)
 
+    # ── Spell swap (optional) ────────────────────────────────────────────────
+    swap_step_id = f"spell_swap_l{next_level}"
+    if swap_step_id in choices:
+        payload = choices[swap_step_id]
+        remove_id = payload.get("remove_id")
+        add_id = payload.get("add_id")
+        if remove_id and add_id:
+            for cs in list(char.spells):
+                if cs.spell_id == remove_id and cs.source == "class" and not (cs.always_prepared or False):
+                    db.delete(cs)
+                    break
+            if add_id not in owned_ids:
+                is_wizard = cls.name == "Wizard"
+                db.add(CharacterSpell(character_id=char.id, spell_id=add_id, source="class",
+                                      prepared=not is_wizard))
+        _audit(char, db, f"lvlup:{next_level}:spell_swap", payload, next_level)
+
+    # ── Cantrip swap (optional) ──────────────────────────────────────────────
+    cswap_step_id = f"cantrip_swap_l{next_level}"
+    if cswap_step_id in choices:
+        payload = choices[cswap_step_id]
+        remove_id = payload.get("remove_id")
+        add_id = payload.get("add_id")
+        if remove_id and add_id:
+            for cs in list(char.spells):
+                if cs.spell_id == remove_id and cs.source == "class":
+                    spell_obj = db.get(Spell, remove_id)
+                    if spell_obj and spell_obj.level == 0:
+                        db.delete(cs)
+                        break
+            if add_id not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=add_id, source="class"))
+
+    # ── Metamagic ────────────────────────────────────────────────────────────
+    mm_step_id = f"metamagic_l{next_level}"
+    if mm_step_id in choices:
+        for key in choices[mm_step_id].get("keys", []):
+            db.add(CharacterChoice(character_id=char.id, feature_key="metamagic",
+                                   choice_value={"key": key}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:metamagic", choices[mm_step_id], next_level)
+
+    # ── Eldritch Invocations (new) ────────────────────────────────────────────
+    invoc_step_id = f"invocations_l{next_level}"
+    if invoc_step_id in choices:
+        for key in choices[invoc_step_id].get("keys", []):
+            db.add(CharacterChoice(character_id=char.id, feature_key="invocation",
+                                   choice_value={"key": key}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:invocations", choices[invoc_step_id], next_level)
+
+    # ── Invocation swap (optional) ────────────────────────────────────────────
+    iswap_step_id = f"invoc_swap_l{next_level}"
+    if iswap_step_id in choices:
+        payload = choices[iswap_step_id]
+        remove_key = payload.get("remove_key")
+        add_key = payload.get("add_key")
+        if remove_key and add_key:
+            for ch in list(char.choices):
+                if ch.feature_key == "invocation" and (ch.choice_value or {}).get("key") == remove_key:
+                    db.delete(ch)
+                    break
+            db.add(CharacterChoice(character_id=char.id, feature_key="invocation",
+                                   choice_value={"key": add_key}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:invoc_swap", payload, next_level)
+
+    # ── Mystic Arcanum ────────────────────────────────────────────────────────
+    arcanum_step_id = f"arcanum_l{next_level}"
+    if arcanum_step_id in choices:
+        sid = choices[arcanum_step_id].get("spell_id")
+        if sid and sid not in owned_ids:
+            db.add(CharacterSpell(character_id=char.id, spell_id=sid, source="arcanum",
+                                  notes="Mystic Arcanum — 1/long rest, no slot"))
+            owned_ids.add(sid)
+        _audit(char, db, f"lvlup:{next_level}:arcanum", choices[arcanum_step_id], next_level)
+
+    # ── Feature choices (generic) ─────────────────────────────────────────────
+    for step_id, payload in choices.items():
+        if step_id.startswith("feature_") and "choice" in step_id:
+            _audit(char, db, f"lvlup:{next_level}:{step_id}", payload, next_level)
+
+    # ── Auto-grants (domain/patron/oath tier spells at this level, after subclass resolved) ──
+    current_subclass = db.get(Subclass, cc.subclass_id) if cc.subclass_id else None
+    if current_subclass:
+        grant_ids = auto_grants(char, cc, cls, current_subclass, next_level, db)
+        owned_ids = {cs.spell_id for cs in char.spells}
+        for sid in grant_ids:
+            if sid not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=sid,
+                                      source="subclass", always_prepared=True, prepared=True))
+                owned_ids.add(sid)
+                spell = db.get(Spell, sid)
+                if spell:
+                    auto_added_spells.append(spell.name)
+
+    # ── Increment level ───────────────────────────────────────────────────────
     cc.level = next_level
     cc.hit_dice_remaining = (cc.hit_dice_remaining or 0) + 1
     db.commit()
-    return {"ok": True, "new_level": next_level, "hp_max": char.hp_max}
+
+    return {
+        "ok": True,
+        "new_level": next_level,
+        "hp_max": char.hp_max,
+        "hp_gained": hp_gain,
+        "auto_added_spells": auto_added_spells,
+    }
 
 
 # --- Exports ---

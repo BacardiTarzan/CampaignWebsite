@@ -31,64 +31,25 @@
       <div class="lu-steps" id="lu-steps"></div>
     </div>
 
-    <!-- Step: Features -->
+    <!-- Dynamic step host (all steps render here) -->
+    <div id="lu-step-host" class="lu-panel"></div>
+
+    <!-- Features info panel (shown as step 0 before wizard steps) -->
     <div id="lu-step-features" class="lu-panel hidden">
-      <h2 class="lu-step-heading">New Features</h2>
+      <h2 class="lu-step-heading">New Features at This Level</h2>
+      <p class="lu-step-desc">Review your new class and subclass features, then continue to make your choices.</p>
       <div id="lu-features-list" class="lu-features-list"></div>
       <div class="lu-nav">
         <button class="btn-primary" onclick="luNext()">Continue →</button>
       </div>
     </div>
 
-    <!-- Step: Subclass -->
-    <div id="lu-step-subclass" class="lu-panel hidden">
-      <h2 class="lu-step-heading">Choose Your Subclass</h2>
-      <p class="lu-step-desc">Your path diverges. Choose a subclass — this defines your specialization from here on.</p>
-      <div id="lu-subclass-grid" class="lu-subclass-grid"></div>
-      <div class="lu-nav">
-        <button class="btn-secondary" onclick="luBack()">← Back</button>
-        <button class="btn-primary" onclick="luNext()" id="lu-subclass-next" disabled>Continue →</button>
-      </div>
-    </div>
-
-    <!-- Step: Cantrips -->
-    <div id="lu-step-cantrips" class="lu-panel hidden">
-      <h2 class="lu-step-heading">New Cantrips</h2>
-      <p class="lu-step-desc" id="lu-cantrip-hint"></p>
-      <div id="lu-cantrip-grid" class="lu-spell-grid"></div>
-      <div class="lu-nav">
-        <button class="btn-secondary" onclick="luBack()">← Back</button>
-        <button class="btn-primary" onclick="luNext()" id="lu-cantrip-next" disabled>Continue →</button>
-      </div>
-    </div>
-
-    <!-- Step: Spells -->
-    <div id="lu-step-spells" class="lu-panel hidden">
-      <h2 class="lu-step-heading">New Spells</h2>
-      <p class="lu-step-desc" id="lu-spell-hint"></p>
-      <div class="lu-spell-filter" id="lu-spell-filter"></div>
-      <div id="lu-spell-grid" class="lu-spell-grid"></div>
-      <div class="lu-nav">
-        <button class="btn-secondary" onclick="luBack()">← Back</button>
-        <button class="btn-primary" onclick="luNext()" id="lu-spell-next" disabled>Continue →</button>
-      </div>
-    </div>
-
-    <!-- Step: Confirm -->
-    <div id="lu-step-confirm" class="lu-panel hidden">
-      <h2 class="lu-step-heading">Ready to Level Up</h2>
-      <div id="lu-confirm-summary" class="lu-confirm-summary"></div>
-      <div class="lu-nav">
-        <button class="btn-secondary" onclick="luBack()">← Back</button>
-        <button class="btn-levelup" onclick="luApply()" id="lu-apply-btn">⬆ Level Up</button>
-      </div>
-    </div>
-
-    <!-- Step: Done -->
+    <!-- Done panel -->
     <div id="lu-step-done" class="lu-panel hidden">
       <div class="lu-done">
         <div class="lu-done-title" id="lu-done-title"></div>
         <div class="lu-done-sub" id="lu-done-sub"></div>
+        <div id="lu-done-auto-spells" class="lu-done-spells hidden"></div>
         <a href="/portal"><button class="btn-primary" style="margin-top:24px;">Return to Characters</button></a>
         <a id="lu-sheet-link" href="/portal"><button class="btn-secondary" style="margin-top:8px;">View Character Sheet →</button></a>
       </div>

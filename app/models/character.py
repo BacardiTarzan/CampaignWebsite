@@ -31,6 +31,7 @@ class Character(Base):
     currency = Column(JSON, nullable=True)                   # {"pp":0,"gp":0,"sp":0,"cp":0}
     stat_roll_locked = Column(Boolean, default=False)
     physical_locked = Column(Boolean, default=False)
+    hp_roll_log = Column(JSON, nullable=True)   # [{level, method, die_value, con_mod, total}]
     wizard_step = Column(Integer, default=1)
     is_complete = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
@@ -80,8 +81,9 @@ class CharacterChoice(Base):
     __tablename__ = "character_choices"
     id = Column(Integer, primary_key=True)
     character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
-    feature_key = Column(String, nullable=False)  # "fighting_style","divine_order","weapon_mastery_1"
-    choice_value = Column(JSON)                   # "Archery" or ["Archery","Defense"]
+    feature_key = Column(String, nullable=False)  # "fighting_style","divine_order", "lvlup:4:asi"
+    choice_value = Column(JSON)                   # "Archery" or ["Archery","Defense"] or {mode:"+2",ability:"cha"}
+    level = Column(Integer, nullable=True)        # level at which this choice was made
 
     character = relationship("Character", back_populates="choices")
 
@@ -103,8 +105,9 @@ class CharacterSpell(Base):
     character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
     spell_id = Column(Integer, ForeignKey("spells.id"), nullable=False)
     prepared = Column(Boolean, default=True)
+    always_prepared = Column(Boolean, default=False)  # domain/patron/oath/subclass spells
     source_class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
-    source = Column(String, nullable=True)   # "class" | "species"
+    source = Column(String, nullable=True)   # "class" | "species" | "subclass" | "arcanum"
     notes = Column(Text, nullable=True)      # special casting rules (e.g. limited no-slot casts)
 
     character = relationship("Character", back_populates="spells")
