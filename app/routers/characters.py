@@ -124,6 +124,7 @@ class StepBioIn(BaseModel):
 
 
 class BioUpdateIn(BaseModel):
+    age: int | None = None
     height: str | None = None
     weight: str | None = None
     deity: str | None = None
@@ -550,6 +551,8 @@ def update_bio(char_id: int, data: BioUpdateIn, db: Session = Depends(get_db), u
     _check_owner_or_admin(char, user)
     is_admin = user.get("is_admin", False)
     physical_blocked = bool(char.physical_locked) and not is_admin
+    if data.age is not None and not physical_blocked:
+        char.age = data.age
     if data.height is not None and not physical_blocked:
         char.height = data.height
     if data.weight is not None and not physical_blocked:

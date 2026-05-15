@@ -128,7 +128,7 @@ function render() {
 
   const identity = [
     c.class_name ? `${c.class_name} ${c.level}` : null,
-    c.species_lineage || c.species_name,
+    speciesDisplayName(c.species_name, c.species_lineage),
     c.background_name,
     c.alignment,
   ].filter(Boolean).join(" · ");
@@ -372,7 +372,7 @@ function renderFeaturesSection(c) {
   const classFeatures = (c.class_features || []).map(f =>
     renderEntry(f.name, f.description, `${c.class_name} Lv ${f.level}`)).join("");
   const speciesTraits = (c.species_traits || []).map(t =>
-    renderEntry(t.name, t.description, c.species_lineage || c.species_name)).join("");
+    renderEntry(t.name, t.description, speciesDisplayName(c.species_name, c.species_lineage))).join("");
   const feats = (c.feats || []).map(f =>
     renderEntry(f.name, f.description, "Feat")).join("");
 
@@ -448,6 +448,38 @@ function buildHeightOptions(range, currentVal) {
   return opts;
 }
 
+const SPECIES_AGE = {
+  "Human":      { min: 16, max:  80, ya: 30, ad: 45, oa: 65 },
+  "Elf":        { min: 50, max:1000, ya:200, ad:450, oa:600 },
+  "Dwarf":      { min: 30, max: 350, ya:100, ad:200, oa:280 },
+  "Gnome":      { min: 25, max: 500, ya: 80, ad:250, oa:350 },
+  "Halfling":   { min: 20, max: 150, ya: 35, ad: 85, oa:120 },
+  "Dragonborn": { min: 15, max: 200, ya: 25, ad: 50, oa: 99 },
+  "Orc":        { min: 14, max:  60, ya: 20, ad: 35, oa: 50 },
+  "Tiefling":   { min: 16, max: 120, ya: 30, ad: 45, oa: 65 },
+  "Aasimar":    { min: 16, max: 120, ya: 30, ad: 45, oa: 65 },
+  "Goliath":    { min: 15, max: 150, ya: 30, ad: 70, oa:100 },
+};
+const SPECIES_AGE_DEFAULT = { min: 1, max: 9999, ya: 25, ad: 50, oa: 75 };
+
+function getSpeciesAge(speciesName) {
+  return SPECIES_AGE[speciesName] || SPECIES_AGE_DEFAULT;
+}
+
+function ageLabel(age, speciesName) {
+  if (!age || age < 1) return "";
+  const s = getSpeciesAge(speciesName);
+  if (age <= s.ya) return " (Young Adult)";
+  if (age <= s.ad) return " (Adult)";
+  if (age <= s.oa) return " (Older Adult)";
+  return " (Elder)";
+}
+
+function speciesDisplayName(speciesName, speciesLineage) {
+  if (speciesName === "Dragonborn" && speciesLineage) return `${speciesLineage} Dragonborn`;
+  return speciesLineage || speciesName || "";
+}
+
 function renderBioTab(c) {
   const sizeHint = c.species_size ? ` <span class="bio-hint">(${c.species_size})</span>` : "";
   const range    = getSpeciesRange(c.species_name, c.species_size);
@@ -456,6 +488,7 @@ function renderBioTab(c) {
 
   if (locked) {
     // Read-only physical details — same style as Alignment/Background
+    const ageDisplay    = c.age ? `${c.age}${ageLabel(c.age, c.species_name)}` : "—";
     const heightDisplay = c.height || "—";
     const weightDisplay = c.weight ? `${c.weight} lbs` : "—";
     const deityDisplay  = c.deity  || "None";
@@ -471,6 +504,10 @@ function renderBioTab(c) {
         <div class="bio-field-row">
           <label class="bio-field-label">Background</label>
           <span class="bio-field-value">${c.background_name || "—"}</span>
+        </div>
+        <div class="bio-field-row">
+          <label class="bio-field-label">Age</label>
+          <span class="bio-field-value">${ageDisplay}</span>
         </div>
         <div class="bio-field-row">
           <label class="bio-field-label">Height${sizeHint}</label>
@@ -522,6 +559,14 @@ function renderBioTab(c) {
           <span class="bio-field-value">${c.background_name || "—"}</span>
         </div>
         <div class="bio-field-row">
+          <label class="bio-field-label">Age</label>
+          <div class="bio-counter">
+            <input id="bio-age-val" class="bio-counter-input" type="number"
+                   min="${getSpeciesAge(c.species_name).min}" max="${getSpeciesAge(c.species_name).max}" step="1" value="${c.age || ""}">
+            <span id="bio-age-label" class="bio-range-hint">${ageLabel(c.age, c.species_name)}</span>
+          </div>
+        </div>
+        <div class="bio-field-row">
           <label class="bio-field-label">Height${sizeHint}</label>
           <select id="bio-height-sel" class="bio-select">
             ${heightOpts}
@@ -546,7 +591,7 @@ function renderBioTab(c) {
           <button class="btn-gold bio-lock-btn" onclick="saveAndLockPhysical()" type="button">
             Save &amp; Lock Physical Details
           </button>
-          <span class="bio-lock-hint">Once saved, only the DM can edit height, weight &amp; deity.</span>
+          <span class="bio-lock-hint">Once saved, only the DM can edit age, height, weight &amp; deity.</span>
         </div>
       </div>
 
@@ -571,6 +616,27 @@ function renderBioTab(c) {
 
 let _journalTimer = null;
 function attachBioSave() {
+  // Age input — update label live, save on blur
+  const ageInput = document.getElementById("bio-age-val");
+  if (ageInput) {
+    ageInput.addEventListener("input", () => {
+      const lbl = document.getElementById("bio-age-label");
+      if (lbl) lbl.textContent = ageLabel(parseInt(ageInput.value) || 0, charData.species_name);
+    });
+    ageInput.addEventListener("blur", async () => {
+      const sa = getSpeciesAge(charData.species_name);
+      let val = parseInt(ageInput.value) || null;
+      if (val !== null) {
+        val = Math.max(sa.min, Math.min(sa.max, val));
+        ageInput.value = val;
+      }
+      try {
+        await api("PATCH", `/api/characters/${charId}/bio`, { age: val });
+        charData.age = val;
+      } catch(e) { toast("⚠ Save failed: " + e.message, 4000); }
+    });
+  }
+
   // Height dropdown — save on change
   const heightSel = document.getElementById("bio-height-sel");
   if (heightSel) {
@@ -633,6 +699,7 @@ function adjustWeight(delta) {
 }
 
 async function saveAndLockPhysical() {
+  const ageEl      = document.getElementById("bio-age-val");
   const heightSel  = document.getElementById("bio-height-sel");
   const weightEl   = document.getElementById("bio-weight-val");
   const deityEl    = document.getElementById("bio-deity");
@@ -640,13 +707,15 @@ async function saveAndLockPhysical() {
   if (!heightSel?.value) { toast("Please select a height before locking.", 3000); return; }
   if (!weightEl?.value)  { toast("Please enter a weight before locking.", 3000); return; }
 
+  const age    = ageEl?.value ? parseInt(ageEl.value) : null;
   const height = heightSel.value;
   const weight = String(parseInt(weightEl.value) || 0);
   const deity  = deityEl?.value.trim() || "";
 
   try {
-    await api("PATCH", `/api/characters/${charId}/bio`, { height, weight, deity });
+    await api("PATCH", `/api/characters/${charId}/bio`, { age, height, weight, deity });
     await api("POST", `/api/characters/${charId}/bio/lock`);
+    charData.age    = age;
     charData.height = height;
     charData.weight = weight;
     charData.deity  = deity;

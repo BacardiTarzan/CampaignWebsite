@@ -68,7 +68,9 @@ async function loadRoster() {
 }
 
 function renderCard(c) {
-  const speciesDisplay = c.species_lineage || c.species_name || "";
+  const speciesDisplay = (c.species_name === "Dragonborn" && c.species_lineage)
+    ? `${c.species_lineage} Dragonborn`
+    : (c.species_lineage || c.species_name || "");
   const classDisplay = c.class_name ? `${c.class_name}${c.level ? ` Lv ${c.level}` : ""}` : null;
   const subtitle = [speciesDisplay, classDisplay, c.background_name].filter(Boolean).join(" &nbsp;·&nbsp; ");
 

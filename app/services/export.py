@@ -279,6 +279,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "background_name": char.background.name if char.background else None,
         "alignment": char.alignment,
         "bio": char.bio,
+        "age": char.age,
         "height": char.height,
         "weight": char.weight,
         "deity": char.deity,

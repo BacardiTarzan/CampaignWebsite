@@ -421,8 +421,9 @@
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: var(--radius-sm);
   color: #f0eadc;
+  -webkit-text-fill-color: #f0eadc;
   font-family: var(--font-book);
-  font-size: 0.9rem;
+  font-size: 1rem;
   padding: 4px 8px;
   height: 30px;
 }
@@ -440,8 +441,9 @@
   border: 1px solid rgba(255,255,255,0.2);
   border-radius: var(--radius-sm);
   color: #f0eadc;
+  -webkit-text-fill-color: #f0eadc;
   font-family: var(--font-book);
-  font-size: 0.9rem;
+  font-size: 1rem;
   padding: 4px 8px;
   height: 30px;
   cursor: pointer;
@@ -494,8 +496,9 @@
   border: 1px solid rgba(255,255,255,0.2);
   border-radius: var(--radius-sm);
   color: #f0eadc;
+  -webkit-text-fill-color: #f0eadc;
   font-family: var(--font-book);
-  font-size: 0.9rem;
+  font-size: 1rem;
   padding: 4px 4px;
   height: 30px;
   text-align: center;
