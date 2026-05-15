@@ -51,8 +51,12 @@ function switchCodexTab(sub) {
 // ---------------------------------------------------------------------------
 // Roster
 // ---------------------------------------------------------------------------
+let _rosterBios = {};
+
 async function loadRoster() {
   const chars = await api("GET", "/api/admin/characters");
+  _rosterBios = {};
+  chars.forEach(c => { _rosterBios[c.id] = c.bio || ""; });
   const tbody = chars.map(c => {
     const hp = c.hp_max ? `<span class="roster-hp" id="hp-${c.id}">${c.hp_current ?? "?"}/${c.hp_max}</span>` : "—";
     return `
@@ -76,7 +80,7 @@ async function loadRoster() {
         <button onclick="levelUp(${c.id})">+Lv</button>
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
         ${c.physical_locked ? `<button onclick="unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
-        <button onclick="editBio(${c.id}, ${JSON.stringify(c.bio || '')})">📜 Bio</button>
+        <button onclick="editBio(${c.id})">📜 Bio</button>
         <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
         <a href="/api/admin/characters/${c.id}/export/json" target="_blank"><button>⬇ JSON</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
@@ -137,12 +141,12 @@ async function unlockPhysical(id) {
   } catch(e) { err(e.message); }
 }
 
-async function editBio(id, currentBio) {
+function editBio(id) {
   const modal = document.getElementById("bio-edit-modal");
   const textarea = document.getElementById("bio-edit-text");
   const title = document.getElementById("bio-edit-title");
   title.textContent = `Edit Backstory — Character #${id}`;
-  textarea.value = currentBio || "";
+  textarea.value = _rosterBios[id] || "";
   modal.dataset.charId = id;
   modal.classList.remove("hidden");
   textarea.focus();
