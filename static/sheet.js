@@ -796,49 +796,49 @@ function renderSpellsTab(c, prof, attrs) {
   const dc = 8 + prof + abMod;
   const atk = fmtMod(prof + abMod);
 
-  const isWizard = (c.class_name || "").toLowerCase() === "wizard";
+  const className = (c.class_name || "").toLowerCase();
+  const isWizard = className === "wizard";
   const isPact = c.class_spellcasting_type === "pact";
+  const isPrepCaster = c.is_prep_caster || false;
 
   const slots = getSlots(c);
   const slotRef = slots.length ? `
     <div class="slot-ref-bar">
-      <span class="slot-ref-title">Spell Slots</span>
+      <span class="slot-ref-title">${isPact ? "Pact Magic" : "Spell Slots"}</span>
       ${slots.map(s => `<div class="slot-ref-group">
         <div class="slot-ref-label">${s.pact ? "Pact" : ORDINAL[s.level]}</div>
         <div class="slot-ref-count">${s.total}</div>
       </div>`).join("")}
+      ${isPact ? `<div class="slot-ref-note">Recover on short rest</div>` : ""}
     </div>` : "";
 
-  const spells = c.spells || [];
-  if (!spells.length) return `
-    <div class="sh-section">
+  const allSpells = c.spells || [];
+  const arcanumSpells = allSpells.filter(s => s.source === "arcanum");
+  const regularSpells = allSpells.filter(s => s.source !== "arcanum");
+
+  if (!regularSpells.length && !arcanumSpells.length) {
+    return `<div class="sh-section">
       <p class="spell-cast-line"><strong>${ab}</strong> · Save DC <strong>${dc}</strong> · Atk <strong>${atk}</strong></p>
       ${slotRef}
       <p class="hint mt-md">No spells recorded.</p>
     </div>`;
+  }
 
-  // Group by level
-  const byLevel = {};
-  spells.forEach(s => {
-    const key = s.level;
-    if (!byLevel[key]) byLevel[key] = [];
-    byLevel[key].push(s);
-  });
-
-  const renderSpell = (s) => {
-    const isSpecies = s.source === "species";
+  // Build a spell card
+  const renderSpell = (s, opts = {}) => {
     const levelLabel = s.level === 0 ? "Cantrip" : `${ORDINAL[s.level]} Level`;
-
-    // Preparation / source badges
     let prepBadge = "";
-    if (isSpecies) {
+
+    if (opts.arcanum) {
+      prepBadge = `<span class="spell-badge spell-badge--arcanum">1/Long Rest</span>`;
+    } else if (s.source === "species") {
       prepBadge = `<span class="spell-badge spell-badge--species">Species</span>`;
-    } else if (isWizard) {
+    } else if (s.always_prepared) {
+      prepBadge = `<span class="spell-badge spell-badge--always-prep">Always Prepared</span>`;
+    } else if (isWizard && s.source === "class" && s.level > 0) {
       prepBadge = `<span class="spell-badge spell-badge--spellbook">Spellbook</span>`;
-      if (s.level > 0 && s.prepared) {
-        prepBadge += `<span class="spell-badge spell-badge--prepared">Prepared</span>`;
-      }
-    } else if (!isPact && s.level > 0 && s.prepared) {
+      if (s.prepared) prepBadge += `<span class="spell-badge spell-badge--prepared">Prepared</span>`;
+    } else if (isPrepCaster && s.level > 0 && s.prepared) {
       prepBadge = `<span class="spell-badge spell-badge--prepared">Prepared</span>`;
     }
 
@@ -848,19 +848,18 @@ function renderSpellsTab(c, prof, attrs) {
     ].filter(Boolean).map(t => `<span class="spell-flag">${t}</span>`).join("");
 
     const stats = [
-      { label: "School",    value: s.school },
-      { label: "Cast Time", value: s.casting_time },
-      { label: "Range",     value: s.range },
-      { label: "Duration",  value: s.duration },
-      { label: "Components",value: s.components },
+      { label: "School",     value: s.school },
+      { label: "Cast Time",  value: s.casting_time },
+      { label: "Range",      value: s.range },
+      { label: "Duration",   value: s.duration },
+      { label: "Components", value: s.components },
     ].filter(r => r.value).map(r =>
       `<div class="spell-stat"><span class="spell-stat-label">${r.label}</span>${r.value}</div>`
     ).join("");
 
-    const notesLine = (isSpecies && s.notes)
+    const notesLine = (s.source === "species" && s.notes)
       ? `<div class="spell-notes">${s.notes}</div>` : "";
-    const desc = s.description
-      ? `<div class="spell-desc">${s.description}</div>` : "";
+    const desc = s.description ? `<div class="spell-desc">${s.description}</div>` : "";
 
     return `<div class="spell-card" onclick="this.classList.toggle('open')">
       <div class="spell-card-header">
@@ -873,23 +872,209 @@ function renderSpellsTab(c, prof, attrs) {
         </div>
         ${stats ? `<div class="spell-stats-row">${stats}</div>` : ""}
       </div>
-      <div class="spell-card-body">
-        ${notesLine}${desc}
-      </div>
+      <div class="spell-card-body">${notesLine}${desc}</div>
     </div>`;
   };
+
+  // Mystic Arcanum section (Warlock)
+  const arcanumSection = arcanumSpells.length ? `
+    <div class="sh-resource-block">
+      <h4 class="sh-section-title">Mystic Arcanum <span class="sh-resource-note-inline">· 1/long rest each</span></h4>
+      ${arcanumSpells.map(s => renderSpell(s, { arcanum: true })).join("")}
+    </div>` : "";
+
+  // Class resource notes
+  let resourceNotes = "";
+  if (isWizard) {
+    const arSlots = Math.ceil((c.level || 1) / 2);
+    resourceNotes = `<div class="sh-resource-note-bar">
+      <strong>Arcane Recovery:</strong> Once per day on a short rest, recover spell slots totaling up to ${arSlots} levels (max 5th).
+    </div>`;
+  } else if (className === "paladin") {
+    resourceNotes = `<div class="sh-resource-note-bar">
+      <strong>Lay on Hands:</strong> ${(c.level || 1) * 5} HP pool per long rest.
+    </div>`;
+  }
+
+  // Prepare bar (prep casters only)
+  let prepBar = "";
+  if (isPrepCaster && c.prepared_max != null) {
+    const prepCount = c.prepared_count ?? 0;
+    const overLimit = prepCount > c.prepared_max;
+    prepBar = `<div class="prep-bar">
+      <span class="prep-count${overLimit ? " prep-over" : ""}">
+        Prepared <strong>${prepCount}</strong> / <strong>${c.prepared_max}</strong>
+      </span>
+      <button class="prep-edit-btn" onclick="openPrepModal()">✎ Prepare Spells</button>
+    </div>`;
+  }
+
+  // Section label for non-prep casters
+  let sectionLabel = "";
+  if (isPact) {
+    sectionLabel = `<p class="sh-known-label${arcanumSpells.length ? " mt-sm" : ""}">Known Spells — Pact Magic</p>`;
+  } else if (!isPrepCaster) {
+    sectionLabel = `<p class="sh-known-label">Known Spells — always available</p>`;
+  }
+
+  // Group regular spells by level
+  const byLevel = {};
+  regularSpells.forEach(s => {
+    if (!byLevel[s.level]) byLevel[s.level] = [];
+    byLevel[s.level].push(s);
+  });
 
   const levelGroups = Object.keys(byLevel).sort((a,b) => a-b).map(lvl => {
     const levelName = lvl === "0" ? "Cantrips" : `${ORDINAL[lvl]} Level`;
     return `<h4 class="sh-section-title mt-md">${levelName}</h4>
-      ${byLevel[lvl].map(renderSpell).join("")}`;
+      ${byLevel[lvl].map(s => renderSpell(s)).join("")}`;
   }).join("");
 
   return `<div class="sh-section">
     <p class="spell-cast-line"><strong>${ab}</strong> · Save DC <strong>${dc}</strong> · Atk <strong>${atk}</strong></p>
     ${slotRef}
+    ${arcanumSection}
+    ${resourceNotes}
+    ${prepBar}
+    ${sectionLabel}
     ${levelGroups}
   </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Prepare Spells modal
+// ---------------------------------------------------------------------------
+function openPrepModal() {
+  const c = charData;
+  if (!c || !c.is_prep_caster) return;
+
+  const className = (c.class_name || "").toLowerCase();
+  const isWizard = className === "wizard";
+  const allSpells = c.spells || [];
+
+  const alwaysPrepSpells = allSpells.filter(s =>
+    s.always_prepared && s.level > 0 && s.source !== "species" && s.source !== "arcanum"
+  );
+  const selectableSpells = allSpells.filter(s =>
+    !s.always_prepared && s.level > 0 && s.source !== "species" && s.source !== "arcanum"
+  );
+  const cantrips = allSpells.filter(s => s.level === 0 && s.source !== "species");
+
+  const prepMax = c.prepared_max || 0;
+  window._prepSelected = new Set(selectableSpells.filter(s => s.prepared).map(s => s.spell_id));
+  window._prepMax = prepMax;
+
+  const alwaysPrepSection = alwaysPrepSpells.length ? `
+    <div class="modal-section">
+      <div class="modal-section-title">Always Prepared — doesn't count against limit</div>
+      ${alwaysPrepSpells.map(s => `
+        <div class="modal-spell-row locked">
+          <span class="modal-spell-check-locked">✓</span>
+          <label class="modal-spell-name">${s.name} <span class="modal-spell-level">${ORDINAL[s.level]}</span></label>
+          <span class="modal-spell-always">Always Prepared</span>
+        </div>`).join("")}
+    </div>` : "";
+
+  const selectableSection = `
+    <div class="modal-section">
+      <div class="modal-section-title">Prepare from ${isWizard ? "Spellbook" : "Class List"}</div>
+      ${selectableSpells.length ? selectableSpells.map(s => `
+        <div class="modal-spell-row">
+          <input type="checkbox" class="modal-spell-cb" id="ms-${s.spell_id}" value="${s.spell_id}"
+            ${window._prepSelected.has(s.spell_id) ? "checked" : ""}
+            onchange="prepModalChange(this)">
+          <label for="ms-${s.spell_id}" class="modal-spell-name">${s.name} <span class="modal-spell-level">${ORDINAL[s.level]}</span></label>
+        </div>`).join("") : `<p class="hint">No spells available.</p>`}
+    </div>`;
+
+  const cantripSection = cantrips.length ? `
+    <div class="modal-section">
+      <div class="modal-section-title">Cantrips — always prepared</div>
+      ${cantrips.map(s => `
+        <div class="modal-spell-row locked">
+          <span class="modal-spell-check-locked">✓</span>
+          <label class="modal-spell-name">${s.name}</label>
+        </div>`).join("")}
+    </div>` : "";
+
+  const overlay = document.createElement("div");
+  overlay.id = "prep-modal-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box prep-modal">
+      <div class="modal-header">
+        <h3>Prepare Spells — Long Rest</h3>
+        <button class="modal-close-btn" onclick="closePrepModal()">✕</button>
+      </div>
+      <div class="modal-prep-counter">
+        <span>Select up to <strong>${prepMax}</strong> spells</span>
+        <span id="prep-modal-count"><strong>${window._prepSelected.size}</strong> selected</span>
+      </div>
+      <div class="modal-body">
+        ${alwaysPrepSection}
+        ${selectableSection}
+        ${cantripSection}
+      </div>
+      <div class="modal-footer">
+        <button class="prep-modal-cancel" onclick="closePrepModal()">Cancel</button>
+        <button class="prep-modal-save" onclick="savePreparedSpells()">Save Preparation</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function prepModalChange(cb) {
+  const id = parseInt(cb.value);
+  if (cb.checked) {
+    if (window._prepSelected.size >= window._prepMax) {
+      cb.checked = false;
+      toast(`Maximum ${window._prepMax} spells can be prepared`);
+      return;
+    }
+    window._prepSelected.add(id);
+  } else {
+    window._prepSelected.delete(id);
+  }
+  const el = document.getElementById("prep-modal-count");
+  if (el) el.innerHTML = `<strong>${window._prepSelected.size}</strong> selected`;
+}
+
+function closePrepModal() {
+  const overlay = document.getElementById("prep-modal-overlay");
+  if (overlay) overlay.remove();
+}
+
+async function savePreparedSpells() {
+  const c = charData;
+  const alwaysPrepIds = (c.spells || [])
+    .filter(s => s.always_prepared && s.level > 0 && s.source !== "species" && s.source !== "arcanum")
+    .map(s => s.spell_id);
+
+  const spellIds = [...window._prepSelected, ...alwaysPrepIds];
+
+  try {
+    const result = await api("PATCH", `/api/characters/${charId}/prepared-spells`, { spell_ids: spellIds });
+    if (!result) return;
+
+    // Update local charData
+    const preparedSet = new Set(spellIds);
+    (c.spells || []).forEach(s => {
+      if (!s.always_prepared && s.source !== "species" && s.source !== "arcanum" && s.level > 0) {
+        s.prepared = preparedSet.has(s.spell_id);
+      }
+    });
+    c.prepared_count = result.prepared_count;
+
+    closePrepModal();
+
+    // Re-render spells tab
+    const panel = document.getElementById("sh-tab-spells");
+    if (panel) panel.innerHTML = renderSpellsTab(c, c.proficiency_bonus, c.attributes);
+
+    toast("Spell preparation saved");
+  } catch (e) {
+    toast("Error: " + e.message);
+  }
 }
 
 // ---------------------------------------------------------------------------

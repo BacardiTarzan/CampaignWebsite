@@ -26,6 +26,9 @@ def list_characters(db: Session = Depends(get_db)):
     result = []
     for c in chars:
         cc = c.character_classes[0] if c.character_classes else None
+        base_attrs = c.base_attributes or {}
+        bg_asi = c.background_asi or {}
+        con_total = base_attrs.get("con", 10) + bg_asi.get("con", 0)
         result.append({
             "id": c.id,
             "created_by_display_name": c.created_by_display_name,
@@ -43,6 +46,10 @@ def list_characters(db: Session = Depends(get_db)):
             "level_granted": cc.level_granted if cc else None,
             "bio": c.bio,
             "created_at": c.created_at,
+            "hit_dice_remaining": cc.hit_dice_remaining if cc else None,
+            "hit_die": cc.dnd_class.hit_die if cc and cc.dnd_class else None,
+            "class_level": cc.level if cc else None,
+            "con_mod": (con_total - 10) // 2,
         })
     return result
 
@@ -116,8 +123,49 @@ def long_rest(char_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404)
     char.hp_current = char.hp_max
     char.spell_slots_used = {}
+    # 2024 RAW: all spent hit dice recovered on long rest
+    for cc in char.character_classes:
+        cc.hit_dice_remaining = cc.level
     db.commit()
     return {"ok": True, "hp_current": char.hp_current}
+
+
+class ShortRestIn(BaseModel):
+    dice_rolls: list[int]
+
+@router.post("/characters/{char_id}/short-rest")
+def short_rest(char_id: int, data: ShortRestIn, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    cc = char.character_classes[0] if char.character_classes else None
+    if not cc:
+        raise HTTPException(400, "No class assigned")
+    if (char.hp_current or 0) <= 0:
+        raise HTTPException(400, "Cannot short rest at 0 HP")
+    if len(data.dice_rolls) > (cc.hit_dice_remaining or 0):
+        raise HTTPException(400, "Not enough hit dice remaining")
+    if not data.dice_rolls:
+        return {"ok": True, "hp_current": char.hp_current, "hp_max": char.hp_max,
+                "hp_gained": 0, "hit_dice_remaining": cc.hit_dice_remaining or 0}
+
+    base_attrs = char.base_attributes or {}
+    bg_asi = char.background_asi or {}
+    con_total = base_attrs.get("con", 10) + bg_asi.get("con", 0)
+    con_mod = (con_total - 10) // 2
+    die_size = cc.dnd_class.hit_die
+
+    total = 0
+    for roll in data.dice_rolls:
+        die = max(1, min(int(roll), die_size))
+        total += max(1, die + con_mod)
+
+    new_hp = min(char.hp_max or 0, (char.hp_current or 0) + total)
+    char.hp_current = new_hp
+    cc.hit_dice_remaining = (cc.hit_dice_remaining or 0) - len(data.dice_rolls)
+    db.commit()
+    return {"ok": True, "hp_current": new_hp, "hp_max": char.hp_max,
+            "hp_gained": total, "hit_dice_remaining": cc.hit_dice_remaining}
 
 
 @router.post("/characters/{char_id}/hp")

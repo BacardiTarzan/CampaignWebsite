@@ -236,6 +236,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             "name": sp.name,
             "level": sp.level,
             "prepared": cs.prepared,
+            "always_prepared": bool(cs.always_prepared),
             "source": cs.source or "class",
             "notes": cs.notes,
             "school": sp.school or "",
@@ -248,6 +249,27 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             "description": sp.description or "",
         })
     spells.sort(key=lambda s: (s["level"], s["name"]))
+
+    # Prepared spell tracking for prep casters
+    PREP_CASTERS = {"cleric", "druid", "paladin", "ranger", "wizard"}
+    class_lower = (cls.name if cls else "").lower()
+    is_prep_caster = class_lower in PREP_CASTERS
+    prepared_max = None
+    prepared_count = None
+    if is_prep_caster and cls:
+        ab_map = {"intelligence": "int", "wisdom": "wis", "charisma": "cha"}
+        sp_ab_key = ab_map.get((cls.spellcasting_ability or "").lower(), "int")
+        sp_mod = (attrs.get(sp_ab_key, 10) - 10) // 2
+        if class_lower in ("cleric", "druid", "wizard"):
+            prepared_max = max(1, sp_mod + level)
+        else:  # paladin, ranger
+            prepared_max = max(1, sp_mod + (level // 2))
+        prepared_count = sum(
+            1 for cs in char.spells
+            if cs.prepared and not cs.always_prepared
+            and cs.source not in ("species", "arcanum")
+            and cs.spell and cs.spell.level > 0
+        )
 
     # Equipment with type details
     equipment = []
@@ -309,6 +331,9 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "class_features": features,
         "feats": feats,
         "spells": spells,
+        "is_prep_caster": is_prep_caster,
+        "prepared_max": prepared_max,
+        "prepared_count": prepared_count,
         "equipment": equipment,
         "attacks": _calc_attacks(char, attrs, prof),
         "is_complete": char.is_complete,

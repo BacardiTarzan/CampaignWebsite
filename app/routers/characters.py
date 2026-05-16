@@ -591,6 +591,66 @@ def sheet_data(char_id: int, db: Session = Depends(get_db), user: dict = Depends
 
 
 # ---------------------------------------------------------------------------
+# Prepared spells
+# ---------------------------------------------------------------------------
+
+class PreparedSpellsIn(BaseModel):
+    spell_ids: list[int]
+
+@router.patch("/{char_id}/prepared-spells")
+def update_prepared_spells(char_id: int, data: PreparedSpellsIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+
+    cc = char.character_classes[0] if char.character_classes else None
+    if not cc:
+        raise HTTPException(400, "No class assigned")
+
+    cls = cc.dnd_class
+    class_lower = cls.name.lower()
+    level = cc.level
+
+    PREP_CASTERS = {"cleric", "druid", "paladin", "ranger", "wizard"}
+    if class_lower not in PREP_CASTERS:
+        raise HTTPException(400, "Class does not prepare spells")
+
+    base = char.base_attributes or {}
+    asi_bonus = char.background_asi or {}
+    a = {k: base.get(k, 10) + asi_bonus.get(k, 0) for k in ("str", "dex", "con", "int", "wis", "cha")}
+    ab_map = {"intelligence": "int", "wisdom": "wis", "charisma": "cha"}
+    sp_ab_key = ab_map.get((cls.spellcasting_ability or "").lower(), "int")
+    sp_mod = (a.get(sp_ab_key, 10) - 10) // 2
+
+    if class_lower in ("cleric", "druid", "wizard"):
+        prepared_max = max(1, sp_mod + level)
+    else:
+        prepared_max = max(1, sp_mod + (level // 2))
+
+    requested_ids = set(data.spell_ids)
+
+    # Count non-always-prepared, non-cantrip, non-species/arcanum spells being set
+    count = sum(
+        1 for cs in char.spells
+        if cs.spell_id in requested_ids
+        and not cs.always_prepared
+        and cs.source not in ("species", "arcanum")
+        and cs.spell and cs.spell.level > 0
+    )
+    if count > prepared_max:
+        raise HTTPException(400, f"Cannot prepare more than {prepared_max} spells (requested {count})")
+
+    for cs in char.spells:
+        if cs.always_prepared or cs.source in ("species", "arcanum"):
+            continue
+        if cs.spell and cs.spell.level == 0:
+            continue
+        cs.prepared = cs.spell_id in requested_ids
+
+    db.commit()
+    return {"ok": True, "prepared_count": count, "prepared_max": prepared_max}
+
+
+# ---------------------------------------------------------------------------
 # Level-up
 # ---------------------------------------------------------------------------
 

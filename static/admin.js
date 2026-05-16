@@ -52,9 +52,11 @@ function switchCodexTab(sub) {
 // Roster
 // ---------------------------------------------------------------------------
 let _rosterBios = {};
+let _rosterChars = [];
 
 async function loadRoster() {
   const chars = await api("GET", "/api/admin/characters");
+  _rosterChars = chars;
   _rosterBios = {};
   chars.forEach(c => { _rosterBios[c.id] = c.bio || ""; });
   const tbody = chars.map(c => {
@@ -73,7 +75,8 @@ async function loadRoster() {
         ${c.hp_max ? `<div class="hp-adj-row">
           <input type="number" id="hp-adj-${c.id}" class="hp-adj-input" placeholder="±" style="width:50px">
           <button onclick="adminAdjHp(${c.id})">±HP</button>
-          <button onclick="adminRest(${c.id})">💤 Rest</button>
+          <button onclick="adminRest(${c.id})">💤 Long Rest</button>
+          <button onclick="adminShortRest(${c.id})">⏱ Short Rest</button>
         </div>` : ""}
       </td>
       <td><div class="actions">
@@ -112,9 +115,153 @@ async function adminAdjHp(id) {
 async function adminRest(id) {
   try {
     const r = await api("POST", `/api/admin/characters/${id}/rest`);
-    toast(`Long rest — HP fully restored (${r.hp_current} HP).`);
+    toast(`Long rest — HP and hit dice fully restored (${r.hp_current} HP).`);
     loadRoster();
   } catch(e) { err(e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Short rest modal — one hit die at a time, DM enters physical roll result
+// ---------------------------------------------------------------------------
+let _srState = null;
+
+function adminShortRest(id) {
+  const c = _rosterChars.find(x => x.id === id);
+  if (!c || !c.hp_max) return;
+
+  if ((c.hp_current || 0) <= 0) {
+    toast("Cannot short rest at 0 HP.");
+    return;
+  }
+
+  _srState = {
+    charId: c.id,
+    charName: c.character_name,
+    hitDie: c.hit_die || 8,
+    conMod: c.con_mod || 0,
+    hdMax: c.class_level || c.level || 1,
+    hdRemain: c.hit_dice_remaining ?? 0,
+    hpCurrent: c.hp_current,
+    hpMax: c.hp_max,
+    rolls: [],
+    hpGained: 0,
+  };
+
+  _renderSrModal();
+}
+
+function _renderSrModal() {
+  const existing = document.getElementById("sr-modal-overlay");
+  if (existing) existing.remove();
+
+  const s = _srState;
+  const dieNum = s.rolls.length + 1;
+  const hdLeft = s.hdRemain - s.rolls.length;
+  const projectedHp = Math.min(s.hpMax, s.hpCurrent + s.hpGained);
+  const noHd = s.hdRemain <= 0;
+  const noMoreHd = hdLeft <= 0;
+  const atMax = projectedHp >= s.hpMax;
+  const canKeepGoing = !noMoreHd && !atMax;
+
+  let bodyHtml = "";
+  if (noHd) {
+    bodyHtml = `<p class="sr-hint">No hit dice remaining. Take a long rest to recover them.</p>`;
+  } else {
+    if (canKeepGoing) {
+      bodyHtml = `
+        <div class="sr-die-row">
+          <label class="sr-die-label">Die #${dieNum} — roll your d${s.hitDie}:</label>
+          <div class="sr-die-input-row">
+            <input type="number" id="sr-roll-input" class="sr-roll-input" min="1" max="${s.hitDie}"
+              placeholder="1–${s.hitDie}">
+            <span class="sr-con-mod">CON ${s.conMod >= 0 ? "+" : ""}${s.conMod}</span>
+          </div>
+        </div>`;
+    } else if (atMax) {
+      bodyHtml = `<p class="sr-hint">Already at full HP — no need to spend more dice.</p>`;
+    } else {
+      bodyHtml = `<p class="sr-hint">All available hit dice spent.</p>`;
+    }
+    if (s.rolls.length > 0) {
+      bodyHtml += `<div class="sr-total">HP gained: <strong>+${s.hpGained}</strong></div>`;
+    }
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "sr-modal-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box sr-modal">
+      <div class="modal-header">
+        <h3>Short Rest — ${s.charName}</h3>
+        <button class="modal-close-btn" onclick="closeSrModal()">✕</button>
+      </div>
+      <div class="sr-status-bar">
+        HP <strong>${projectedHp}</strong> / <strong>${s.hpMax}</strong>
+        &nbsp;·&nbsp;
+        Hit Dice <strong>${hdLeft}</strong> / <strong>${s.hdMax}</strong> (d${s.hitDie})
+      </div>
+      <div class="modal-body">${bodyHtml}</div>
+      <div class="modal-footer">
+        <button class="sr-btn-cancel" onclick="closeSrModal()">Cancel</button>
+        ${canKeepGoing ? `<button class="sr-btn-continue" onclick="srContinue()">Continue</button>` : ""}
+        <button class="sr-btn-done" onclick="srDone()">${s.rolls.length === 0 ? "Close" : "Done"}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const input = document.getElementById("sr-roll-input");
+  if (input) {
+    input.focus();
+    input.addEventListener("keydown", e => { if (e.key === "Enter") srContinue(); });
+  }
+}
+
+function srContinue() {
+  const s = _srState;
+  const input = document.getElementById("sr-roll-input");
+  if (!input) return;
+
+  const val = parseInt(input.value, 10);
+  if (isNaN(val) || val < 1 || val > s.hitDie) {
+    toast(`Enter a number between 1 and ${s.hitDie}`);
+    input.focus();
+    return;
+  }
+
+  const gained = Math.max(1, val + s.conMod);
+  s.rolls.push(val);
+  s.hpGained += gained;
+  _renderSrModal();
+}
+
+async function srDone() {
+  const s = _srState;
+  if (s.rolls.length === 0) {
+    closeSrModal();
+    return;
+  }
+
+  try {
+    const r = await api("POST", `/api/admin/characters/${s.charId}/short-rest`, { dice_rolls: s.rolls });
+    if (!r) return;
+
+    const char = _rosterChars.find(x => x.id === s.charId);
+    if (char) {
+      char.hp_current = r.hp_current;
+      char.hit_dice_remaining = r.hit_dice_remaining;
+    }
+
+    closeSrModal();
+    toast(`Short rest — +${r.hp_gained} HP. Hit dice: ${r.hit_dice_remaining}/${s.hdMax} remaining.`);
+    loadRoster();
+  } catch(e) { err(e.message); }
+}
+
+function closeSrModal() {
+  const overlay = document.getElementById("sr-modal-overlay");
+  if (overlay) overlay.remove();
+  _srState = null;
 }
 
 async function levelUp(id) {
