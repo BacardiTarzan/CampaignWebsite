@@ -754,14 +754,16 @@ const CAT_TO_DB_CATS = {
   "All Weapons":                  ["Simple Melee", "Simple Ranged", "Martial Melee", "Martial Ranged"],
 };
 
-function _syncCategoryBoxes(overlay) {
-  const rows = [...overlay.querySelectorAll(".ep-weapon-row")];
-  for (const catCb of overlay.querySelectorAll(".ep-wcat-cb")) {
-    const dbCats = CAT_TO_DB_CATS[catCb.value];
-    if (!dbCats) continue;
-    const inCat = rows.filter(r => dbCats.includes(r.dataset.tipCat));
-    if (!inCat.length) continue;
-    catCb.checked = inCat.every(r => r.querySelector(".ep-wprof-cb")?.checked);
+function toggleWeaponCategory(cat) {
+  const dbCats = CAT_TO_DB_CATS[cat] || [];
+  const overlay = document.getElementById("ep-overlay");
+  if (!overlay) return;
+  const rows = [...overlay.querySelectorAll(".ep-weapon-row")]
+    .filter(r => dbCats.includes(r.dataset.tipCat));
+  const anyChecked = rows.some(r => r.querySelector(".ep-wprof-cb")?.checked);
+  for (const row of rows) {
+    const cb = row.querySelector(".ep-wprof-cb");
+    if (cb) cb.checked = !anyChecked;
   }
 }
 
@@ -792,11 +794,9 @@ async function openEditPanel(charId) {
     "All Weapons",
   ];
 
-  const categoryCheckboxes = WP_CATEGORIES.map(cat => `
-    <label class="ep-cb-row">
-      <input type="checkbox" class="ep-wcat-cb" value="${cat}" ${wprofSet.has(cat) ? "checked" : ""}>
-      ${cat}
-    </label>`).join("");
+  const categoryButtons = WP_CATEGORIES.map(cat =>
+    `<button type="button" class="ep-cat-btn" onclick="toggleWeaponCategory('${cat}')">${cat}</button>`
+  ).join("");
 
   // Per-weapon rows: Prof checkbox + Mastery checkbox side by side
   const weaponRows = (detail.all_weapons || []).map(w => {
@@ -890,8 +890,8 @@ async function openEditPanel(charId) {
 
       <div class="ep-section">
         <h4>Weapon Proficiencies &amp; Masteries</h4>
-        <p class="hint" style="margin-bottom:8px">Quick-grant proficiency by category:</p>
-        <div class="ep-cb-grid" style="margin-bottom:12px">${categoryCheckboxes}</div>
+        <p class="hint" style="margin-bottom:8px">Quick-fill by category — fills all if empty, clears all if any are checked:</p>
+        <div class="ep-cat-btns" style="margin-bottom:12px">${categoryButtons}</div>
         <p class="hint" style="margin-bottom:6px">Per-weapon overrides — Prof grants individual proficiency, Mastery unlocks mastery property:</p>
         <div class="ep-weapon-table">${weaponRows}</div>
       </div>
@@ -913,28 +913,9 @@ async function openEditPanel(charId) {
       }
     }
 
-    // Category → individual weapons
-    if (e.target.classList.contains("ep-wcat-cb")) {
-      const dbCats = CAT_TO_DB_CATS[e.target.value] || [];
-      for (const row of overlay.querySelectorAll(".ep-weapon-row")) {
-        if (dbCats.includes(row.dataset.tipCat)) {
-          const cb = row.querySelector(".ep-wprof-cb");
-          if (cb) cb.checked = e.target.checked;
-        }
-      }
-      // Re-evaluate sibling categories (e.g. "All Weapons" when "Simple Weapons" is toggled)
-      _syncCategoryBoxes(overlay);
-    }
-
-    // Individual weapon → recalculate category boxes
-    if (e.target.classList.contains("ep-wprof-cb")) {
-      _syncCategoryBoxes(overlay);
-    }
   });
 
   document.body.appendChild(overlay);
-  // Ensure category boxes reflect the initial individual weapon state
-  _syncCategoryBoxes(overlay);
 }
 
 function closeEditPanel() {
@@ -965,22 +946,11 @@ async function saveEditPanel() {
     await api("PATCH", `/api/admin/characters/${id}/proficiencies`, { skills, expertise, tools, languages: langs });
   } catch(e) { errs.push("Proficiencies: " + e.message); }
 
-  // Weapon proficiencies — save checked categories + individual weapons not covered by any category
-  const wprofCategories = [...document.querySelectorAll(".ep-wcat-cb:checked")].map(cb => cb.value);
-  // Build set of weapon names already covered by checked categories
-  const coveredByCategory = new Set();
-  for (const cat of wprofCategories) {
-    const dbCats = CAT_TO_DB_CATS[cat] || [];
-    for (const row of document.querySelectorAll(".ep-weapon-row")) {
-      if (dbCats.includes(row.dataset.tipCat)) coveredByCategory.add(row.querySelector(".ep-wprof-cb")?.value);
-    }
-  }
-  const wprofIndividual = [...document.querySelectorAll(".ep-wprof-cb:checked")]
-    .map(cb => cb.value)
-    .filter(name => !coveredByCategory.has(name));
+  // Weapon proficiencies — save exactly the individual weapons that are checked
+  const wprofIndividual = [...document.querySelectorAll(".ep-wprof-cb:checked")].map(cb => cb.value);
   try {
     await api("PATCH", `/api/admin/characters/${id}/weapon-proficiencies`,
-      { proficiency_types: [...wprofCategories, ...wprofIndividual] });
+      { proficiency_types: wprofIndividual });
   } catch(e) { errs.push("Weapon proficiencies: " + e.message); }
 
   // Masteries
