@@ -42,7 +42,7 @@ const SPELL_AB_KEY = { "Intelligence":"int","Wisdom":"wis","Charisma":"cha" };
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
-let charId, charData;
+let charId, charData, isDM = false;
 
 function mod(score) { return Math.floor((score - 10) / 2); }
 function fmtMod(n) { return (n >= 0 ? "+" : "") + n; }
@@ -87,6 +87,7 @@ async function boot() {
 
   const me = await api("GET", "/auth/me");
   if (!me) return;
+  isDM = me.is_admin || false;
   document.getElementById("sheet-user-name").textContent = me.name || me.email;
 
   try {
@@ -745,8 +746,8 @@ async function saveJournal() {
 function renderEquipmentTab(c) {
   const items = (c.equipment || []).filter(e => e.name?.toLowerCase() !== "gold");
   const weapons = items.filter(e => e.item_type === "weapon");
-  const armor = items.filter(e => e.item_type === "armor" || e.item_type === "shield");
-  const gear = items.filter(e => !["weapon","armor","shield"].includes(e.item_type));
+  const armor   = items.filter(e => e.item_type === "armor" || e.item_type === "shield");
+  const gear    = items.filter(e => !["weapon","armor","shield"].includes(e.item_type));
 
   const renderRow = (e) => {
     const detail = [
@@ -754,10 +755,14 @@ function renderEquipmentTab(c) {
       e.ac_formula ? `AC ${e.ac_formula}` : null,
       (e.properties || []).join(", ") || null,
     ].filter(Boolean).join(" · ");
+    const delBtn = isDM
+      ? `<button class="equip-del-btn" onclick="removeEquipment(${e.entry_id},'${e.name.replace(/'/g,"\\'")}',event)" title="Remove item">✕</button>`
+      : "";
     return `<tr>
       <td>${e.quantity > 1 ? `<span class="equip-qty">${e.quantity}×</span> ` : ""}<strong>${e.name}</strong></td>
       <td class="text-muted">${e.category || e.item_type || ""}</td>
       <td class="text-muted">${detail}</td>
+      ${isDM ? `<td class="equip-del-cell">${delBtn}</td>` : ""}
     </tr>`;
   };
 
@@ -777,13 +782,156 @@ function renderEquipmentTab(c) {
       </div>
     </div>`;
 
-  if (!items.length) return `<p class="hint">No equipment recorded.</p>${currencyHtml}`;
+  const dmBar = isDM ? `<div class="equip-dm-bar">
+    <button class="equip-add-btn" onclick="openAddEquipModal()">+ Add Item</button>
+  </div>` : "";
 
-  return `<div class="sh-section">
+  if (!items.length) return `${dmBar}<p class="hint">No equipment recorded.</p>${currencyHtml}`;
+
+  return `${dmBar}<div class="sh-section">
     ${renderSection("Weapons", weapons)}
     ${renderSection("Armor & Shields", armor)}
     ${renderSection("Gear", gear)}
   </div>${currencyHtml}`;
+}
+
+// ---------------------------------------------------------------------------
+// Equipment management (DM only)
+// ---------------------------------------------------------------------------
+let _equipCache = null;
+
+async function removeEquipment(entryId, name, evt) {
+  evt.stopPropagation();
+  try {
+    await api("DELETE", `/api/characters/${charId}/equipment/${entryId}`);
+    charData.equipment = charData.equipment.filter(e => e.entry_id !== entryId);
+    document.getElementById("sh-tab-equipment").innerHTML = renderEquipmentTab(charData);
+    toast(`Removed: ${name}`);
+  } catch(e) { toast("Error: " + e.message); }
+}
+
+async function openAddEquipModal() {
+  if (!_equipCache) {
+    try {
+      _equipCache = await api("GET", "/api/content/equipment");
+    } catch(e) { toast("Could not load equipment list"); return; }
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "add-equip-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box add-equip-modal">
+      <div class="modal-header">
+        <h3>Add Item to Inventory</h3>
+        <button class="modal-close-btn" onclick="closeAddEquipModal()">✕</button>
+      </div>
+      <div class="add-equip-tabs">
+        <button class="add-equip-tab active" onclick="switchAddTab('db',this)">From Database</button>
+        <button class="add-equip-tab" onclick="switchAddTab('custom',this)">Custom Item</button>
+      </div>
+      <div class="modal-body">
+        <div id="add-equip-db">
+          <input type="text" id="equip-search" class="equip-search-input" placeholder="Search items…" oninput="filterEquipList(this.value)">
+          <div id="equip-list" class="equip-pick-list"></div>
+          <div class="equip-qty-row">
+            <label>Qty:</label>
+            <input type="number" id="equip-db-qty" class="equip-qty-input" value="1" min="1">
+          </div>
+        </div>
+        <div id="add-equip-custom" class="hidden">
+          <input type="text" id="equip-custom-name" class="equip-search-input" placeholder="Item name">
+          <div class="equip-qty-row">
+            <label>Type:</label>
+            <select id="equip-custom-type" class="equip-type-select">
+              <option value="">— none —</option>
+              <option value="weapon">Weapon</option>
+              <option value="armor">Armor</option>
+              <option value="shield">Shield</option>
+              <option value="gear">Gear</option>
+              <option value="tool">Tool</option>
+              <option value="focus">Focus</option>
+            </select>
+          </div>
+          <div class="equip-qty-row">
+            <label>Qty:</label>
+            <input type="number" id="equip-custom-qty" class="equip-qty-input" value="1" min="1">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="sr-btn-cancel" onclick="closeAddEquipModal()">Cancel</button>
+        <button class="sr-btn-done" onclick="confirmAddEquip()">Add to Inventory</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Populate list
+  _selectedEquipId = null;
+  filterEquipList("");
+}
+
+let _selectedEquipId = null;
+let _addEquipTab = "db";
+
+function switchAddTab(tab, btn) {
+  _addEquipTab = tab;
+  document.querySelectorAll(".add-equip-tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("add-equip-db").classList.toggle("hidden", tab !== "db");
+  document.getElementById("add-equip-custom").classList.toggle("hidden", tab !== "custom");
+}
+
+function filterEquipList(query) {
+  const q = query.toLowerCase();
+  const list = document.getElementById("equip-list");
+  if (!list) return;
+  const filtered = (_equipCache || []).filter(e =>
+    !q || e.name.toLowerCase().includes(q)
+  ).slice(0, 60);
+  list.innerHTML = filtered.map(e => `
+    <div class="equip-pick-row${_selectedEquipId === e.id ? " selected" : ""}"
+      onclick="selectEquipItem(${e.id}, this)">
+      <span class="equip-pick-name">${e.name}</span>
+      <span class="equip-pick-type">${e.category || e.item_type || ""}</span>
+    </div>`).join("") || `<p class="hint">No items match.</p>`;
+}
+
+function selectEquipItem(id, el) {
+  _selectedEquipId = id;
+  document.querySelectorAll(".equip-pick-row").forEach(r => r.classList.remove("selected"));
+  el.classList.add("selected");
+}
+
+async function confirmAddEquip() {
+  let body;
+  if (_addEquipTab === "db") {
+    if (!_selectedEquipId) { toast("Select an item first"); return; }
+    const qty = parseInt(document.getElementById("equip-db-qty").value, 10) || 1;
+    body = { equipment_id: _selectedEquipId, quantity: qty };
+  } else {
+    const name = (document.getElementById("equip-custom-name").value || "").trim();
+    if (!name) { toast("Enter an item name"); return; }
+    const qty = parseInt(document.getElementById("equip-custom-qty").value, 10) || 1;
+    const type = document.getElementById("equip-custom-type").value || null;
+    body = { custom_name: name, quantity: qty, item_type: type };
+  }
+
+  try {
+    const entry = await api("POST", `/api/characters/${charId}/equipment`, body);
+    if (!entry) return;
+    charData.equipment.push(entry);
+    closeAddEquipModal();
+    document.getElementById("sh-tab-equipment").innerHTML = renderEquipmentTab(charData);
+    toast(`Added: ${entry.name}`);
+  } catch(e) { toast("Error: " + e.message); }
+}
+
+function closeAddEquipModal() {
+  const overlay = document.getElementById("add-equip-overlay");
+  if (overlay) overlay.remove();
+  _selectedEquipId = null;
+  _addEquipTab = "db";
 }
 
 // ---------------------------------------------------------------------------

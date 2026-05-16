@@ -276,6 +276,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     for ce in char.equipment:
         item = ce.equipment_item
         eq = {
+            "entry_id": ce.id,
             "name": item.name if item else ce.custom_name,
             "quantity": ce.quantity,
             "equipped": ce.equipped,

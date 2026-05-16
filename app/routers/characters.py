@@ -591,6 +591,72 @@ def sheet_data(char_id: int, db: Session = Depends(get_db), user: dict = Depends
 
 
 # ---------------------------------------------------------------------------
+# Equipment management (admin-only)
+# ---------------------------------------------------------------------------
+
+class AddEquipmentIn(BaseModel):
+    equipment_id: int | None = None
+    custom_name: str | None = None
+    quantity: int = 1
+    item_type: str | None = None
+
+@router.post("/{char_id}/equipment")
+def add_equipment(char_id: int, data: AddEquipmentIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    _require_admin(user)
+    char = _get_char(char_id, db)
+    if not data.equipment_id and not (data.custom_name or "").strip():
+        raise HTTPException(400, "Provide equipment_id or custom_name")
+    entry = CharacterEquipment(
+        character_id=char.id,
+        equipment_id=data.equipment_id or None,
+        custom_name=data.custom_name.strip() if data.custom_name else None,
+        quantity=max(1, data.quantity),
+        equipped=False,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    item = entry.equipment_item
+    return {
+        "entry_id": entry.id,
+        "name": item.name if item else entry.custom_name,
+        "quantity": entry.quantity,
+        "equipped": entry.equipped,
+        "item_type": item.item_type if item else data.item_type,
+        "category": item.category if item else None,
+        "damage": item.damage if item else None,
+        "damage_type": item.damage_type if item else None,
+        "properties": item.properties if item else [],
+        "mastery_property": item.mastery_property if item else None,
+        "ac_formula": item.ac_formula if item else None,
+    }
+
+@router.delete("/{char_id}/equipment/{entry_id}")
+def remove_equipment(char_id: int, entry_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    _require_admin(user)
+    char = _get_char(char_id, db)
+    entry = db.get(CharacterEquipment, entry_id)
+    if not entry or entry.character_id != char.id:
+        raise HTTPException(404)
+    db.delete(entry)
+    db.commit()
+    return {"ok": True}
+
+@router.patch("/{char_id}/equipment/{entry_id}/quantity")
+def update_equipment_quantity(char_id: int, entry_id: int, quantity: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    _require_admin(user)
+    char = _get_char(char_id, db)
+    entry = db.get(CharacterEquipment, entry_id)
+    if not entry or entry.character_id != char.id:
+        raise HTTPException(404)
+    if quantity < 1:
+        raise HTTPException(400, "Quantity must be at least 1")
+    entry.quantity = quantity
+    db.commit()
+    return {"ok": True, "quantity": entry.quantity}
+
+
+# ---------------------------------------------------------------------------
 # Prepared spells
 # ---------------------------------------------------------------------------
 
