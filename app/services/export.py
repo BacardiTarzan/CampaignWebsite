@@ -125,6 +125,32 @@ def _calc_ac(formula: str, attrs: dict) -> int:
     return 10 + dex
 
 
+def compute_ac(char, attrs: dict, db) -> tuple[int, str]:
+    """Return (ac, ac_source). ac_source: 'armor'|'unarmored_defense_barbarian'|'unarmored_defense_monk'|'unarmored'."""
+    dex = _mod(attrs.get("dex", 10))
+    armor = None
+    shield = None
+    for ce in char.equipment:
+        item = ce.equipment_item if ce.equipment_item else db.get(EquipmentModel, ce.equipment_id)
+        if not item:
+            continue
+        if item.item_type == "armor" and ce.equipped and armor is None:
+            armor = item
+        elif item.item_type == "shield" and ce.equipped and shield is None:
+            shield = item
+    shield_bonus = 2 if shield else 0
+    if armor:
+        return _calc_ac(armor.ac_formula or "", attrs) + shield_bonus, "armor"
+    # Unarmored Defense
+    for cc in char.character_classes:
+        cls_name = cc.dnd_class.name if cc.dnd_class else ""
+        if cls_name == "Barbarian" and cc.level > 0:
+            return 10 + dex + _mod(attrs.get("con", 10)) + shield_bonus, "unarmored_defense_barbarian"
+        if cls_name == "Monk" and cc.level > 0:
+            return 10 + dex + _mod(attrs.get("wis", 10)) + shield_bonus, "unarmored_defense_monk"
+    return 10 + dex + shield_bonus, "unarmored"
+
+
 def _calc_attacks(char, attrs: dict, prof: int) -> list:
     str_mod = _mod(attrs.get("str", 10))
     dex_mod = _mod(attrs.get("dex", 10))
@@ -175,20 +201,14 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     asi = char.background_asi or {}
     attrs = {k: base.get(k, 10) + asi.get(k, 0) for k in ("str", "dex", "con", "int", "wis", "cha")}
 
-    # AC: find first equipped armor, else unarmored
-    ac = 10 + _mod(attrs["dex"])
-    for ce in char.equipment:
-        item = ce.equipment_item if ce.equipment_item else db.get(EquipmentModel, ce.equipment_id)
-        if item and item.item_type == "armor" and ce.equipped:
-            ac = _calc_ac(item.ac_formula or "", attrs)
-            break
+    # AC — uses unified compute_ac which handles Unarmored Defense
+    ac, ac_source = compute_ac(char, attrs, db)
 
-    # Shield bonus
-    for ce in char.equipment:
-        item = ce.equipment_item if ce.equipment_item else db.get(EquipmentModel, ce.equipment_id)
-        if item and item.item_type == "shield" and ce.equipped:
-            ac += 2
-            break
+    # Initiative — Dex mod + prof if Alert feat is held
+    total_level = sum(cc.level for cc in char.character_classes) or level
+    has_alert = any(cf.feat and cf.feat.name == "Alert" for cf in char.feats)
+    initiative = _mod(attrs["dex"]) + (_prof_bonus(total_level) if has_alert else 0)
+    initiative_source = "alert" if has_alert else "dex"
 
     # Proficient skill names for quick lookup
     prof_skills = {s.skill_name for s in char.skill_proficiencies}
@@ -204,20 +224,41 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             if f.get("level", 1) <= level:
                 features.append({"name": f["name"], "description": f.get("description", ""), "level": f["level"]})
 
-    # Species traits — filter the parent lineage/legacy/ancestry descriptor and
-    # replace it with the selected lineage's specific description as its own entry.
+    # Species traits — filter by level and parent lineage/legacy descriptor;
+    # insert the selected lineage as its own L1 entry.
     species_traits = []
     if char.species:
         selected = char.species_lineage
         for trait in (char.species.traits or []):
             if selected and re.search(r'lineage|legacy|ancestry', trait.get('name', ''), re.IGNORECASE):
                 continue
-            species_traits.append(trait)
+            if trait.get('level', 1) <= total_level:
+                species_traits.append(trait)
         if selected and char.species.lineages:
             for lin in char.species.lineages:
                 if lin.get('name') == selected:
-                    species_traits.insert(0, {"name": selected, "description": lin.get('description', '')})
+                    species_traits.insert(0, {"name": selected, "description": lin.get('description', ''), "level": 1})
                     break
+        # Inject Aasimar Celestial Revelation choice if stored
+        if char.species.name == "Aasimar":
+            rev_choice = next(
+                (ch for ch in char.choices if ch.feature_key == "species_revelation_l3"),
+                None
+            )
+            if rev_choice and total_level >= 3:
+                rv = rev_choice.choice_value or {}
+                species_traits.append({
+                    "name": f"Celestial Revelation: {rv.get('name', rv.get('key', ''))}",
+                    "description": rv.get('description', ''),
+                    "level": 3,
+                })
+
+    # Dwarven Toughness — virtual HP bonus (+1 per level, no DB change)
+    has_dwarven_toughness = char.species and any(
+        "Dwarven Toughness" in (t.get("name") or "")
+        for t in (char.species.traits or [])
+    )
+    dwarven_toughness_bonus = total_level if has_dwarven_toughness else 0
 
     # Feats with descriptions
     feats = []
@@ -317,8 +358,12 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "level": level,
         "proficiency_bonus": prof,
         "ac": ac,
-        "hp_max": char.hp_max,
-        "hp_current": char.hp_current,
+        "ac_source": ac_source,
+        "initiative": initiative,
+        "initiative_source": initiative_source,
+        "hp_max": (char.hp_max or 0) + dwarven_toughness_bonus,
+        "hp_current": (char.hp_current or 0) + dwarven_toughness_bonus,
+        "hp_bonus_source": f"Dwarven Toughness +{dwarven_toughness_bonus}" if dwarven_toughness_bonus else None,
         "speed": char.speed,
         "spell_slots_used": char.spell_slots_used or {},
         "attributes": attrs,

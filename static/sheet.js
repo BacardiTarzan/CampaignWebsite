@@ -276,7 +276,8 @@ function render() {
     c.alignment,
   ].filter(Boolean).join(" · ");
 
-  const initiative = fmtMod(mod(attrs.dex || 10));
+  const initiative = fmtMod(c.initiative ?? mod(attrs.dex || 10));
+  const initiativeTip = c.initiative_source === "alert" ? ` title="Alert: Dex + Proficiency Bonus"` : "";
   const passivePerc = 10 + mod(attrs.wis || 10) + (profSkills.has("Perception") ? prof : 0);
   const isCaster = !!c.class_spellcasting_type;
 
@@ -297,6 +298,8 @@ function render() {
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Armor Class</div>
         <div class="sh-combat-big" id="sh-ac-val">${c.ac ?? "—"}</div>
+        ${c.ac_source && c.ac_source !== "armor" && c.ac_source !== "unarmored"
+          ? `<div class="sh-stat-badge">${c.ac_source === "unarmored_defense_barbarian" ? "Unarmored Defense" : "Unarmored Defense (Wis)"}</div>` : ""}
       </div>
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Speed</div>
@@ -304,7 +307,8 @@ function render() {
       </div>
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Initiative</div>
-        <div class="sh-combat-big">${initiative}</div>
+        <div class="sh-combat-big"${initiativeTip}>${initiative}</div>
+        ${c.initiative_source === "alert" ? `<div class="sh-stat-badge sh-stat-badge--alert">Alert</div>` : ""}
       </div>
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Proficiency</div>
@@ -340,11 +344,15 @@ function renderHpWidget(c) {
   const max = c.hp_max ?? 1;
   const pct = max > 0 ? Math.round((cur / max) * 100) : 0;
   const barColor = pct > 50 ? "#4a8c4a" : pct > 25 ? "#b8860b" : "#8b1a1a";
+  const bonusBadge = c.hp_bonus_source
+    ? `<div class="sh-stat-badge sh-stat-badge--trait" title="${c.hp_bonus_source}">${c.hp_bonus_source}</div>`
+    : "";
   return `
     <div class="hp-bar-wrap">
       <div class="hp-bar" style="width:${pct}%;background:${barColor}"></div>
     </div>
-    <div class="hp-numbers">${cur} <span class="hp-max">/ ${max}</span></div>`;
+    <div class="hp-numbers">${cur} <span class="hp-max">/ ${max}</span></div>
+    ${bonusBadge}`;
 }
 
 // ---------------------------------------------------------------------------

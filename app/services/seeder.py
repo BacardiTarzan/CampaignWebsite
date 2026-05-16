@@ -221,7 +221,13 @@ def _parse_species_file(path: Path) -> dict:
             if m:
                 tname = m.group(1).strip()
                 tdesc_raw = m.group(2)
-                traits.append({"name": tname, "description": re.sub(r"\s+", " ", tdesc_raw).strip()})
+                # Extract unlock level from names like "Celestial Revelation (Level 3)"
+                tlevel = 1
+                lm = re.match(r"^(.*?)\s*\(Level\s*(\d+)\)\s*$", tname, re.IGNORECASE)
+                if lm:
+                    tname = lm.group(1).strip()
+                    tlevel = int(lm.group(2))
+                traits.append({"name": tname, "description": re.sub(r"\s+", " ", tdesc_raw).strip(), "level": tlevel})
 
                 # Parse lineages from traits named with choice keywords
                 if not lineages and any(kw in tname.lower() for kw in ("lineage", "legacy", "ancestry")):

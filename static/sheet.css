@@ -1155,6 +1155,23 @@
   white-space: pre-wrap;
 }
 
+/* ── Stat Badges (Unarmored Defense, Alert, Dwarven Toughness) ── */
+.sh-stat-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-top: 3px;
+  display: inline-block;
+  line-height: 1.4;
+}
+.sh-stat-badge--alert { color: var(--color-accent); border-color: var(--color-accent); }
+.sh-stat-badge--trait { color: #7db87d; border-color: #7db87d; }
+
 /* ── Glossary Tooltips ── */
 .gloss-term {
   border-bottom: 1px dotted var(--color-accent);

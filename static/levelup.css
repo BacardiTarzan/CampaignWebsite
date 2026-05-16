@@ -833,3 +833,15 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Species info notice (lineage spell grant) */
+.lu-info-notice {
+  background: rgba(var(--color-accent-rgb, 139, 90, 43), 0.12);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 8px 0 16px;
+  color: var(--color-light);
+  line-height: 1.6;
+  font-size: 1rem;
+}

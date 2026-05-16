@@ -11,9 +11,10 @@ from ..models.character import (
     SkillProficiency, ToolProficiency, LanguageProficiency, WeaponMasteryUnlock,
 )
 from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species, Subclass
-from ..services.export import character_to_dict, character_to_sheet_dict
+from ..services.export import character_to_dict, character_to_sheet_dict, compute_ac
 from ..services.levelup_rules import (
-    required_steps, auto_grants, subclass_auto_grants, max_spell_level, METAMAGIC_OPTIONS, ELDRITCH_INVOCATIONS,
+    required_steps, auto_grants, subclass_auto_grants, max_spell_level,
+    METAMAGIC_OPTIONS, ELDRITCH_INVOCATIONS, AASIMAR_REVELATIONS, _species_lineage_spells,
 )
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
@@ -679,31 +680,13 @@ def toggle_equipped(char_id: int, entry_id: int, data: EquipToggleIn, db: Sessio
     entry.equipped = data.equipped
     db.commit()
 
-    # Recompute AC inline (mirrors export.py logic)
+    # Recompute AC using shared compute_ac helper (handles Unarmored Defense)
     base = char.base_attributes or {}
     asi = char.background_asi or {}
-    attrs = {k: base.get(k, 10) + asi.get(k, 0) for k in ("str","dex","con","int","wis","cha")}
-    dex_mod = (attrs["dex"] - 10) // 2
+    attrs = {k: base.get(k, 10) + asi.get(k, 0) for k in ("str", "dex", "con", "int", "wis", "cha")}
+    ac, ac_source = compute_ac(char, attrs, db)
 
-    ac = 10 + dex_mod
-    for ce in char.equipment:
-        it = ce.equipment_item
-        if it and it.item_type == "armor" and ce.equipped:
-            f = (it.ac_formula or "").strip()
-            import re as _re
-            if _re.fullmatch(r"\d+", f):
-                ac = int(f)
-            else:
-                m = _re.match(r"(\d+)\s*\+\s*Dex(?:\s*\(max\s*(\d+)\))?", f, _re.IGNORECASE)
-                ac = int(m.group(1)) + min(dex_mod, int(m.group(2)) if m and m.group(2) else 99) if m else 10 + dex_mod
-            break
-    for ce in char.equipment:
-        it = ce.equipment_item
-        if it and it.item_type == "shield" and ce.equipped:
-            ac += 2
-            break
-
-    return {"ok": True, "entry_id": entry_id, "equipped": entry.equipped, "ac": ac}
+    return {"ok": True, "entry_id": entry_id, "equipped": entry.equipped, "ac": ac, "ac_source": ac_source}
 
 
 # ---------------------------------------------------------------------------
@@ -1109,19 +1092,33 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
         if step_id.startswith("feature_") and "choice" in step_id:
             _audit(char, db, f"lvlup:{next_level}:{step_id}", payload, next_level)
 
-    # ── Auto-grants (domain/patron/oath tier spells at this level, after subclass resolved) ──
+    # ── Species revelation choice (Aasimar L3) ────────────────────────────────
+    rev_step_id = f"species_revelation_l{next_level}"
+    if rev_step_id in choices:
+        rv = choices[rev_step_id]
+        key = rv.get("key")
+        if key:
+            revelation = next((r for r in AASIMAR_REVELATIONS if r["key"] == key), None)
+            if revelation:
+                _audit(char, db, f"species_revelation_l{next_level}",
+                       {"key": key, "name": revelation["name"], "description": revelation["description"]},
+                       next_level)
+
+    # ── Auto-grants (subclass tier spells + lineage spells) ──────────────────
     current_subclass = db.get(Subclass, cc.subclass_id) if cc.subclass_id else None
-    if current_subclass:
-        grant_ids = auto_grants(char, cc, cls, current_subclass, next_level, db)
-        owned_ids = {cs.spell_id for cs in char.spells}
-        for sid in grant_ids:
-            if sid not in owned_ids:
-                db.add(CharacterSpell(character_id=char.id, spell_id=sid,
-                                      source="subclass", always_prepared=True, prepared=True))
-                owned_ids.add(sid)
-                spell = db.get(Spell, sid)
-                if spell:
-                    auto_added_spells.append(spell.name)
+    grant_ids = auto_grants(char, cc, cls, current_subclass, next_level, db)
+    owned_ids = {cs.spell_id for cs in char.spells}
+    for sid in grant_ids:
+        if sid not in owned_ids:
+            # Determine source: lineage spell vs subclass
+            lineage_names = _species_lineage_spells(char, next_level)
+            spell_obj = db.get(Spell, sid)
+            src = "lineage" if (spell_obj and spell_obj.name in lineage_names) else "subclass"
+            db.add(CharacterSpell(character_id=char.id, spell_id=sid,
+                                  source=src, always_prepared=True, prepared=True))
+            owned_ids.add(sid)
+            if spell_obj:
+                auto_added_spells.append(spell_obj.name)
 
     # ── Increment level ───────────────────────────────────────────────────────
     cc.level = next_level

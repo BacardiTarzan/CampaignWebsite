@@ -106,6 +106,19 @@ METAMAGIC_OPTIONS = [
 
 METAMAGIC_GAINS: dict[int, int] = {2: 2, 10: 2, 17: 2}
 
+# Aasimar Celestial Revelation choices (unlocked at L3)
+AASIMAR_REVELATIONS = [
+    {"key": "heavenly_wings",
+     "name": "Heavenly Wings",
+     "description": "Spectral wings sprout from your back. Until the transformation ends, you have a Fly Speed equal to your Speed. The transformation lasts for 1 minute or until you end it (no action required). Once you use this transformation, you can't use it again until you finish a Long Rest."},
+    {"key": "inner_radiance",
+     "name": "Inner Radiance",
+     "description": "Searing light temporarily radiates from your eyes and mouth. For 1 minute or until you end it (no action required), you shed Bright Light in a 10-foot radius and dim light for an additional 10 feet, and at the end of each of your turns each creature within 10 feet of you takes Radiant damage equal to your Proficiency Bonus. Once you use this transformation, you can't use it again until you finish a Long Rest."},
+    {"key": "necrotic_shroud",
+     "name": "Necrotic Shroud",
+     "description": "Your eyes briefly become pools of darkness, and ghostly, flightless wings sprout from your back. Creatures other than your allies within 10 feet of you that can see you must succeed on a Charisma saving throw (DC 8 + your Charisma modifier + your Proficiency Bonus) or have the Frightened condition until the end of your next turn. This transformation lasts for 1 minute or until you end it (no action required), and once per turn when you deal damage to a creature you also deal extra Necrotic damage to it equal to your Proficiency Bonus. Once you use this transformation, you can't use it again until you finish a Long Rest."},
+]
+
 # Eldritch Invocations (hard-coded — not in feat DB)
 # prereq_level: minimum warlock level; prereq_pact: "blade"/"chain"/"tome" or None
 ELDRITCH_INVOCATIONS = [
@@ -641,32 +654,79 @@ def required_steps(char, cc, cls, db: Session) -> list[dict]:
     if subclass:
         sub_features = [f for f in (subclass.features or []) if f.get("level") == next_level]
         steps.extend(_feature_choice_steps(sub_features, next_level, prefix="sub_"))
-    # After subclass selection at L3, also add subclass feature choices for the NEWLY selected subclass
-    # (The frontend handles this by re-fetching options after subclass choice — backend validates)
+
+    # 14. Species level-gated steps
+    species = char.species if hasattr(char, 'species') else None
+    if species:
+        # Aasimar Celestial Revelation at L3 (requires a pick)
+        if species.name == "Aasimar" and next_level == 3:
+            already_chosen = any(c.feature_key == "species_revelation_l3" for c in char.choices)
+            if not already_chosen:
+                steps.append({
+                    "id": "species_revelation_l3",
+                    "kind": "species_revelation",
+                    "label": "Celestial Revelation",
+                    "title": "Choose your Celestial Revelation",
+                    "description": "At 3rd level your angelic nature manifests. Choose one of the following transformations, usable once per Long Rest.",
+                    "options": AASIMAR_REVELATIONS,
+                    "required": True,
+                })
+
+        # Lineage spell notifications (informational — actual grants happen in auto_grants)
+        lineage_spells = _species_lineage_spells(char, next_level)
+        for spell_name in lineage_spells:
+            steps.append({
+                "id": f"species_spell_info_{next_level}",
+                "kind": "species_spell_info",
+                "label": "Lineage Spell",
+                "spell_name": spell_name,
+                "required": False,
+            })
 
     return steps
+
+
+def _species_lineage_spells(char, next_level: int) -> list[str]:
+    """Return spell names auto-granted by lineage at next_level (L3 and L5)."""
+    species = char.species if hasattr(char, 'species') else None
+    if not species or not char.species_lineage or not species.lineages:
+        return []
+    lineage = next((l for l in species.lineages if l.get('name') == char.species_lineage), None)
+    if not lineage:
+        return []
+    spell_names = []
+    if next_level == 3 and lineage.get('level3_spell'):
+        spell_names.append(lineage['level3_spell'])
+    if next_level == 5 and lineage.get('level5_spell'):
+        spell_names.append(lineage['level5_spell'])
+    return spell_names
 
 
 def auto_grants(char, cc, cls, subclass, next_level: int, db: Session) -> list[int]:
     """
     Return spell IDs that should be auto-added as always_prepared=True
-    when this character levels to next_level. Does NOT include patron/domain spells
-    that were already granted at a prior level.
-    Looks up spells by name in the DB.
+    when this character levels to next_level. Includes subclass domain/patron/oath
+    spells and species lineage spells.
     """
-    if not subclass:
-        return []
-
-    tier_spells = SUBCLASS_ALWAYS_PREPARED.get(subclass.name, {}).get(next_level, [])
-    if not tier_spells:
-        return []
-
     owned_ids = {cs.spell_id for cs in char.spells}
     spell_ids = []
-    for name in tier_spells:
+
+    # Subclass tier spells
+    if subclass:
+        tier_spells = SUBCLASS_ALWAYS_PREPARED.get(subclass.name, {}).get(next_level, [])
+        for name in tier_spells:
+            spell = db.query(Spell).filter(Spell.name == name).first()
+            if spell and spell.id not in owned_ids:
+                spell_ids.append(spell.id)
+                owned_ids.add(spell.id)
+
+    # Species lineage spells (Elven, Tiefling, etc.)
+    for name in _species_lineage_spells(char, next_level):
         spell = db.query(Spell).filter(Spell.name == name).first()
         if spell and spell.id not in owned_ids:
             spell_ids.append(spell.id)
+            owned_ids.add(spell.id)
+
     return spell_ids
 
 

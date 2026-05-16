@@ -186,7 +186,9 @@ function renderStep(step) {
   else if (kind === "invocations_new")  host.innerHTML = buildCardPickStep(step, step.options || []);
   else if (kind === "invocation_swap")  host.innerHTML = buildInvocationSwapStep(step);
   else if (kind === "mystic_arcanum") host.innerHTML = buildMysticArcanumStep(step);
-  else if (kind === "feature_choice") host.innerHTML = buildFeatureChoiceStep(step);
+  else if (kind === "feature_choice")    host.innerHTML = buildFeatureChoiceStep(step);
+  else if (kind === "species_revelation") host.innerHTML = buildSpeciesRevelationStep(step);
+  else if (kind === "species_spell_info") host.innerHTML = buildSpeciesSpellInfoStep(step);
   else host.innerHTML = buildUnknownStep(step);
 
   attachStepListeners(step);
@@ -249,6 +251,10 @@ function validateStep(step) {
   }
   if (kind === "feature_choice") {
     if (!payload?.choice) { toast("Make a choice."); return false; }
+    return true;
+  }
+  if (kind === "species_revelation") {
+    if (!payload?.key) { toast("Choose your Celestial Revelation."); return false; }
     return true;
   }
   return true;
@@ -678,6 +684,33 @@ function buildUnknownStep(step) {
     ${navRow()}`;
 }
 
+// Aasimar Celestial Revelation — pick 1 of 3
+function buildSpeciesRevelationStep(step) {
+  const prev = choices[step.id] || {};
+  return `
+    <h2 class="lu-step-heading">${step.title || step.label}</h2>
+    <p class="lu-step-desc">${step.description || ""}</p>
+    <div class="lu-feat-grid" id="revelation-grid">
+      ${(step.options || []).map(opt => `
+        <div class="lu-feat-card ${prev.key === opt.key ? 'chosen' : ''}"
+             onclick="pickRevelation('${step.id}', '${opt.key}', '${escQ(opt.name)}', '${escQ(opt.description)}', this)">
+          <div class="lu-feat-name">${opt.name}</div>
+          <div class="lu-feat-desc">${opt.description}</div>
+        </div>`).join("")}
+    </div>
+    ${navRow()}`;
+}
+
+// Species lineage spell notification (informational — spell auto-granted)
+function buildSpeciesSpellInfoStep(step) {
+  return `
+    <h2 class="lu-step-heading">Lineage Spell Granted</h2>
+    <div class="lu-info-notice">
+      <p>Your lineage grants you <strong>${step.spell_name}</strong> at this level. It has been added to your spell list as Always Prepared.</p>
+    </div>
+    ${navRow()}`;
+}
+
 // Shared spell card
 function spellCard(s, stepId, preChosen = false) {
   const lvlLabel = s.level === 0 ? "Cantrip" : `Level ${s.level}`;
@@ -921,6 +954,12 @@ function pickArcanum(stepId, spellId, el) {
 function pickFeatureChoice(stepId, choiceValue, el) {
   choices[stepId] = { choice: choiceValue };
   el.closest(".lu-feat-grid")?.querySelectorAll(".lu-feat-card").forEach(c => c.classList.remove("chosen"));
+  el.classList.add("chosen");
+}
+
+function pickRevelation(stepId, key, name, description, el) {
+  choices[stepId] = { key, name, description };
+  document.getElementById("revelation-grid")?.querySelectorAll(".lu-feat-card").forEach(c => c.classList.remove("chosen"));
   el.classList.add("chosen");
 }
 
