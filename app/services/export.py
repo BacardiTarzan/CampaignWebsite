@@ -217,12 +217,39 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     # Proficient saving throws from class
     save_profs = set(cls.saving_throws or []) if cls else set()
 
+    # Per-option descriptions for choice_required features; keyed by choice_key → {option → description}
+    CHOICE_DESCRIPTIONS: dict[str, dict[str, str]] = {
+        "divine_order": {
+            "Protector":    "You gain proficiency with Martial weapons and Heavy armor.",
+            "Thaumaturge":  "You learn one extra Cleric cantrip of your choice, and your Wisdom modifier is added as a bonus to your Arcana and Religion checks.",
+        },
+        "blessed_strikes": {
+            "Divine Strike":         "Once per turn when you hit a creature with a weapon attack, you can deal an extra 1d8 Necrotic or Radiant damage (your choice) to the target.",
+            "Potent Spellcasting":   "You add your Wisdom modifier to the damage you deal with any Cleric cantrip.",
+        },
+    }
+
+    # Build a lookup: choice_key → chosen value
+    choice_lookup: dict[str, str] = {
+        c.feature_key: c.choice_value
+        for c in char.choices
+        if c.feature_key and c.choice_value
+    }
+
     # Class features at or below current level
     features = []
     if cls and cls.features:
         for f in cls.features:
             if f.get("level", 1) <= level:
-                features.append({"name": f["name"], "description": f.get("description", ""), "level": f["level"]})
+                name = f["name"]
+                desc = f.get("description", "")
+                choice_key = f.get("choice_key")
+                if choice_key and choice_key in CHOICE_DESCRIPTIONS:
+                    chosen = choice_lookup.get(choice_key)
+                    if chosen:
+                        name = f"{name}: {chosen}"
+                        desc = CHOICE_DESCRIPTIONS[choice_key].get(chosen, desc)
+                features.append({"name": name, "description": desc, "level": f["level"]})
 
     # Species traits — filter by level and parent lineage/legacy descriptor;
     # insert the selected lineage as its own L1 entry.
