@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
+from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage, GlossaryTerm
 
 REF = Path(settings.reference_dir)
 
@@ -811,7 +811,7 @@ def _parse_armor_file(path: Path) -> list[dict]:
 def seed_all(db: Session) -> dict:
     counts = {
         "species": 0, "classes": 0, "subclasses": 0, "backgrounds": 0,
-        "feats": 0, "spells": 0, "equipment": 0,
+        "feats": 0, "spells": 0, "equipment": 0, "glossary": 0,
     }
 
     # Pre-load existing names to avoid duplicate checks failing on unflushed adds
@@ -946,6 +946,9 @@ def seed_all(db: Session) -> dict:
     counts["lore"] = _seed_lore(db)
     db.commit()
 
+    # Glossary terms
+    counts["glossary"] = _seed_glossary(db)
+
     return counts
 
 
@@ -988,6 +991,186 @@ def _seed_lore(db: Session) -> int:
             page.content_md = raw
             page.category = category
 
+    return added
+
+
+def _short_desc(text: str, max_len: int = 220) -> str:
+    """First sentence of text, stripped of **bold** markers, capped at max_len."""
+    clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', text).strip()
+    # Take up to first period that ends a sentence
+    m = re.search(r'^(.{20,}?\.)\s', clean)
+    if m and len(m.group(1)) <= max_len:
+        return m.group(1)
+    return clean[:max_len].rsplit(" ", 1)[0] if len(clean) > max_len else clean
+
+
+# Glossary terms to pull from glossary.md (UPPERCASE heading → slug, category)
+_GLOSSARY_WANTED = {
+    "ADVANTAGE": "combat", "DISADVANTAGE": "combat",
+    "BONUS ACTION": "combat", "REACTION": "combat",
+    "CONCENTRATION": "combat", "RITUAL": "combat",
+    "SAVING THROW": "combat", "CRITICAL HIT": "combat",
+    "OPPORTUNITY ATTACKS": "combat", "PROFICIENCY": "combat",
+    "EXPERTISE": "combat", "CANTRIP": "combat",
+    "UNARMED STRIKE": "combat", "D20 TEST": "combat",
+    "RESISTANCE": "combat", "VULNERABILITY": "combat",
+    "IMMUNITY": "combat", "TEMPORARY HIT POINTS": "combat",
+    "SPEED": "combat", "HIT POINTS": "combat", "HIT POINT DICE": "combat",
+    "LONG REST": "combat", "SHORT REST": "combat",
+    "HEROIC INSPIRATION": "combat", "DEATH SAVING THROW": "combat",
+    "ABILITY CHECK": "combat", "ARMOR CLASS": "combat",
+    "ATTACK ROLL": "combat", "DIFFICULT TERRAIN": "combat",
+    "SPELL ATTACK": "combat", "DAMAGE TYPES": "combat",
+    # Conditions all included via Tag: Condition detection
+}
+
+
+def _parse_glossary_terms(path: Path) -> list[dict]:
+    text = path.read_text(encoding="utf-8")
+    items = []
+    # Split by ### HEADING entries
+    parts = re.split(r'\n### ', text)
+    for part in parts[1:]:  # skip preamble
+        lines = part.strip().splitlines()
+        if not lines:
+            continue
+        heading = lines[0].strip()
+        body_lines = lines[1:]
+        # Strip tag line and determine category
+        tag_m = re.search(r'\*\*Tag:\*\*\s*(\w[\w ]*)', part)
+        tag = tag_m.group(1).strip() if tag_m else ""
+
+        if tag == "Condition":
+            category = "condition"
+        elif tag == "Action":
+            category = "action"
+        elif heading in _GLOSSARY_WANTED:
+            category = _GLOSSARY_WANTED[heading]
+        else:
+            continue  # skip unwanted entries
+
+        # Build full description (skip tag line, strip leading ---)
+        body = "\n".join(l for l in body_lines
+                         if not re.match(r'^\*\*Tag:\*\*', l) and l.strip() != "---").strip()
+        if not body:
+            body = heading.title()
+
+        term = heading.title()
+        # Fix casing for well-known terms
+        _CASING = {
+            "D20 Test": "D20 Test", "Hit Points": "Hit Points",
+            "Hit Point Dice": "Hit Point Dice", "Long Rest": "Long Rest",
+            "Short Rest": "Short Rest", "Armor Class": "Armor Class",
+            "Unarmed Strike": "Unarmed Strike", "Heroic Inspiration": "Heroic Inspiration",
+            "Death Saving Throw": "Death Saving Throw", "Bonus Action": "Bonus Action",
+        }
+        term = _CASING.get(heading.title(), heading.title())
+        slug = heading.lower().replace(" ", "-")
+
+        items.append({
+            "slug": slug,
+            "term": term,
+            "category": category,
+            "short_description": _short_desc(body),
+            "full_description": body,
+            "ability": None,
+        })
+    return items
+
+
+def _seed_glossary(db: Session) -> int:
+    existing = {r.slug: r for r in db.query(GlossaryTerm).all()}
+    terms: list[dict] = []
+
+    # 1. Weapon properties
+    wp_path = REF / "rules" / "weapon-properties.md"
+    if wp_path.exists():
+        for m in re.finditer(r'\*\*([^.]+)\.\*\*\s+(.+)', wp_path.read_text(encoding="utf-8")):
+            name = m.group(1).strip()
+            desc = m.group(2).strip()
+            terms.append({
+                "slug": name.lower().replace(" ", "-"),
+                "term": name,
+                "category": "weapon_property",
+                "short_description": _short_desc(desc),
+                "full_description": desc,
+                "ability": None,
+            })
+
+    # 2. Mastery properties
+    mp_path = REF / "rules" / "mastery-properties.md"
+    if mp_path.exists():
+        for m in re.finditer(r'\*\*([^.]+)\.\*\*\s+(.+)', mp_path.read_text(encoding="utf-8")):
+            name = m.group(1).strip()
+            desc = m.group(2).strip()
+            terms.append({
+                "slug": name.lower().replace(" ", "-"),
+                "term": name,
+                "category": "mastery",
+                "short_description": _short_desc(desc),
+                "full_description": desc,
+                "ability": None,
+            })
+
+    # 3. Skills
+    skills_path = REF / "rules" / "skills.md"
+    if skills_path.exists():
+        for line in skills_path.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("| ") or "---" in line or "Skill" in line:
+                continue
+            cols = [c.strip() for c in line.strip("|").split("|")]
+            if len(cols) >= 3 and cols[0]:
+                skill, ability, example = cols[0], cols[1], cols[2]
+                desc = f"{skill} ({ability}): {example}"
+                terms.append({
+                    "slug": skill.lower().replace(" ", "-"),
+                    "term": skill,
+                    "category": "skill",
+                    "short_description": desc,
+                    "full_description": desc,
+                    "ability": ability,
+                })
+
+    # 4. Actions (short summaries from actions.md)
+    actions_path = REF / "rules" / "actions.md"
+    if actions_path.exists():
+        for line in actions_path.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("| ") or "---" in line or "Action" in line:
+                continue
+            cols = [c.strip() for c in line.strip("|").split("|")]
+            if len(cols) >= 2 and cols[0]:
+                action, summary = cols[0], cols[1]
+                terms.append({
+                    "slug": action.lower().replace(" ", "-"),
+                    "term": action,
+                    "category": "action",
+                    "short_description": summary,
+                    "full_description": summary,
+                    "ability": None,
+                })
+
+    # 5. Selected glossary entries (conditions + combat terms)
+    glossary_path = REF / "rules" / "glossary.md"
+    if glossary_path.exists():
+        terms.extend(_parse_glossary_terms(glossary_path))
+
+    # Upsert by slug
+    added = 0
+    seen_slugs: set[str] = set()
+    for item in terms:
+        slug = item["slug"]
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+        row = existing.get(slug)
+        if row is None:
+            db.add(GlossaryTerm(**item, source="PHB 2024"))
+            added += 1
+        else:
+            for k, v in item.items():
+                setattr(row, k, v)
+            added += 1
+    db.commit()
     return added
 
 

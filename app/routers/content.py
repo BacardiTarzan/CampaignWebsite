@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..dependencies import require_user
-from ..models.content import Species, DnDClass, Background, Feat, Spell, Equipment, LorePage
+from ..models.content import Species, DnDClass, Background, Feat, Spell, Equipment, LorePage, GlossaryTerm
 
 router = APIRouter(prefix="/api/content", tags=["content"])
 
@@ -112,6 +112,21 @@ def list_equipment(item_type: str | None = None, db: Session = Depends(get_db)):
     if item_type:
         q = q.filter(Equipment.item_type == item_type)
     return q.order_by(Equipment.name).all()
+
+
+@router.get("/glossary")
+def list_glossary(db: Session = Depends(get_db)):
+    return [
+        {
+            "slug": t.slug,
+            "term": t.term,
+            "category": t.category,
+            "short_description": t.short_description,
+            "full_description": t.full_description,
+            "ability": t.ability,
+        }
+        for t in db.query(GlossaryTerm).order_by(GlossaryTerm.term).all()
+    ]
 
 
 @router.get("/lore", dependencies=[Depends(require_user)])

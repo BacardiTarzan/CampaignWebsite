@@ -105,6 +105,18 @@ class Spell(Base):
     is_homebrew = Column(Boolean, default=False)
 
 
+class GlossaryTerm(Base):
+    __tablename__ = "glossary_terms"
+    id = Column(Integer, primary_key=True)
+    slug = Column(String, unique=True, nullable=False, index=True)
+    term = Column(String, nullable=False)
+    category = Column(String, nullable=False)   # weapon_property|mastery|skill|action|condition|combat
+    short_description = Column(Text, nullable=False)
+    full_description = Column(Text, nullable=False)
+    ability = Column(String, nullable=True)      # only used by skills
+    source = Column(String, default="PHB 2024")
+
+
 class Equipment(Base):
     __tablename__ = "equipment"
     id = Column(Integer, primary_key=True)

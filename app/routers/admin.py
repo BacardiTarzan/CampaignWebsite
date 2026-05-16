@@ -511,6 +511,20 @@ def repair_schema(db: Session = Depends(get_db)):
     ]
     for stmt in stmts:
         db.execute(text(stmt))
+    # Create glossary_terms table if it doesn't exist (Phase 6)
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS glossary_terms (
+            id SERIAL PRIMARY KEY,
+            slug VARCHAR UNIQUE NOT NULL,
+            term VARCHAR NOT NULL,
+            category VARCHAR NOT NULL,
+            short_description TEXT NOT NULL,
+            full_description TEXT NOT NULL,
+            ability VARCHAR,
+            source VARCHAR DEFAULT 'PHB 2024'
+        )
+    """))
+    db.execute(text("CREATE INDEX IF NOT EXISTS ix_glossary_terms_slug ON glossary_terms (slug)"))
     db.commit()
     return {"ok": True, "applied": stmts}
 

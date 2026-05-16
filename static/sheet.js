@@ -78,6 +78,145 @@ function getSlots(char) {
 }
 
 // ---------------------------------------------------------------------------
+// Glossary tooltip system
+// ---------------------------------------------------------------------------
+let _glossaryMap = null;          // Map<slug, {term, short_description, full_description, category}>
+let _glossarySlugByName = null;   // Map<lowercase-term, slug>
+let _glossRx = null;              // built once, cached
+
+async function loadGlossary() {
+  if (_glossaryMap) return;
+  try {
+    const list = await api("GET", "/api/content/glossary");
+    if (!list) return;
+    _glossaryMap = new Map(list.map(t => [t.slug, t]));
+    _glossarySlugByName = new Map(list.map(t => [t.term.toLowerCase(), t.slug]));
+  } catch (_) { /* glossary optional — degrade gracefully */ }
+}
+
+function _buildGlossRx() {
+  if (!_glossarySlugByName) return null;
+  // Sort longest first so multi-word matches take priority
+  const terms = [..._glossarySlugByName.keys()].sort((a, b) => b.length - a.length);
+  const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
+}
+
+function gloss(name, displayText) {
+  if (!_glossarySlugByName) return displayText != null ? displayText : name;
+  const lower = (name || "").toLowerCase();
+  // Try exact match, then strip parenthetical suffix (e.g. "Versatile (1d10)" → "versatile")
+  const base = lower.replace(/\s*\(.*$/, '').trim();
+  const slug = _glossarySlugByName.get(lower) || _glossarySlugByName.get(base);
+  if (!slug) return displayText != null ? displayText : name;
+  const label = displayText != null ? displayText : name;
+  return `<span class="gloss-term" data-slug="${slug}">${label}</span>`;
+}
+
+function glossifyDescription(text) {
+  if (!_glossarySlugByName || !text) return text;
+  if (!_glossRx) _glossRx = _buildGlossRx();
+  const seen = new Set();
+  return text.replace(_glossRx, (match) => {
+    const slug = _glossarySlugByName.get(match.toLowerCase());
+    if (!slug || seen.has(slug)) return match;
+    seen.add(slug);
+    return `<span class="gloss-term" data-slug="${slug}">${match}</span>`;
+  });
+}
+
+function _simpleMarkdown(md) {
+  return (md || "")
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+}
+
+function openGlossaryModal(slug) {
+  closeGlossPopover();
+  const term = _glossaryMap && _glossaryMap.get(slug);
+  if (!term) return;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "gloss-modal-overlay";
+  overlay.innerHTML = `<div class="modal-box" style="max-width:480px">
+    <div class="modal-header">
+      <h3>${term.term}</h3>
+      <button class="modal-close-btn" onclick="closeGlossaryModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="gloss-modal-category">${term.category.replace(/_/g, ' ')}</p>
+      <div class="gloss-modal-body"><p>${_simpleMarkdown(term.full_description)}</p></div>
+    </div>
+  </div>`;
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeGlossaryModal(); });
+  document.body.appendChild(overlay);
+}
+
+function closeGlossaryModal() {
+  const el = document.getElementById("gloss-modal-overlay");
+  if (el) el.remove();
+}
+
+function closeGlossPopover() {
+  const el = document.getElementById("gloss-popover");
+  if (el) el.remove();
+}
+
+function _showGlossPopover(slug, anchorEl) {
+  closeGlossPopover();
+  const term = _glossaryMap && _glossaryMap.get(slug);
+  if (!term) return;
+
+  const pop = document.createElement("div");
+  pop.className = "gloss-popover";
+  pop.id = "gloss-popover";
+  pop.innerHTML = `<div class="gloss-popover-term">${term.term}</div>
+    <div class="gloss-popover-body">${term.short_description}</div>
+    <span class="gloss-popover-more" onclick="openGlossaryModal('${slug}')">Read full rule ›</span>`;
+
+  document.body.appendChild(pop);
+
+  // Position: prefer below, flip above if off-screen
+  const rect = anchorEl.getBoundingClientRect();
+  const popW = 300;
+  let left = rect.left + window.scrollX;
+  let top  = rect.bottom + window.scrollY + 6;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  if (top + pop.offsetHeight > window.innerHeight + window.scrollY - 8) {
+    top = rect.top + window.scrollY - pop.offsetHeight - 6;
+  }
+  pop.style.left = Math.max(8, left) + "px";
+  pop.style.top  = top + "px";
+}
+
+// Delegated click handler for all .gloss-term spans
+document.addEventListener("click", e => {
+  const term = e.target.closest(".gloss-term");
+  if (term) {
+    e.stopPropagation();
+    const slug = term.dataset.slug;
+    const existing = document.getElementById("gloss-popover");
+    // Toggle: close if same slug already open
+    if (existing && existing.dataset.forSlug === slug) { closeGlossPopover(); return; }
+    _showGlossPopover(slug, term);
+    if (document.getElementById("gloss-popover")) {
+      document.getElementById("gloss-popover").dataset.forSlug = slug;
+    }
+    return;
+  }
+  // Click outside closes popover and modal
+  if (!e.target.closest("#gloss-popover") && !e.target.closest(".gloss-popover-more")) {
+    closeGlossPopover();
+  }
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { closeGlossPopover(); closeGlossaryModal(); }
+});
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 async function boot() {
@@ -91,7 +230,10 @@ async function boot() {
   document.getElementById("sheet-user-name").textContent = me.name || me.email;
 
   try {
-    charData = await api("GET", `/api/characters/${charId}/sheet-data`);
+    [charData] = await Promise.all([
+      api("GET", `/api/characters/${charId}/sheet-data`),
+      loadGlossary(),
+    ]);
   } catch(e) {
     document.getElementById("sheet-loading").textContent = "Could not load character: " + e.message;
     return;
@@ -281,7 +423,7 @@ function renderSkills(attrs, profSkills, expertSkills, prof) {
     const dot = isExpert ? "expert" : isProf ? "prof" : "";
     return `<div class="save-row">
       <span class="prof-dot ${dot}" title="${isExpert ? "Expertise" : isProf ? "Proficient" : ""}"></span>
-      <span class="save-name">${skill} <span class="skill-ab">(${ab.toUpperCase()})</span></span>
+      <span class="save-name">${gloss(skill)} <span class="skill-ab">(${ab.toUpperCase()})</span></span>
       <span class="save-val">${fmtMod(bonus)}</span>
     </div>`;
   }).join("");
@@ -294,7 +436,9 @@ function renderSkills(attrs, profSkills, expertSkills, prof) {
 function renderProficiencies(c, prof, attrs) {
   const languages = (c.language_proficiencies || []).join(", ") || "—";
   const tools = (c.tool_proficiencies || []).join(", ") || "—";
-  const masteries = (c.weapon_mastery_unlocks || []).join(", ") || "—";
+  const masteries = (c.weapon_mastery_unlocks || []).length
+    ? (c.weapon_mastery_unlocks || []).map(m => gloss(m)).join(", ")
+    : "—";
 
   let spellSection = "";
   if (c.class_spellcasting_type) {
@@ -337,9 +481,9 @@ function renderAttackCards(c) {
 
   const cards = attacks.map(a => {
     const propTags = (a.properties || []).slice(0, 4)
-      .map(p => `<span class="attack-prop">${p}</span>`).join("");
+      .map(p => `<span class="attack-prop">${gloss(p)}</span>`).join("");
     const masteryTag = a.mastery_property
-      ? `<span class="attack-mastery">${a.mastery_property}</span>` : "";
+      ? `<span class="attack-mastery">${gloss(a.mastery_property)}</span>` : "";
     const unarmedClass = a.is_unarmed ? " attack-card--unarmed" : "";
     return `<div class="attack-card${unarmedClass}">
       <div class="attack-name">${a.name}</div>
@@ -367,7 +511,7 @@ function renderFeaturesSection(c) {
         <span class="feature-name">${name}</span>
         ${badge ? `<span class="feature-badge">${badge}</span>` : ""}
       </div>
-      ${desc ? `<div class="feature-desc">${desc}</div>` : ""}
+      ${desc ? `<div class="feature-desc">${glossifyDescription(desc)}</div>` : ""}
     </div>`;
 
   const classFeatures = (c.class_features || []).map(f =>
@@ -754,10 +898,11 @@ function renderEquipmentTab(c) {
     : "";
 
   const renderRow = (e) => {
+    const propSpans = (e.properties || []).map(p => gloss(p)).join(", ");
     const detail = [
       e.damage ? `${e.damage}${e.damage_type ? " " + e.damage_type : ""}` : null,
       e.ac_formula ? `AC ${e.ac_formula}` : null,
-      (e.properties || []).join(", ") || null,
+      propSpans || null,
     ].filter(Boolean).join(" · ");
     return `<tr>
       <td>${e.quantity > 1 ? `<span class="equip-qty">${e.quantity}×</span> ` : ""}<strong>${e.name}</strong></td>
@@ -1032,7 +1177,7 @@ function renderSpellsTab(c, prof, attrs) {
     const flags = [
       s.concentration ? "Concentration" : null,
       s.ritual ? "Ritual" : null,
-    ].filter(Boolean).map(t => `<span class="spell-flag">${t}</span>`).join("");
+    ].filter(Boolean).map(t => `<span class="spell-flag">${gloss(t)}</span>`).join("");
 
     const stats = [
       { label: "School",     value: s.school },
@@ -1046,7 +1191,7 @@ function renderSpellsTab(c, prof, attrs) {
 
     const notesLine = (s.source === "species" && s.notes)
       ? `<div class="spell-notes">${s.notes}</div>` : "";
-    const desc = s.description ? `<div class="spell-desc">${s.description}</div>` : "";
+    const desc = s.description ? `<div class="spell-desc">${glossifyDescription(s.description)}</div>` : "";
 
     return `<div class="spell-card" onclick="this.classList.toggle('open')">
       <div class="spell-card-header">
