@@ -157,6 +157,7 @@ def compute_ac(char, attrs: dict, db) -> tuple[int, str]:
 def _calc_attacks(char, attrs: dict, prof: int) -> list:
     str_mod = _mod(attrs.get("str", 10))
     dex_mod = _mod(attrs.get("dex", 10))
+    mastery_set = {w.weapon_name for w in char.weapon_mastery_unlocks}
     attacks = []
     for ce in char.equipment:
         item = ce.equipment_item
@@ -176,7 +177,7 @@ def _calc_attacks(char, attrs: dict, prof: int) -> list:
             "attack_bonus": attack_bonus,
             "damage": dmg_str,
             "properties": item.properties or [],
-            "mastery_property": item.mastery_property,
+            "mastery_property": item.mastery_property if item.name in mastery_set else None,
             "category": item.category or "",
         })
     # Unarmed strike always available
