@@ -742,6 +742,29 @@ const ALL_LANGUAGES_ADMIN = [
 let _editCharId = null;
 let _allBgsAdmin = [];
 
+// Maps UI category names → DB category strings on weapon rows (data-tip-cat)
+const CAT_TO_DB_CATS = {
+  "Simple Weapons":               ["Simple Melee", "Simple Ranged"],
+  "Simple Melee Weapons":         ["Simple Melee"],
+  "Simple Ranged Weapons":        ["Simple Ranged"],
+  "Martial Weapons":              ["Martial Melee", "Martial Ranged"],
+  "Martial Melee Weapons":        ["Martial Melee"],
+  "Martial Ranged Weapons":       ["Martial Ranged"],
+  "Simple or Martial Melee Weapons": ["Simple Melee", "Martial Melee"],
+  "All Weapons":                  ["Simple Melee", "Simple Ranged", "Martial Melee", "Martial Ranged"],
+};
+
+function _syncCategoryBoxes(overlay) {
+  const rows = [...overlay.querySelectorAll(".ep-weapon-row")];
+  for (const catCb of overlay.querySelectorAll(".ep-wcat-cb")) {
+    const dbCats = CAT_TO_DB_CATS[catCb.value];
+    if (!dbCats) continue;
+    const inCat = rows.filter(r => dbCats.includes(r.dataset.tipCat));
+    if (!inCat.length) continue;
+    catCb.checked = inCat.every(r => r.querySelector(".ep-wprof-cb")?.checked);
+  }
+}
+
 async function openEditPanel(charId) {
   _editCharId = charId;
   const [detail, bgs] = await Promise.all([
@@ -879,8 +902,8 @@ async function openEditPanel(charId) {
       </div>
     </div>`;
 
-  // Sync expertise checkboxes when skill checkbox toggled
   overlay.addEventListener("change", e => {
+    // Skill expertise sync
     if (e.target.classList.contains("ep-skill-cb")) {
       const val = e.target.value;
       const expertCb = overlay.querySelector(`.ep-expert-cb[value="${val}"]`);
@@ -889,9 +912,29 @@ async function openEditPanel(charId) {
         if (!e.target.checked) expertCb.checked = false;
       }
     }
+
+    // Category → individual weapons
+    if (e.target.classList.contains("ep-wcat-cb")) {
+      const dbCats = CAT_TO_DB_CATS[e.target.value] || [];
+      for (const row of overlay.querySelectorAll(".ep-weapon-row")) {
+        if (dbCats.includes(row.dataset.tipCat)) {
+          const cb = row.querySelector(".ep-wprof-cb");
+          if (cb) cb.checked = e.target.checked;
+        }
+      }
+      // Re-evaluate sibling categories (e.g. "All Weapons" when "Simple Weapons" is toggled)
+      _syncCategoryBoxes(overlay);
+    }
+
+    // Individual weapon → recalculate category boxes
+    if (e.target.classList.contains("ep-wprof-cb")) {
+      _syncCategoryBoxes(overlay);
+    }
   });
 
   document.body.appendChild(overlay);
+  // Ensure category boxes reflect the initial individual weapon state
+  _syncCategoryBoxes(overlay);
 }
 
 function closeEditPanel() {
@@ -922,9 +965,19 @@ async function saveEditPanel() {
     await api("PATCH", `/api/admin/characters/${id}/proficiencies`, { skills, expertise, tools, languages: langs });
   } catch(e) { errs.push("Proficiencies: " + e.message); }
 
-  // Weapon proficiencies (categories + individual)
+  // Weapon proficiencies — save checked categories + individual weapons not covered by any category
   const wprofCategories = [...document.querySelectorAll(".ep-wcat-cb:checked")].map(cb => cb.value);
-  const wprofIndividual = [...document.querySelectorAll(".ep-wprof-cb:checked")].map(cb => cb.value);
+  // Build set of weapon names already covered by checked categories
+  const coveredByCategory = new Set();
+  for (const cat of wprofCategories) {
+    const dbCats = CAT_TO_DB_CATS[cat] || [];
+    for (const row of document.querySelectorAll(".ep-weapon-row")) {
+      if (dbCats.includes(row.dataset.tipCat)) coveredByCategory.add(row.querySelector(".ep-wprof-cb")?.value);
+    }
+  }
+  const wprofIndividual = [...document.querySelectorAll(".ep-wprof-cb:checked")]
+    .map(cb => cb.value)
+    .filter(name => !coveredByCategory.has(name));
   try {
     await api("PATCH", `/api/admin/characters/${id}/weapon-proficiencies`,
       { proficiency_types: [...wprofCategories, ...wprofIndividual] });
