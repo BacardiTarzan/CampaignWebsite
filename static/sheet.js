@@ -373,6 +373,7 @@ function renderStatsTab(c, prof, attrs) {
       <div class="sh-col-right">
         ${renderProficiencies(c, prof, attrs)}
         ${renderAttackCards(c)}
+        ${renderSneakAttackSection(c)}
         ${renderWeaponsSection(c)}
       </div>
     </div>
@@ -507,6 +508,52 @@ function renderAttackCards(c) {
   return `<div class="sh-section">
     <h4 class="sh-section-title">Attacks</h4>
     <div class="attack-cards">${cards}</div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Sneak Attack (Rogue only)
+// ---------------------------------------------------------------------------
+function renderSneakAttackSection(c) {
+  if ((c.class_name || "").toLowerCase() !== "rogue") return "";
+
+  const level = c.level || 1;
+  const dexMod = mod(c.attributes?.dex || 10);
+  const prof = c.proficiency_bonus || 2;
+  const dc = 8 + dexMod + prof;
+  const sneakDice = Math.ceil(level / 2);
+
+  const CUNNING_STRIKES = [
+    { minLevel: 5,  cost: "1d6", name: "Poison",    desc: "Con save or Poisoned until the start of your next turn." },
+    { minLevel: 5,  cost: "1d6", name: "Trip",      desc: "Dex save or Prone (Large or smaller targets only)." },
+    { minLevel: 5,  cost: "1d6", name: "Withdraw",  desc: "Move up to half your Speed without provoking Opportunity Attacks." },
+    { minLevel: 14, cost: "2d6", name: "Daze",      desc: "Con save or Incapacitated until the start of your next turn." },
+    { minLevel: 14, cost: "3d6", name: "Obscure",   desc: "Dex save or Blinded until the start of your next turn." },
+    { minLevel: 14, cost: "6d6", name: "Knock Out", desc: "Con save or Unconscious for 1 minute (ends if target takes damage or is shaken awake)." },
+  ];
+
+  const available = CUNNING_STRIKES.filter(o => level >= o.minLevel);
+
+  const strikeRows = available.map(o => `
+    <div class="sh-sneak-option">
+      <span class="sh-sneak-cost">${o.cost}</span>
+      <div class="sh-sneak-option-body">
+        <span class="sh-sneak-name">${o.name}</span>
+        <span class="sh-sneak-desc">${o.desc}</span>
+      </div>
+    </div>`).join("");
+
+  const cunningBlock = available.length ? `
+    <div class="sh-sneak-subtitle">Cunning Strike — Save DC ${dc}
+      ${level >= 11 ? `<span class="sh-sneak-improved">two effects at once</span>` : ""}
+    </div>
+    <div class="sh-sneak-options">${strikeRows}</div>
+  ` : `<p class="sh-sneak-unlocks">Cunning Strike unlocks at level 5.</p>`;
+
+  return `<div class="sh-section">
+    <h4 class="sh-section-title">Sneak Attack</h4>
+    <div class="sh-sneak-damage">${sneakDice}d6 <span class="sh-sneak-damage-label">extra damage</span></div>
+    ${cunningBlock}
   </div>`;
 }
 

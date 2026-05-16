@@ -1217,6 +1217,81 @@
   color: var(--color-light);
 }
 
+/* ── Sneak Attack ── */
+.sh-sneak-damage {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--color-accent);
+  margin-bottom: 10px;
+  line-height: 1;
+}
+.sh-sneak-damage-label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--color-muted, #9a8a6a);
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.sh-sneak-subtitle {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted, #9a8a6a);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sh-sneak-improved {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(180,130,60,0.2);
+  color: #d4a843;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.sh-sneak-options {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sh-sneak-option {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.sh-sneak-cost {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: #e05555;
+  text-align: center;
+  padding-top: 1px;
+}
+.sh-sneak-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sh-sneak-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-light);
+}
+.sh-sneak-desc {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.4;
+}
+.sh-sneak-unlocks {
+  font-size: 0.82rem;
+  color: var(--color-muted, #9a8a6a);
+  margin: 0;
+}
+
 /* ── Responsive ── */
 @media (max-width: 700px) {
   .sh-main {
