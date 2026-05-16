@@ -343,9 +343,16 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
     char = db.get(Character, char_id)
     if not char:
         raise HTTPException(404)
-    # All weapons with category and mastery info
+    # All weapons with full stats for tooltips
     all_weapons = [
-        {"name": e.name, "category": e.category or "", "mastery": e.mastery_property}
+        {
+            "name": e.name,
+            "category": e.category or "",
+            "mastery": e.mastery_property,
+            "damage": e.damage or "",
+            "damage_type": e.damage_type or "",
+            "properties": e.properties or [],
+        }
         for e in db.query(Equipment)
               .filter(Equipment.item_type == "weapon")
               .order_by(Equipment.name).all()

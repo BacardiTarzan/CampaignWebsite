@@ -783,9 +783,13 @@ function renderFeaturesStep() {
         <div class="checklist" id="mastery-checklist">
           ${list.map(w => {
             const mp = MASTERY_PROPERTIES[w];
-            const titleAttr = mp ? ` title="${mp.name}: ${mp.desc}"` : "";
-            const tag = mp ? `<span class="mastery-tag" title="${mp.desc}">${mp.name}</span>` : "";
-            return `<label class="check-item"${titleAttr}><input type="checkbox" class="mastery-cb" value="${w}" onchange="checkMasteryLimit(${slots})"> ${w}${tag}</label>`;
+            const eq = state.equipCatalog?.find(i => i.name === w);
+            const dmg = eq ? [eq.damage, eq.damage_type].filter(Boolean).join(" ") : "";
+            const props = eq ? (eq.properties || []).join(", ") : "";
+            const cat = eq ? (eq.category || "") : "";
+            const tipAttrs = `data-tip-name="${w}" data-tip-cat="${cat}" data-tip-damage="${dmg}" data-tip-props="${props}" data-tip-mastery="${mp ? mp.name : ""}"`;
+            const tag = mp ? `<span class="mastery-tag">${mp.name}</span>` : "";
+            return `<label class="check-item" ${tipAttrs} onmouseenter="showWeaponTip(this,event)" onmouseleave="hideWeaponTip()"><input type="checkbox" class="mastery-cb" value="${w}" onchange="checkMasteryLimit(${slots})"> ${w}${tag}</label>`;
           }).join("")}
         </div>
       </div>`;
@@ -1165,7 +1169,14 @@ function renderShop() {
             : item.item_type === "armor" || item.item_type === "shield"
             ? (item.ac_formula || "—")
             : item.description || item.category || "";
-          return `<div class="shop-item">
+          const isWeapon = item.item_type === "weapon";
+          const tipAttrs = isWeapon ? ` data-tip-name="${item.name}"
+            data-tip-cat="${item.category || ""}"
+            data-tip-damage="${[item.damage, item.damage_type].filter(Boolean).join(" ")}"
+            data-tip-props="${(item.properties || []).join(", ")}"
+            data-tip-mastery="${item.mastery_property || ""}"
+            onmouseenter="showWeaponTip(this,event)" onmouseleave="hideWeaponTip()"` : "";
+          return `<div class="shop-item"${tipAttrs}>
             <span class="shop-item-name">${item.name}</span>
             <span class="shop-item-detail">${detail}</span>
             <span class="shop-item-cost">${item.cost || "—"}</span>
@@ -1473,6 +1484,49 @@ function startNewCharacter() {
   document.getElementById("display-name").value = "";
   document.getElementById("char-name").value = "";
   showStep(1);
+}
+
+// ---------------------------------------------------------------------------
+// Weapon tooltip (shared with admin.js pattern)
+// ---------------------------------------------------------------------------
+function _initWeaponTip() {
+  if (document.getElementById("weapon-tip")) return;
+  const tip = document.createElement("div");
+  tip.id = "weapon-tip";
+  tip.className = "weapon-tip";
+  tip.style.display = "none";
+  document.body.appendChild(tip);
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display !== "none") {
+      tip.style.left = (e.clientX + 14) + "px";
+      tip.style.top  = (e.clientY + 14) + "px";
+    }
+  });
+}
+
+function showWeaponTip(el, e) {
+  _initWeaponTip();
+  const tip = document.getElementById("weapon-tip");
+  const name    = el.dataset.tipName    || "";
+  const cat     = el.dataset.tipCat     || "";
+  const damage  = el.dataset.tipDamage  || "";
+  const props   = el.dataset.tipProps   || "";
+  const mastery = el.dataset.tipMastery || "";
+  if (!name) return;
+  tip.innerHTML =
+    `<strong>${name}</strong>` +
+    (cat     ? `<div class="wt-cat">${cat}</div>`       : "") +
+    (damage  ? `<div class="wt-damage">${damage}</div>` : "") +
+    (props   ? `<div class="wt-props">${props}</div>`   : "") +
+    (mastery ? `<div class="wt-mastery">Mastery: ${mastery}</div>` : "");
+  tip.style.display = "block";
+  tip.style.left = (e.clientX + 14) + "px";
+  tip.style.top  = (e.clientY + 14) + "px";
+}
+
+function hideWeaponTip() {
+  const tip = document.getElementById("weapon-tip");
+  if (tip) tip.style.display = "none";
 }
 
 // ---------------------------------------------------------------------------

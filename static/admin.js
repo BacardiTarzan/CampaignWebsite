@@ -777,8 +777,16 @@ async function openEditPanel(charId) {
 
   // Per-weapon rows: Prof checkbox + Mastery checkbox side by side
   const weaponRows = (detail.all_weapons || []).map(w => {
+    const dmgStr = [w.damage, w.damage_type].filter(Boolean).join(" ");
+    const propsStr = (w.properties || []).join(", ");
     const masteryTag = w.mastery ? `<span class="ep-mastery-tag">${w.mastery}</span>` : "";
-    return `<div class="ep-weapon-row">
+    return `<div class="ep-weapon-row"
+        data-tip-name="${w.name}"
+        data-tip-cat="${w.category}"
+        data-tip-damage="${dmgStr}"
+        data-tip-props="${propsStr}"
+        data-tip-mastery="${w.mastery || ""}"
+        onmouseenter="showWeaponTip(this,event)" onmouseleave="hideWeaponTip()">
       <span class="ep-weapon-name">${w.name}</span>
       <label class="ep-weapon-cb-label" title="Proficient">
         <input type="checkbox" class="ep-wprof-cb" value="${w.name}" ${wprofSet.has(w.name) ? "checked" : ""}> Prof
@@ -932,6 +940,49 @@ async function saveEditPanel() {
   toast("Changes saved.");
   closeEditPanel();
   loadRoster();
+}
+
+// ---------------------------------------------------------------------------
+// Weapon tooltip
+// ---------------------------------------------------------------------------
+function _initWeaponTip() {
+  if (document.getElementById("weapon-tip")) return;
+  const tip = document.createElement("div");
+  tip.id = "weapon-tip";
+  tip.className = "weapon-tip";
+  tip.style.display = "none";
+  document.body.appendChild(tip);
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display !== "none") {
+      tip.style.left = (e.clientX + 14) + "px";
+      tip.style.top  = (e.clientY + 14) + "px";
+    }
+  });
+}
+
+function showWeaponTip(el, e) {
+  _initWeaponTip();
+  const tip = document.getElementById("weapon-tip");
+  const name    = el.dataset.tipName    || "";
+  const cat     = el.dataset.tipCat     || "";
+  const damage  = el.dataset.tipDamage  || "";
+  const props   = el.dataset.tipProps   || "";
+  const mastery = el.dataset.tipMastery || "";
+  if (!name) return;
+  tip.innerHTML =
+    `<strong>${name}</strong>` +
+    (cat     ? `<div class="wt-cat">${cat}</div>`       : "") +
+    (damage  ? `<div class="wt-damage">${damage}</div>` : "") +
+    (props   ? `<div class="wt-props">${props}</div>`   : "") +
+    (mastery ? `<div class="wt-mastery">Mastery: ${mastery}</div>` : "");
+  tip.style.display = "block";
+  tip.style.left = (e.clientX + 14) + "px";
+  tip.style.top  = (e.clientY + 14) + "px";
+}
+
+function hideWeaponTip() {
+  const tip = document.getElementById("weapon-tip");
+  if (tip) tip.style.display = "none";
 }
 
 // ---------------------------------------------------------------------------
