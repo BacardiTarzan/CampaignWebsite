@@ -318,6 +318,10 @@ def _parse_class_file(path: Path) -> dict:
     hd_m = re.search(r"d(\d+)", hd_raw)
     hit_die = int(hd_m.group(1)) if hd_m else HIT_DIE_MAP.get(slug, 8)
 
+    # Tool proficiencies
+    tool_raw = _field(text, "Tool Proficiencies") or ""
+    tool_proficiencies = [t.strip() for t in tool_raw.split(",") if t.strip()] if tool_raw else []
+
     # Spellcasting
     sc_type, sc_ability = SPELLCASTING_MAP.get(slug, (None, None))
 
@@ -372,6 +376,7 @@ def _parse_class_file(path: Path) -> dict:
         "weapon_proficiencies": weapons,
         "skill_choices": skill_choices,
         "skill_options": skill_options,
+        "tool_proficiencies": tool_proficiencies or None,
         "spellcasting_type": sc_type,
         "spellcasting_ability": sc_ability,
         "equipment_options": equipment_options,
@@ -822,7 +827,7 @@ def seed_all(db: Session) -> dict:
 
     # Pre-load existing names to avoid duplicate checks failing on unflushed adds
     existing_species = {r.name for r in db.query(Species.name)}
-    existing_classes = {r.name for r in db.query(DnDClass.name)}
+    existing_classes = {r.name for r in db.query(DnDClass.name)}  # kept for reference below
     existing_backgrounds = {r.name for r in db.query(Background.name)}
     existing_feats = {r.name for r in db.query(Feat.name)}
     existing_spells = {r.name for r in db.query(Spell.name)}
@@ -842,21 +847,26 @@ def seed_all(db: Session) -> dict:
             if sp and sp.lineages is None and data.get("lineages"):
                 sp.lineages = data["lineages"]
 
-    # Classes
+    # Classes — insert new, refresh tool_proficiencies on existing
+    existing_class_rows = {r.name: r for r in db.query(DnDClass)}
     for f in sorted((REF / "classes").glob("*.md")):
         if "Zone.Identifier" in f.name:
             continue
         data = _parse_class_file(f)
         subclasses_data = data.pop("subclasses", [])
-        if data["name"] not in existing_classes:
+        if data["name"] not in existing_class_rows:
             cls_obj = DnDClass(**data)
             db.add(cls_obj)
             db.flush()
             for sc in subclasses_data:
                 db.add(Subclass(class_id=cls_obj.id, **sc))
                 counts["subclasses"] += 1
-            existing_classes.add(data["name"])
+            existing_class_rows[data["name"]] = cls_obj
             counts["classes"] += 1
+        else:
+            # Refresh tool_proficiencies (and skill data) on existing rows
+            cls_obj = existing_class_rows[data["name"]]
+            cls_obj.tool_proficiencies = data.get("tool_proficiencies")
 
     # Backgrounds
     for f in sorted((REF / "backgrounds").glob("*.md")):

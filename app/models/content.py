@@ -37,6 +37,7 @@ class DnDClass(Base):
     weapon_proficiencies = Column(JSON)
     skill_choices = Column(Integer, default=2)
     skill_options = Column(JSON)
+    tool_proficiencies = Column(JSON, nullable=True)    # e.g. ["Thieves' Tools"] or ["3 Musical Instruments of your choice"]
     spellcasting_type = Column(String, nullable=True)   # "full", "half", "pact"
     spellcasting_ability = Column(String, nullable=True)
     equipment_options = Column(JSON)    # [{"label":"A","items":[...]},{"label":"B","gold":75}]

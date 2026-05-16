@@ -897,6 +897,34 @@ function renderSkillsStep() {
        }).join("")}
      </div>`;
 
+  // Class tool proficiencies
+  const toolProfs = cls.tool_proficiencies || [];
+  let toolHtml = "";
+  if (toolProfs.length > 0) {
+    const toolItems = toolProfs.map(entry => {
+      const isChoice = /choose|your choice|\bor\b/i.test(entry);
+      if (!isChoice) {
+        return `<p class="hint mb-sm">Your class grants you <strong>${entry}</strong> proficiency.</p>`;
+      }
+      // Determine the picker options and count
+      const isBard = /musical instrument/i.test(entry);
+      const isMonk = /artisan/i.test(entry) && /musical instrument/i.test(entry);
+      const countMatch = entry.match(/^(\d+)/);
+      const pickCount = countMatch ? parseInt(countMatch[1]) : 1;
+      const instrumentOpts = TOOL_OPTIONS["Choose one kind of Musical Instrument"] || [];
+      const artisanOpts = TOOL_OPTIONS["Choose one kind of Artisan's Tools"] || [];
+      const allOpts = isMonk ? [...artisanOpts, ...instrumentOpts] : (isBard ? instrumentOpts : []);
+      const pickers = Array.from({length: pickCount}, (_, i) =>
+        `<select class="class-tool-pick" id="class-tool-${i}" onchange="validateToolPicks()">
+           <option value="">— choose —</option>
+           ${allOpts.map(o => `<option>${o}</option>`).join("")}
+         </select>`
+      ).join(" ");
+      return `<p class="hint mb-sm"><strong>${entry}:</strong></p>${pickers}`;
+    }).join("");
+    toolHtml = `<div id="tools-section" style="margin-bottom:1rem">${toolItems}</div>`;
+  }
+
   // Language pickers
   const className = state.currentClass?.name || "";
   const speciesName = state.currentSpecies?.name || "";
@@ -924,10 +952,19 @@ function renderSkillsStep() {
   ).join("");
 
   document.getElementById("languages-section").innerHTML = `
+    ${toolHtml}
     ${classNote}
     <div class="grid-2">${pickerHtml}</div>`;
 
   syncLangPickers();
+}
+
+function validateToolPicks() {
+  const toolSelects = [...document.querySelectorAll(".class-tool-pick")];
+  const toolsOk = toolSelects.every(s => s.value !== "");
+  const langSelects = [1, 2, 3].map(i => document.getElementById(`lang-${i}`)).filter(Boolean);
+  const langsOk = langSelects.every(s => s.value !== "");
+  document.getElementById("btn-skills-next").disabled = !(toolsOk && langsOk);
 }
 
 function syncLangPickers() {
@@ -941,8 +978,10 @@ function syncLangPickers() {
       .map(l => `<option${l === current ? " selected" : ""}>${l}</option>`)
       .join("");
   });
-  const allChosen = selects.every(s => s.value !== "");
-  document.getElementById("btn-skills-next").disabled = !allChosen;
+  const allLangChosen = selects.every(s => s.value !== "");
+  const toolSelects = [...document.querySelectorAll(".class-tool-pick")];
+  const allToolChosen = toolSelects.every(s => s.value !== "");
+  document.getElementById("btn-skills-next").disabled = !(allLangChosen && allToolChosen);
 }
 
 function checkSkillLimit(max) {
@@ -979,10 +1018,15 @@ async function saveSkills() {
   state.selectedSkills = chosen;
   state.selectedLanguages = langs;
 
+  // Collect chosen class tool proficiencies (from choice pickers only; fixed ones are auto-granted)
+  const classToolChoices = [...document.querySelectorAll(".class-tool-pick")]
+    .map(s => s.value).filter(Boolean);
+
   try {
     await api("POST", `/api/characters/${state.charId}/step/skills`, {
       skills: chosen,
       languages: langs,
+      class_tool_choices: classToolChoices,
     });
     await renderEquipmentStep();
     showStep(8);

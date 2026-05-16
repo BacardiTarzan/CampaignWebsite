@@ -508,6 +508,7 @@ def repair_schema(db: Session = Depends(get_db)):
         "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS always_prepared BOOLEAN DEFAULT FALSE",
         "ALTER TABLE character_choices ADD COLUMN IF NOT EXISTS level INTEGER",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS hp_roll_log JSON",
+        "ALTER TABLE classes ADD COLUMN IF NOT EXISTS tool_proficiencies JSON",
     ]
     for stmt in stmts:
         db.execute(text(stmt))

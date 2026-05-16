@@ -40,6 +40,7 @@ def get_class(class_id: int, db: Session = Depends(get_db)):
         "weapon_proficiencies": obj.weapon_proficiencies,
         "skill_choices": obj.skill_choices,
         "skill_options": obj.skill_options,
+        "tool_proficiencies": obj.tool_proficiencies or [],
         "spellcasting_type": obj.spellcasting_type,
         "spellcasting_ability": obj.spellcasting_ability,
         "equipment_options": obj.equipment_options,

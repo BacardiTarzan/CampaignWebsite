@@ -109,6 +109,7 @@ class StepFeaturesIn(BaseModel):
 class StepSkillsIn(BaseModel):
     skills: list[str]                 # chosen class skills
     languages: list[str]
+    class_tool_choices: list[str] = []  # tool proficiencies chosen this step (class-granted)
 
 
 class StepEquipmentIn(BaseModel):
@@ -410,10 +411,13 @@ def save_features(char_id: int, data: StepFeaturesIn, db: Session = Depends(get_
 def save_skills(char_id: int, data: StepSkillsIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
     _check_owner(char, user)
-    # Remove class-sourced skills and all language proficiencies
+    # Remove class-sourced skills, tool proficiencies, and all language proficiencies
     for sp in list(char.skill_proficiencies):
         if sp.source == "class":
             db.delete(sp)
+    for tp in list(char.tool_proficiencies):
+        if tp.source == "class":
+            db.delete(tp)
     for lp in list(char.language_proficiencies):
         db.delete(lp)
     db.flush()
@@ -422,6 +426,19 @@ def save_skills(char_id: int, data: StepSkillsIn, db: Session = Depends(get_db),
         db.add(SkillProficiency(character_id=char.id, skill_name=skill, source="class"))
     for lang in data.languages:
         db.add(LanguageProficiency(character_id=char.id, language_name=lang, source="player_choice"))
+
+    # Class tool proficiencies — fixed grants + player-chosen ones
+    cc = char.character_classes[0] if char.character_classes else None
+    cls = cc.dnd_class if cc else None
+    if cls and cls.tool_proficiencies:
+        for tool_entry in cls.tool_proficiencies:
+            is_choice = any(kw in tool_entry.lower() for kw in ("choose", "your choice", " or "))
+            if not is_choice:
+                db.add(ToolProficiency(character_id=char.id, tool_name=tool_entry, source="class"))
+    # Player-chosen tool proficiencies (Bard instruments, Monk artisan/instrument pick)
+    for tool_name in (data.class_tool_choices or []):
+        if tool_name:
+            db.add(ToolProficiency(character_id=char.id, tool_name=tool_name, source="class"))
 
     char.wizard_step = max(char.wizard_step, 8)
     db.commit()
