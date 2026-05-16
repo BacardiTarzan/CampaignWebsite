@@ -227,11 +227,28 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             "Divine Strike":         "Once per turn when you hit a creature with a weapon attack, you can deal an extra 1d8 Necrotic or Radiant damage (your choice) to the target.",
             "Potent Spellcasting":   "You add your Wisdom modifier to the damage you deal with any Cleric cantrip.",
         },
+        "fighting_style": {
+            "Archery":               "+2 bonus to attack rolls with Ranged weapons.",
+            "Blind Fighting":        "You have Blindsight with a range of 10 feet.",
+            "Defense":               "+1 to AC while you're wearing Light, Medium, or Heavy armor.",
+            "Dueling":               "+2 to damage rolls when wielding a Melee weapon in one hand and no other weapons.",
+            "Great Weapon Fighting": "When you roll damage for an attack with a Melee weapon held in two hands, you can reroll any die that shows a 1 or 2 and must use the new roll.",
+            "Interception":          "As a Reaction when a creature you can see hits another creature within 5 feet of you, reduce the damage by 1d10 + your Proficiency Bonus. You must be holding a Shield or a Simple or Martial weapon.",
+            "Protection":            "As a Reaction when a creature you can see attacks a target other than you within 5 feet, impose Disadvantage on the attack roll. You must be holding a Shield.",
+            "Thrown Weapon Fighting":"+2 to damage rolls with weapons that have the Thrown property.",
+            "Two-Weapon Fighting":   "When you make an extra attack with a Light weapon, you can add your ability modifier to the damage of that attack.",
+            "Unarmed Fighting":      "Unarmed Strikes deal 1d6 + Strength Bludgeoning damage (1d8 if you aren't holding a weapon or Shield). At the start of each of your turns, you can deal 1d4 Bludgeoning damage to one creature you are Grappling.",
+        },
     }
 
-    # Build a lookup: choice_key → chosen value
+    # Build a lookup: choice_key → chosen value (string or dict with "name" key)
+    def _resolve_choice_value(raw) -> str:
+        if isinstance(raw, dict):
+            return raw.get("name", "")
+        return str(raw) if raw is not None else ""
+
     choice_lookup: dict[str, str] = {
-        c.feature_key: c.choice_value
+        c.feature_key: _resolve_choice_value(c.choice_value)
         for c in char.choices
         if c.feature_key and c.choice_value
     }
