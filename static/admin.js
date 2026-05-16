@@ -732,12 +732,18 @@ const ALL_SKILLS_ADMIN = [
   "Sleight of Hand","Stealth","Survival",
 ];
 
+const ALL_LANGUAGES_ADMIN = [
+  "Common","Common Sign Language","Draconic","Dwarvish","Elvish",
+  "Giant","Gnomish","Goblin","Halfling","Orc",
+  "Druidic","Thieves' Cant",
+  "Abyssal","Celestial","Deep Speech","Infernal","Primordial","Sylvan","Undercommon",
+];
+
 let _editCharId = null;
 let _allBgsAdmin = [];
 
 async function openEditPanel(charId) {
   _editCharId = charId;
-  // Fetch char detail + background list in parallel
   const [detail, bgs] = await Promise.all([
     api("GET", `/api/admin/characters/${charId}/detail`),
     _allBgsAdmin.length ? Promise.resolve(_allBgsAdmin) : api("GET", "/api/admin/codex/backgrounds"),
@@ -746,7 +752,11 @@ async function openEditPanel(charId) {
 
   const skillSet = new Set(detail.skills.map(s => s.name));
   const expertSet = new Set(detail.skills.filter(s => s.expertise).map(s => s.name));
+  const toolSet = new Set(detail.tools);
+  const langSet = new Set(detail.languages);
+  const masterySet = new Set(detail.masteries);
 
+  // Skill checkboxes with expertise toggle
   const skillCheckboxes = ALL_SKILLS_ADMIN.map(s => `
     <label class="ep-skill-row">
       <input type="checkbox" class="ep-skill-cb" value="${s}" ${skillSet.has(s) ? "checked" : ""}>
@@ -754,6 +764,29 @@ async function openEditPanel(charId) {
       <input type="checkbox" class="ep-expert-cb" value="${s}" ${expertSet.has(s) ? "checked" : ""}
         title="Expertise" style="margin-left:8px" ${skillSet.has(s) ? "" : "disabled"}>
       <span style="font-size:0.75rem;opacity:0.6">exp</span>
+    </label>`).join("");
+
+  // Tool checkboxes from DB
+  const toolCheckboxes = (detail.all_tools || []).map(name => `
+    <label class="ep-cb-row">
+      <input type="checkbox" class="ep-tool-cb" value="${name}" ${toolSet.has(name) ? "checked" : ""}>
+      ${name}
+    </label>`).join("");
+
+  // Language checkboxes from fixed list; extras shown in freeform field
+  const knownLangs = new Set(ALL_LANGUAGES_ADMIN);
+  const extraLangs = detail.languages.filter(l => !knownLangs.has(l));
+  const langCheckboxes = ALL_LANGUAGES_ADMIN.map(l => `
+    <label class="ep-cb-row">
+      <input type="checkbox" class="ep-lang-cb" value="${l}" ${langSet.has(l) ? "checked" : ""}>
+      ${l}
+    </label>`).join("");
+
+  // Weapon mastery checkboxes from DB weapons with mastery property
+  const masteryCheckboxes = (detail.all_mastery_weapons || []).map(w => `
+    <label class="ep-cb-row">
+      <input type="checkbox" class="ep-mastery-cb" value="${w.name}" ${masterySet.has(w.name) ? "checked" : ""}>
+      ${w.name} <span class="ep-mastery-tag">${w.mastery}</span>
     </label>`).join("");
 
   const bgOptions = bgs.map(b =>
@@ -776,27 +809,30 @@ async function openEditPanel(charId) {
           <option value="">— no change —</option>
           ${bgOptions}
         </select>
-        <p class="hint" style="margin-top:4px">Changing background re-applies its skill profs, tool prof, and origin feat.</p>
+        <p class="hint" style="margin-top:4px">Re-applies background skill profs, tool prof, and origin feat.</p>
       </div>
 
       <div class="ep-section">
-        <h4>Skill Proficiencies <span class="hint">(check = proficient · "exp" = expertise)</span></h4>
+        <h4>Skill Proficiencies <span class="hint">· "exp" = expertise</span></h4>
         <div class="ep-skill-grid">${skillCheckboxes}</div>
       </div>
 
       <div class="ep-section">
-        <h4>Tool Proficiencies <span class="hint">(one per line)</span></h4>
-        <textarea id="ep-tools" class="ep-textarea" rows="4">${detail.tools.join("\n")}</textarea>
+        <h4>Tool Proficiencies</h4>
+        <div class="ep-cb-grid">${toolCheckboxes}</div>
       </div>
 
       <div class="ep-section">
-        <h4>Languages <span class="hint">(one per line)</span></h4>
-        <textarea id="ep-langs" class="ep-textarea" rows="4">${detail.languages.join("\n")}</textarea>
+        <h4>Languages</h4>
+        <div class="ep-cb-grid">${langCheckboxes}</div>
+        ${extraLangs.length ? `<p class="hint" style="margin-top:6px">Also has: ${extraLangs.join(", ")} (edit via freeform below)</p>` : ""}
+        <input type="text" id="ep-extra-langs" class="ep-input" placeholder="Additional languages, comma-separated"
+          value="${extraLangs.join(", ")}" style="margin-top:8px">
       </div>
 
       <div class="ep-section">
-        <h4>Weapon Masteries <span class="hint">(one per line)</span></h4>
-        <textarea id="ep-masteries" class="ep-textarea" rows="3">${detail.masteries.join("\n")}</textarea>
+        <h4>Weapon Masteries</h4>
+        <div class="ep-cb-grid ep-mastery-grid">${masteryCheckboxes}</div>
       </div>
 
       <div class="ep-footer">
@@ -805,7 +841,7 @@ async function openEditPanel(charId) {
       </div>
     </div>`;
 
-  // Sync expertise checkboxes with skill checkboxes
+  // Sync expertise checkboxes when skill checkbox toggled
   overlay.addEventListener("change", e => {
     if (e.target.classList.contains("ep-skill-cb")) {
       const val = e.target.value;
@@ -837,17 +873,19 @@ async function saveEditPanel() {
   }
 
   // Proficiencies
-  const skillCbs = [...document.querySelectorAll(".ep-skill-cb:checked")];
-  const skills = skillCbs.map(cb => cb.value);
+  const skills = [...document.querySelectorAll(".ep-skill-cb:checked")].map(cb => cb.value);
   const expertise = [...document.querySelectorAll(".ep-expert-cb:checked")].map(cb => cb.value);
-  const tools = document.getElementById("ep-tools").value.split("\n").map(s => s.trim()).filter(Boolean);
-  const langs = document.getElementById("ep-langs").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const tools = [...document.querySelectorAll(".ep-tool-cb:checked")].map(cb => cb.value);
+  const checkedLangs = [...document.querySelectorAll(".ep-lang-cb:checked")].map(cb => cb.value);
+  const extraLangs = (document.getElementById("ep-extra-langs")?.value || "")
+    .split(",").map(s => s.trim()).filter(Boolean);
+  const langs = [...new Set([...checkedLangs, ...extraLangs])];
   try {
     await api("PATCH", `/api/admin/characters/${id}/proficiencies`, { skills, expertise, tools, languages: langs });
   } catch(e) { errs.push("Proficiencies: " + e.message); }
 
   // Masteries
-  const masteries = document.getElementById("ep-masteries").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const masteries = [...document.querySelectorAll(".ep-mastery-cb:checked")].map(cb => cb.value);
   try {
     await api("PATCH", `/api/admin/characters/${id}/masteries`, { weapon_names: masteries });
   } catch(e) { errs.push("Masteries: " + e.message); }

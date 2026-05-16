@@ -320,10 +320,24 @@ def admin_set_background(char_id: int, data: AdminBackgroundIn, db: Session = De
 
 @router.get("/characters/{char_id}/detail")
 def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
-    """Return full proficiency/mastery data needed for the admin edit panel."""
+    """Return full proficiency/mastery data + available weapons/tools for the admin edit panel."""
     char = db.get(Character, char_id)
     if not char:
         raise HTTPException(404)
+    # All weapons that have a mastery property (for mastery picker)
+    mastery_weapons = [
+        {"name": e.name, "mastery": e.mastery_property}
+        for e in db.query(Equipment)
+              .filter(Equipment.item_type == "weapon", Equipment.mastery_property.isnot(None))
+              .order_by(Equipment.name).all()
+    ]
+    # All tools
+    all_tools = [
+        e.name
+        for e in db.query(Equipment)
+              .filter(Equipment.item_type == "tool")
+              .order_by(Equipment.name).all()
+    ]
     return {
         "id": char.id,
         "character_name": char.character_name,
@@ -333,6 +347,8 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
         "tools": [t.tool_name for t in char.tool_proficiencies],
         "languages": [l.language_name for l in char.language_proficiencies],
         "masteries": [w.weapon_name for w in char.weapon_mastery_unlocks],
+        "all_mastery_weapons": mastery_weapons,
+        "all_tools": all_tools,
     }
 
 

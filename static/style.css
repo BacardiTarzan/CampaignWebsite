@@ -1228,6 +1228,44 @@ h2 {
   display: flex;
   gap: 10px;
 }
+.ep-cb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 4px 12px;
+}
+.ep-cb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.ep-mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 12px;
+}
+.ep-mastery-tag {
+  margin-left: auto;
+  font-size: 0.7rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.1);
+  color: var(--color-muted, #9a8a6a);
+  white-space: nowrap;
+}
+.ep-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: var(--color-light);
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
