@@ -392,10 +392,10 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     _MARTIAL = _MARTIAL_MELEE | _MARTIAL_RANGED
     _ALL = _SIMPLE | _MARTIAL
     _CATEGORY_MAP = {
-        "Simple Weapons": _SIMPLE,
+        "Simple Weapons": _SIMPLE,   "Simple": _SIMPLE,
         "Simple Melee Weapons": _SIMPLE_MELEE,
         "Simple Ranged Weapons": _SIMPLE_RANGED,
-        "Martial Weapons": _MARTIAL,
+        "Martial Weapons": _MARTIAL, "Martial": _MARTIAL,
         "Martial Melee Weapons": _MARTIAL_MELEE,
         "Martial Ranged Weapons": _MARTIAL_RANGED,
         "Simple or Martial Melee Weapons": _SIMPLE_MELEE | _MARTIAL_MELEE,

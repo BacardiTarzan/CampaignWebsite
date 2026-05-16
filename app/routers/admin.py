@@ -364,6 +364,37 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
               .filter(Equipment.item_type == "tool")
               .order_by(Equipment.name).all()
     ]
+    # Weapon proficiencies: use explicit rows if they exist, else derive from class as defaults
+    _PROF_SHORTHAND = {
+        "Simple":  "Simple Weapons",
+        "Martial": "Martial Weapons",
+        "Simple Melee":  "Simple Melee Weapons",
+        "Martial Melee": "Martial Melee Weapons",
+        "Simple Ranged":  "Simple Ranged Weapons",
+        "Martial Ranged": "Martial Ranged Weapons",
+    }
+    if char.weapon_proficiencies:
+        weapon_proficiencies = [wp.proficiency_type for wp in char.weapon_proficiencies]
+    else:
+        # Fall back to class weapon proficiencies (seeder shorthands → full names)
+        cc = char.character_classes[0] if char.character_classes else None
+        cls_profs = (cc.dnd_class.weapon_proficiencies or []) if cc and cc.dnd_class else []
+        weapon_proficiencies = [_PROF_SHORTHAND.get(p, p) for p in cls_profs]
+        # Also include mastery weapons from character_choices (step 6 creation wizard)
+        # so the mastery column reflects the character's current state without a DB entry
+
+    # Mastery: use WeaponMasteryUnlock rows; if empty fall back to CharacterChoice records
+    # from creation wizard step 6 (feature_key starts with "weapon_mastery")
+    mastery_names = [w.weapon_name for w in char.weapon_mastery_unlocks]
+    if not mastery_names:
+        for ch in char.choices:
+            if ch.feature_key and ch.feature_key.startswith("weapon_mastery"):
+                val = ch.choice_value
+                if isinstance(val, list):
+                    mastery_names.extend(val)
+                elif isinstance(val, str) and val:
+                    mastery_names.append(val)
+
     return {
         "id": char.id,
         "character_name": char.character_name,
@@ -372,8 +403,8 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
         "skills": [{"name": s.skill_name, "expertise": bool(s.expertise)} for s in char.skill_proficiencies],
         "tools": [t.tool_name for t in char.tool_proficiencies],
         "languages": [l.language_name for l in char.language_proficiencies],
-        "masteries": [w.weapon_name for w in char.weapon_mastery_unlocks],
-        "weapon_proficiencies": [wp.proficiency_type for wp in char.weapon_proficiencies],
+        "masteries": mastery_names,
+        "weapon_proficiencies": weapon_proficiencies,
         "all_weapons": all_weapons,
         "all_tools": all_tools,
     }
