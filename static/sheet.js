@@ -154,7 +154,7 @@ function render() {
       </div>
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Armor Class</div>
-        <div class="sh-combat-big">${c.ac ?? "—"}</div>
+        <div class="sh-combat-big" id="sh-ac-val">${c.ac ?? "—"}</div>
       </div>
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Speed</div>
@@ -749,26 +749,45 @@ function renderEquipmentTab(c) {
   const armor   = items.filter(e => e.item_type === "armor" || e.item_type === "shield");
   const gear    = items.filter(e => !["weapon","armor","shield"].includes(e.item_type));
 
+  const delBtn = (e) => isDM
+    ? `<td class="equip-del-cell"><button class="equip-del-btn" onclick="removeEquipment(${e.entry_id},'${e.name.replace(/'/g,"\\'")}',event)" title="Remove item">✕</button></td>`
+    : "";
+
   const renderRow = (e) => {
     const detail = [
       e.damage ? `${e.damage}${e.damage_type ? " " + e.damage_type : ""}` : null,
       e.ac_formula ? `AC ${e.ac_formula}` : null,
       (e.properties || []).join(", ") || null,
     ].filter(Boolean).join(" · ");
-    const delBtn = isDM
-      ? `<button class="equip-del-btn" onclick="removeEquipment(${e.entry_id},'${e.name.replace(/'/g,"\\'")}',event)" title="Remove item">✕</button>`
-      : "";
     return `<tr>
       <td>${e.quantity > 1 ? `<span class="equip-qty">${e.quantity}×</span> ` : ""}<strong>${e.name}</strong></td>
       <td class="text-muted">${e.category || e.item_type || ""}</td>
       <td class="text-muted">${detail}</td>
-      ${isDM ? `<td class="equip-del-cell">${delBtn}</td>` : ""}
+      ${delBtn(e)}
     </tr>`;
   };
 
-  const renderSection = (title, rows) => rows.length ? `
+  const renderArmorRow = (e) => {
+    const detail = [
+      e.ac_formula ? `AC ${e.ac_formula}` : null,
+      e.item_type === "shield" ? "+2 AC" : null,
+    ].filter(Boolean).join(" · ");
+    const equipToggle = `<button class="equip-toggle-btn${e.equipped ? " is-equipped" : ""}"
+      onclick="toggleEquipped(${e.entry_id},${!e.equipped},event)">
+      ${e.equipped ? "✓ Equipped" : "Equip"}
+    </button>`;
+    return `<tr>
+      <td><strong>${e.name}</strong></td>
+      <td class="text-muted">${e.category || (e.item_type === "shield" ? "Shield" : "Armor")}</td>
+      <td class="text-muted">${detail}</td>
+      <td>${equipToggle}</td>
+      ${delBtn(e)}
+    </tr>`;
+  };
+
+  const renderSection = (title, rows, renderer = renderRow) => rows.length ? `
     <h4 class="sh-section-title ${title !== "Weapons" ? "mt-md" : ""}">${title}</h4>
-    <table class="data-table sh-equip-table"><tbody>${rows.map(renderRow).join("")}</tbody></table>` : "";
+    <table class="data-table sh-equip-table"><tbody>${rows.map(renderer).join("")}</tbody></table>` : "";
 
   const cur = c.currency || {pp:0,gp:0,sp:0,cp:0};
   const currencyHtml = `
@@ -790,7 +809,7 @@ function renderEquipmentTab(c) {
 
   return `${dmBar}<div class="sh-section">
     ${renderSection("Weapons", weapons)}
-    ${renderSection("Armor & Shields", armor)}
+    ${renderSection("Armor & Shields", armor, renderArmorRow)}
     ${renderSection("Gear", gear)}
   </div>${currencyHtml}`;
 }
@@ -799,6 +818,26 @@ function renderEquipmentTab(c) {
 // Equipment management (DM only)
 // ---------------------------------------------------------------------------
 let _equipCache = null;
+
+async function toggleEquipped(entryId, equip, evt) {
+  evt.stopPropagation();
+  try {
+    const r = await api("PATCH", `/api/characters/${charId}/equipment/${entryId}/equip`, { equipped: equip });
+    if (!r) return;
+    // If equipping armor, auto-clear old armor in local state
+    charData.equipment.forEach(e => {
+      if (e.entry_id === entryId) {
+        e.equipped = r.equipped;
+      } else if (equip && e.item_type === "armor") {
+        e.equipped = false;
+      }
+    });
+    charData.ac = r.ac;
+    const acEl = document.getElementById("sh-ac-val");
+    if (acEl) acEl.textContent = r.ac;
+    document.getElementById("sh-tab-equipment").innerHTML = renderEquipmentTab(charData);
+  } catch(e) { toast("Error: " + e.message); }
+}
 
 async function removeEquipment(entryId, name, evt) {
   evt.stopPropagation();

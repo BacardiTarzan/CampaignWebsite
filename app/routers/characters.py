@@ -656,6 +656,56 @@ def update_equipment_quantity(char_id: int, entry_id: int, quantity: int, db: Se
     return {"ok": True, "quantity": entry.quantity}
 
 
+class EquipToggleIn(BaseModel):
+    equipped: bool
+
+@router.patch("/{char_id}/equipment/{entry_id}/equip")
+def toggle_equipped(char_id: int, entry_id: int, data: EquipToggleIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+    entry = db.get(CharacterEquipment, entry_id)
+    if not entry or entry.character_id != char.id:
+        raise HTTPException(404)
+
+    item = entry.equipment_item
+    item_type = item.item_type if item else None
+
+    # Equipping a new armor auto-unequips any other equipped armor
+    if data.equipped and item_type == "armor":
+        for ce in char.equipment:
+            if ce.id != entry_id and ce.equipment_item and ce.equipment_item.item_type == "armor":
+                ce.equipped = False
+
+    entry.equipped = data.equipped
+    db.commit()
+
+    # Recompute AC inline (mirrors export.py logic)
+    base = char.base_attributes or {}
+    asi = char.background_asi or {}
+    attrs = {k: base.get(k, 10) + asi.get(k, 0) for k in ("str","dex","con","int","wis","cha")}
+    dex_mod = (attrs["dex"] - 10) // 2
+
+    ac = 10 + dex_mod
+    for ce in char.equipment:
+        it = ce.equipment_item
+        if it and it.item_type == "armor" and ce.equipped:
+            f = (it.ac_formula or "").strip()
+            import re as _re
+            if _re.fullmatch(r"\d+", f):
+                ac = int(f)
+            else:
+                m = _re.match(r"(\d+)\s*\+\s*Dex(?:\s*\(max\s*(\d+)\))?", f, _re.IGNORECASE)
+                ac = int(m.group(1)) + min(dex_mod, int(m.group(2)) if m and m.group(2) else 99) if m else 10 + dex_mod
+            break
+    for ce in char.equipment:
+        it = ce.equipment_item
+        if it and it.item_type == "shield" and ce.equipped:
+            ac += 2
+            break
+
+    return {"ok": True, "entry_id": entry_id, "equipped": entry.equipped, "ac": ac}
+
+
 # ---------------------------------------------------------------------------
 # Prepared spells
 # ---------------------------------------------------------------------------

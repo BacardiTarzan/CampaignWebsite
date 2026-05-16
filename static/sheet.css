@@ -624,6 +624,29 @@
 }
 .equip-add-btn:hover { background: rgba(107,196,107,0.2); }
 
+.equip-toggle-btn {
+  font-size: 0.75rem;
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--color-ink-faded);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.equip-toggle-btn:hover { background: rgba(255,255,255,0.1); color: var(--color-light); }
+.equip-toggle-btn.is-equipped {
+  background: rgba(107,196,107,0.15);
+  border-color: rgba(107,196,107,0.4);
+  color: #6bc46b;
+}
+.equip-toggle-btn.is-equipped:hover {
+  background: rgba(107,196,107,0.08);
+  color: var(--color-ink-faded);
+  border-color: rgba(255,255,255,0.15);
+}
+
 .equip-del-cell { width: 28px; text-align: right; }
 
 .equip-del-btn {
