@@ -375,6 +375,60 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             and cs.spell and cs.spell.level > 0
         )
 
+    # Weapon proficiency + mastery display
+    # Categories → sets of weapon names they cover
+    _SIMPLE_MELEE = {
+        "Club","Dagger","Greatclub","Handaxe","Javelin","Light Hammer",
+        "Mace","Quarterstaff","Sickle","Spear",
+    }
+    _SIMPLE_RANGED = {"Dart","Light Crossbow","Shortbow","Sling"}
+    _SIMPLE = _SIMPLE_MELEE | _SIMPLE_RANGED
+    _MARTIAL_MELEE = {
+        "Battleaxe","Flail","Glaive","Greataxe","Greatsword","Halberd","Lance",
+        "Longsword","Maul","Morningstar","Pike","Rapier","Scimitar","Shortsword",
+        "Trident","Warhammer","War Pick","Whip",
+    }
+    _MARTIAL_RANGED = {"Hand Crossbow","Heavy Crossbow","Longbow"}
+    _MARTIAL = _MARTIAL_MELEE | _MARTIAL_RANGED
+    _ALL = _SIMPLE | _MARTIAL
+    _CATEGORY_MAP = {
+        "Simple Weapons": _SIMPLE,
+        "Simple Melee Weapons": _SIMPLE_MELEE,
+        "Simple Ranged Weapons": _SIMPLE_RANGED,
+        "Martial Weapons": _MARTIAL,
+        "Martial Melee Weapons": _MARTIAL_MELEE,
+        "Martial Ranged Weapons": _MARTIAL_RANGED,
+        "Simple or Martial Melee Weapons": _SIMPLE_MELEE | _MARTIAL_MELEE,
+        "All Weapons": _ALL,
+    }
+
+    weapon_prof_raw = [wp.proficiency_type for wp in char.weapon_proficiencies]
+    weapon_prof_set: set[str] = set()
+    weapon_prof_categories: list[str] = []
+    for pt in weapon_prof_raw:
+        if pt in _CATEGORY_MAP:
+            weapon_prof_set |= _CATEGORY_MAP[pt]
+            weapon_prof_categories.append(pt)
+        else:
+            weapon_prof_set.add(pt)
+
+    mastery_set = {w.weapon_name for w in char.weapon_mastery_unlocks}
+
+    # Build display list: all weapons that have proficiency or mastery
+    from ..models.content import Equipment as EquipmentModel
+    all_db_weapons = db.query(EquipmentModel).filter(EquipmentModel.item_type == "weapon").order_by(EquipmentModel.name).all()
+    weapons_display = []
+    for w in all_db_weapons:
+        proficient = w.name in weapon_prof_set
+        has_mastery = w.name in mastery_set
+        if proficient or has_mastery:
+            weapons_display.append({
+                "name": w.name,
+                "category": w.category or "",
+                "proficient": proficient,
+                "mastery": w.mastery_property if has_mastery else None,
+            })
+
     # Equipment with type details
     equipment = []
     for ce in char.equipment:
@@ -437,6 +491,8 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "tool_proficiencies": [t.tool_name for t in char.tool_proficiencies],
         "language_proficiencies": [l.language_name for l in char.language_proficiencies],
         "weapon_mastery_unlocks": [w.weapon_name for w in char.weapon_mastery_unlocks],
+        "weapon_prof_categories": weapon_prof_categories,
+        "weapons_display": weapons_display,
         "class_features": features,
         "feats": feats,
         "spells": spells,

@@ -9,7 +9,8 @@ from ..dependencies import require_admin
 from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
 from ..models.character import (
     Character, CharacterSpell, SkillProficiency, ToolProficiency,
-    LanguageProficiency, WeaponMasteryUnlock, CharacterFeat, CharacterClass,
+    LanguageProficiency, WeaponMasteryUnlock, CharacterWeaponProficiency,
+    CharacterFeat, CharacterClass,
 )
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
@@ -318,17 +319,35 @@ def admin_set_background(char_id: int, data: AdminBackgroundIn, db: Session = De
     return {"ok": True, "background_name": bg.name}
 
 
-@router.get("/characters/{char_id}/detail")
-def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
-    """Return full proficiency/mastery data + available weapons/tools for the admin edit panel."""
+class AdminWeaponProficienciesIn(BaseModel):
+    proficiency_types: list[str] = []  # full replacement — categories and/or specific weapon names
+
+
+@router.patch("/characters/{char_id}/weapon-proficiencies")
+def admin_set_weapon_proficiencies(char_id: int, data: AdminWeaponProficienciesIn, db: Session = Depends(get_db)):
     char = db.get(Character, char_id)
     if not char:
         raise HTTPException(404)
-    # All weapons that have a mastery property (for mastery picker)
-    mastery_weapons = [
-        {"name": e.name, "mastery": e.mastery_property}
+    for wp in list(char.weapon_proficiencies):
+        db.delete(wp)
+    for pt in data.proficiency_types:
+        if pt:
+            db.add(CharacterWeaponProficiency(character_id=char_id, proficiency_type=pt))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/characters/{char_id}/detail")
+def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
+    """Return full proficiency/mastery/weapon data for the admin edit panel."""
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    # All weapons with category and mastery info
+    all_weapons = [
+        {"name": e.name, "category": e.category or "", "mastery": e.mastery_property}
         for e in db.query(Equipment)
-              .filter(Equipment.item_type == "weapon", Equipment.mastery_property.isnot(None))
+              .filter(Equipment.item_type == "weapon")
               .order_by(Equipment.name).all()
     ]
     # All tools
@@ -347,7 +366,8 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
         "tools": [t.tool_name for t in char.tool_proficiencies],
         "languages": [l.language_name for l in char.language_proficiencies],
         "masteries": [w.weapon_name for w in char.weapon_mastery_unlocks],
-        "all_mastery_weapons": mastery_weapons,
+        "weapon_proficiencies": [wp.proficiency_type for wp in char.weapon_proficiencies],
+        "all_weapons": all_weapons,
         "all_tools": all_tools,
     }
 
@@ -652,6 +672,14 @@ def repair_schema(db: Session = Depends(get_db)):
     ]
     for stmt in stmts:
         db.execute(text(stmt))
+    # Create character_weapon_proficiencies table if missing
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS character_weapon_proficiencies (
+            id SERIAL PRIMARY KEY,
+            character_id INTEGER NOT NULL REFERENCES characters(id),
+            proficiency_type VARCHAR NOT NULL
+        )
+    """))
     # Create glossary_terms table if it doesn't exist (Phase 6)
     db.execute(text("""
         CREATE TABLE IF NOT EXISTS glossary_terms (

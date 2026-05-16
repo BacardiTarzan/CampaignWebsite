@@ -373,6 +373,7 @@ function renderStatsTab(c, prof, attrs) {
       <div class="sh-col-right">
         ${renderProficiencies(c, prof, attrs)}
         ${renderAttackCards(c)}
+        ${renderWeaponsSection(c)}
       </div>
     </div>
     ${renderFeaturesSection(c)}
@@ -506,6 +507,39 @@ function renderAttackCards(c) {
   return `<div class="sh-section">
     <h4 class="sh-section-title">Attacks</h4>
     <div class="attack-cards">${cards}</div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Weapon Proficiencies & Masteries
+// ---------------------------------------------------------------------------
+function renderWeaponsSection(c) {
+  const weapons = c.weapons_display || [];
+  const categories = c.weapon_prof_categories || [];
+  if (!weapons.length && !categories.length) return "";
+
+  const catLine = categories.length
+    ? `<p class="sh-weapons-cats">${categories.join(" · ")}</p>`
+    : "";
+
+  const rows = weapons.map(w => {
+    const masteryTag = w.mastery
+      ? `<span class="sh-weapon-mastery">${gloss(w.mastery)}</span>`
+      : "";
+    const profBadge = w.proficient
+      ? `<span class="sh-weapon-prof">Prof</span>`
+      : `<span class="sh-weapon-noprof">—</span>`;
+    return `<div class="sh-weapon-row">
+      <span class="sh-weapon-name">${w.name}</span>
+      ${profBadge}
+      ${masteryTag}
+    </div>`;
+  }).join("");
+
+  return `<div class="sh-section">
+    <h4 class="sh-section-title">Weapon Proficiencies &amp; Masteries</h4>
+    ${catLine}
+    <div class="sh-weapon-grid">${rows}</div>
   </div>`;
 }
 

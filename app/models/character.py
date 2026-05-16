@@ -49,6 +49,7 @@ class Character(Base):
     tool_proficiencies = relationship("ToolProficiency", back_populates="character", cascade="all, delete-orphan")
     language_proficiencies = relationship("LanguageProficiency", back_populates="character", cascade="all, delete-orphan")
     weapon_mastery_unlocks = relationship("WeaponMasteryUnlock", back_populates="character", cascade="all, delete-orphan")
+    weapon_proficiencies = relationship("CharacterWeaponProficiency", back_populates="character", cascade="all, delete-orphan")
 
 
 class CharacterClass(Base):
@@ -166,3 +167,12 @@ class WeaponMasteryUnlock(Base):
     weapon_name = Column(String, nullable=False)
 
     character = relationship("Character", back_populates="weapon_mastery_unlocks")
+
+
+class CharacterWeaponProficiency(Base):
+    __tablename__ = "character_weapon_proficiencies"
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
+    proficiency_type = Column(String, nullable=False)  # category like "Simple Weapons" or specific weapon name
+
+    character = relationship("Character", back_populates="weapon_proficiencies")

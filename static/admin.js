@@ -755,6 +755,40 @@ async function openEditPanel(charId) {
   const toolSet = new Set(detail.tools);
   const langSet = new Set(detail.languages);
   const masterySet = new Set(detail.masteries);
+  const wprofSet = new Set(detail.weapon_proficiencies || []);
+
+  // Weapon proficiency categories
+  const WP_CATEGORIES = [
+    "Simple Weapons",
+    "Simple Melee Weapons",
+    "Simple Ranged Weapons",
+    "Martial Weapons",
+    "Martial Melee Weapons",
+    "Martial Ranged Weapons",
+    "Simple or Martial Melee Weapons",
+    "All Weapons",
+  ];
+
+  const categoryCheckboxes = WP_CATEGORIES.map(cat => `
+    <label class="ep-cb-row">
+      <input type="checkbox" class="ep-wcat-cb" value="${cat}" ${wprofSet.has(cat) ? "checked" : ""}>
+      ${cat}
+    </label>`).join("");
+
+  // Per-weapon rows: Prof checkbox + Mastery checkbox side by side
+  const weaponRows = (detail.all_weapons || []).map(w => {
+    const masteryTag = w.mastery ? `<span class="ep-mastery-tag">${w.mastery}</span>` : "";
+    return `<div class="ep-weapon-row">
+      <span class="ep-weapon-name">${w.name}</span>
+      <label class="ep-weapon-cb-label" title="Proficient">
+        <input type="checkbox" class="ep-wprof-cb" value="${w.name}" ${wprofSet.has(w.name) ? "checked" : ""}> Prof
+      </label>
+      <label class="ep-weapon-cb-label" title="Mastery${w.mastery ? ': ' + w.mastery : ''}">
+        <input type="checkbox" class="ep-mastery-cb" value="${w.name}" ${masterySet.has(w.name) ? "checked" : ""}
+          ${!w.mastery ? "disabled" : ""}> Mastery${masteryTag}
+      </label>
+    </div>`;
+  }).join("");
 
   // Skill checkboxes with expertise toggle
   const skillCheckboxes = ALL_SKILLS_ADMIN.map(s => `
@@ -780,13 +814,6 @@ async function openEditPanel(charId) {
     <label class="ep-cb-row">
       <input type="checkbox" class="ep-lang-cb" value="${l}" ${langSet.has(l) ? "checked" : ""}>
       ${l}
-    </label>`).join("");
-
-  // Weapon mastery checkboxes from DB weapons with mastery property
-  const masteryCheckboxes = (detail.all_mastery_weapons || []).map(w => `
-    <label class="ep-cb-row">
-      <input type="checkbox" class="ep-mastery-cb" value="${w.name}" ${masterySet.has(w.name) ? "checked" : ""}>
-      ${w.name} <span class="ep-mastery-tag">${w.mastery}</span>
     </label>`).join("");
 
   const bgOptions = bgs.map(b =>
@@ -831,8 +858,11 @@ async function openEditPanel(charId) {
       </div>
 
       <div class="ep-section">
-        <h4>Weapon Masteries</h4>
-        <div class="ep-cb-grid ep-mastery-grid">${masteryCheckboxes}</div>
+        <h4>Weapon Proficiencies &amp; Masteries</h4>
+        <p class="hint" style="margin-bottom:8px">Quick-grant proficiency by category:</p>
+        <div class="ep-cb-grid" style="margin-bottom:12px">${categoryCheckboxes}</div>
+        <p class="hint" style="margin-bottom:6px">Per-weapon overrides — Prof grants individual proficiency, Mastery unlocks mastery property:</p>
+        <div class="ep-weapon-table">${weaponRows}</div>
       </div>
 
       <div class="ep-footer">
@@ -883,6 +913,14 @@ async function saveEditPanel() {
   try {
     await api("PATCH", `/api/admin/characters/${id}/proficiencies`, { skills, expertise, tools, languages: langs });
   } catch(e) { errs.push("Proficiencies: " + e.message); }
+
+  // Weapon proficiencies (categories + individual)
+  const wprofCategories = [...document.querySelectorAll(".ep-wcat-cb:checked")].map(cb => cb.value);
+  const wprofIndividual = [...document.querySelectorAll(".ep-wprof-cb:checked")].map(cb => cb.value);
+  try {
+    await api("PATCH", `/api/admin/characters/${id}/weapon-proficiencies`,
+      { proficiency_types: [...wprofCategories, ...wprofIndividual] });
+  } catch(e) { errs.push("Weapon proficiencies: " + e.message); }
 
   // Masteries
   const masteries = [...document.querySelectorAll(".ep-mastery-cb:checked")].map(cb => cb.value);
