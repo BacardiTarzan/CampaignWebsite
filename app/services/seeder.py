@@ -518,7 +518,185 @@ def _parse_spell_file(path: Path, level: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Equipment (weapons + armor from tables)
+# Equipment — per-item markdown database
+# ---------------------------------------------------------------------------
+
+def _normalize_ac_formula(raw: str) -> str:
+    """Convert markdown AC text to the format _calc_ac() expects."""
+    raw = raw.strip()
+    # Heavy armor: pure number
+    if re.fullmatch(r"\d+", raw):
+        return raw
+    # Shield bonus
+    if raw == "+2":
+        return "+2"
+    # "X + Dexterity modifier (max +N)" or "X + Dex modifier (max +N)"
+    m = re.match(r"(\d+)\s*\+\s*Dex(?:terity)?\s+modifier(?:\s*\(max\s*\+?(\d+)\))?", raw, re.IGNORECASE)
+    if m:
+        base = m.group(1)
+        cap = m.group(2)
+        return f"{base} + Dex (max {cap})" if cap else f"{base} + Dex"
+    return raw
+
+
+def _parse_equip_item_md(path: Path) -> dict | None:
+    """Parse a single per-item markdown file into an Equipment dict."""
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    # Name from H1
+    name = None
+    for line in lines:
+        if line.startswith("# "):
+            name = line[2:].strip()
+            break
+    if not name:
+        return None
+
+    def field(key: str) -> str | None:
+        m = re.search(rf"\*\*{re.escape(key)}[:\*]*\s*\*\*\s*(.+)", text)
+        return m.group(1).strip() if m else None
+
+    # Determine item_type and category from directory structure
+    parts = path.parts
+    # Find 'equipment-database' in parts
+    try:
+        idx = parts.index("equipment-database")
+    except ValueError:
+        return None
+    sub = parts[idx + 1] if len(parts) > idx + 1 else ""
+    sub2 = parts[idx + 2] if len(parts) > idx + 2 else ""
+
+    # Description block
+    desc_m = re.search(r"## Description\s*\n(.*?)(?:\n## |\Z)", text, re.DOTALL)
+    description = desc_m.group(1).strip() if desc_m else None
+
+    cost = field("Cost")
+    weight = field("Weight")
+
+    if sub == "weapons":
+        cat_map = {
+            "simple-melee": "Simple Melee",
+            "simple-ranged": "Simple Ranged",
+            "martial-melee": "Martial Melee",
+            "martial-ranged": "Martial Ranged",
+        }
+        category = cat_map.get(sub2, sub2.replace("-", " ").title())
+
+        damage_raw = field("Damage") or ""
+        dmg_m = re.match(r"(.+?)\s+(Slashing|Piercing|Bludgeoning|Force|Radiant)", damage_raw, re.IGNORECASE)
+        damage = dmg_m.group(1).strip() if dmg_m else damage_raw.split()[0] if damage_raw else None
+        damage_type = dmg_m.group(2).capitalize() if dmg_m else None
+
+        props_block = re.search(r"## Properties\s*\n(.*?)(?:\n## |\Z)", text, re.DOTALL)
+        properties = []
+        if props_block:
+            for ln in props_block.group(1).splitlines():
+                p = ln.strip().lstrip("- ").strip()
+                if p and p.lower() != "none":
+                    properties.append(p)
+
+        mastery_m = re.search(r"## Mastery\s*\n-\s*(.+)", text)
+        mastery = mastery_m.group(1).strip() if mastery_m else None
+
+        return {
+            "name": name,
+            "item_type": "weapon",
+            "category": category,
+            "cost": cost,
+            "weight": weight,
+            "damage": damage,
+            "damage_type": damage_type,
+            "properties": properties,
+            "mastery_property": mastery,
+            "description": description,
+            "source": "PHB 2024",
+        }
+
+    elif sub == "armor":
+        if sub2 == "shields":
+            return {
+                "name": name,
+                "item_type": "shield",
+                "category": "Shield",
+                "cost": cost,
+                "weight": weight,
+                "ac_formula": "+2",
+                "strength_req": None,
+                "stealth_disadvantage": False,
+                "description": description,
+                "source": "PHB 2024",
+            }
+        cat_map = {"light": "Light", "medium": "Medium", "heavy": "Heavy"}
+        category = cat_map.get(sub2, sub2.title())
+
+        ac_raw = field("Armor Class (AC)") or ""
+        ac_formula = _normalize_ac_formula(ac_raw)
+
+        str_req_raw = field("Strength Requirement") or ""
+        str_m = re.search(r"(\d+)", str_req_raw)
+        str_req = int(str_m.group(1)) if str_m else None
+
+        props_block = re.search(r"## Properties\s*\n(.*?)(?:\n## |\Z)", text, re.DOTALL)
+        stealth_dis = False
+        if props_block:
+            for ln in props_block.group(1).splitlines():
+                if "stealth" in ln.lower() or "disadvantage" in ln.lower():
+                    stealth_dis = True
+
+        return {
+            "name": name,
+            "item_type": "armor",
+            "category": category,
+            "cost": cost,
+            "weight": weight,
+            "ac_formula": ac_formula,
+            "strength_req": str_req,
+            "stealth_disadvantage": stealth_dis,
+            "description": description,
+            "source": "PHB 2024",
+        }
+
+    elif sub == "adventuring-gear":
+        return {
+            "name": name,
+            "item_type": "gear",
+            "category": "Gear",
+            "cost": cost,
+            "weight": weight,
+            "description": description,
+            "source": "PHB 2024",
+        }
+
+    elif sub == "tools":
+        cat_map = {"artisan": "Artisan's Tools", "other": "Tools"}
+        category = cat_map.get(sub2, "Tools")
+        return {
+            "name": name,
+            "item_type": "tool",
+            "category": category,
+            "cost": cost,
+            "weight": weight,
+            "description": description,
+            "source": "PHB 2024",
+        }
+
+    # Skip mounts and unknown
+    return None
+
+
+def _parse_equipment_database(db_dir: Path) -> list[dict]:
+    items = []
+    for md_file in sorted(db_dir.rglob("*.md")):
+        if "Zone.Identifier" in md_file.name:
+            continue
+        item = _parse_equip_item_md(md_file)
+        if item:
+            items.append(item)
+    return items
+
+
+# Equipment (weapons + armor from tables) — legacy parsers kept for fallback
 # ---------------------------------------------------------------------------
 
 def _parse_weapons_file(path: Path) -> list[dict]:
@@ -642,7 +820,6 @@ def seed_all(db: Session) -> dict:
     existing_backgrounds = {r.name for r in db.query(Background.name)}
     existing_feats = {r.name for r in db.query(Feat.name)}
     existing_spells = {r.name for r in db.query(Spell.name)}
-    existing_equip = {r.name for r in db.query(Equipment.name)}
 
     # Species
     for f in sorted((REF / "species").glob("*.md")):
@@ -723,27 +900,44 @@ def seed_all(db: Session) -> dict:
                         setattr(row, k, v)
                     counts["spells"] += 1
 
-    # Equipment
-    weapons_file = REF / "equipment" / "weapons.md"
-    if weapons_file.exists():
-        for item in _parse_weapons_file(weapons_file):
-            if item["name"] not in existing_equip:
+    # Equipment — per-item markdown database (upsert: insert new, update existing)
+    equip_db_dir = REF / "equipment" / "equipment-database"
+    existing_equip_rows = {r.name: r for r in db.query(Equipment)}
+    if equip_db_dir.exists():
+        for item in _parse_equipment_database(equip_db_dir):
+            row = existing_equip_rows.get(item["name"])
+            if row is None:
                 db.add(Equipment(**item))
-                existing_equip.add(item["name"])
+                existing_equip_rows[item["name"]] = None
                 counts["equipment"] += 1
-
-    armor_file = REF / "equipment" / "armor.md"
-    if armor_file.exists():
-        for item in _parse_armor_file(armor_file):
-            if item["name"] not in existing_equip:
-                db.add(Equipment(**item))
-                existing_equip.add(item["name"])
+            else:
+                # Update all fields from the authoritative per-item file
+                for k, v in item.items():
+                    setattr(row, k, v)
                 counts["equipment"] += 1
+    else:
+        # Fallback to legacy table parsers if per-item dir doesn't exist
+        weapons_file = REF / "equipment" / "weapons.md"
+        if weapons_file.exists():
+            for item in _parse_weapons_file(weapons_file):
+                if item["name"] not in existing_equip_rows:
+                    db.add(Equipment(**item))
+                    existing_equip_rows[item["name"]] = None
+                    counts["equipment"] += 1
 
+        armor_file = REF / "equipment" / "armor.md"
+        if armor_file.exists():
+            for item in _parse_armor_file(armor_file):
+                if item["name"] not in existing_equip_rows:
+                    db.add(Equipment(**item))
+                    existing_equip_rows[item["name"]] = None
+                    counts["equipment"] += 1
+
+    # Gear items not covered by per-item files
     for item in _gear_items():
-        if item["name"] not in existing_equip:
+        if item["name"] not in existing_equip_rows:
             db.add(Equipment(**item))
-            existing_equip.add(item["name"])
+            existing_equip_rows[item["name"]] = None
             counts["equipment"] += 1
 
     db.commit()
