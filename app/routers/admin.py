@@ -7,7 +7,10 @@ from typing import Any
 from ..database import get_db
 from ..dependencies import require_admin
 from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
-from ..models.character import Character, CharacterSpell
+from ..models.character import (
+    Character, CharacterSpell, SkillProficiency, ToolProficiency,
+    LanguageProficiency, WeaponMasteryUnlock, CharacterFeat, CharacterClass,
+)
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
 from ..services.pdf import render_character_html, render_character_pdf
@@ -210,6 +213,127 @@ def grant_level(char_id: int, db: Session = Depends(get_db)):
     cc.level_granted += 1
     db.commit()
     return {"ok": True, "level_granted": cc.level_granted}
+
+
+# ---------------------------------------------------------------------------
+# Character proficiency / mastery / background admin edits
+# ---------------------------------------------------------------------------
+
+class AdminProficienciesIn(BaseModel):
+    skills: list[str] = []             # full replacement list of skill proficiency names
+    expertise: list[str] = []          # subset of skills that have expertise
+    tools: list[str] = []              # full replacement list of tool proficiency names
+    languages: list[str] = []          # full replacement list of language names
+
+
+@router.patch("/characters/{char_id}/proficiencies")
+def admin_set_proficiencies(char_id: int, data: AdminProficienciesIn, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+
+    # Replace all skill proficiencies
+    for sp in list(char.skill_proficiencies):
+        db.delete(sp)
+    for name in data.skills:
+        if name:
+            db.add(SkillProficiency(
+                character_id=char_id,
+                skill_name=name,
+                source="admin",
+                expertise=(name in data.expertise),
+            ))
+
+    # Replace all tool proficiencies
+    for tp in list(char.tool_proficiencies):
+        db.delete(tp)
+    for name in data.tools:
+        if name:
+            db.add(ToolProficiency(character_id=char_id, tool_name=name, source="admin"))
+
+    # Replace all language proficiencies
+    for lp in list(char.language_proficiencies):
+        db.delete(lp)
+    for name in data.languages:
+        if name:
+            db.add(LanguageProficiency(character_id=char_id, language_name=name, source="admin"))
+
+    db.commit()
+    return {"ok": True}
+
+
+class AdminMasteriesIn(BaseModel):
+    weapon_names: list[str] = []   # full replacement list
+
+
+@router.patch("/characters/{char_id}/masteries")
+def admin_set_masteries(char_id: int, data: AdminMasteriesIn, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    for wm in list(char.weapon_mastery_unlocks):
+        db.delete(wm)
+    for name in data.weapon_names:
+        if name:
+            db.add(WeaponMasteryUnlock(character_id=char_id, weapon_name=name))
+    db.commit()
+    return {"ok": True}
+
+
+class AdminBackgroundIn(BaseModel):
+    background_id: int
+
+
+@router.patch("/characters/{char_id}/background")
+def admin_set_background(char_id: int, data: AdminBackgroundIn, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    bg = db.get(Background, data.background_id)
+    if not bg:
+        raise HTTPException(404, "Background not found")
+    char.background_id = data.background_id
+    # Re-apply background skill proficiencies (preserve class/admin skills)
+    for sp in list(char.skill_proficiencies):
+        if sp.source == "background":
+            db.delete(sp)
+    for skill in (bg.skill_proficiencies or []):
+        db.add(SkillProficiency(character_id=char_id, skill_name=skill, source="background"))
+    # Re-apply background tool proficiency
+    for tp in list(char.tool_proficiencies):
+        if tp.source == "background":
+            db.delete(tp)
+    if bg.tool_proficiency and "choose" not in (bg.tool_proficiency or "").lower():
+        db.add(ToolProficiency(character_id=char_id, tool_name=bg.tool_proficiency, source="background"))
+    # Re-apply origin feat (remove old background feat first)
+    for cf in list(char.feats):
+        if cf.source == "background":
+            db.delete(cf)
+    if bg.origin_feat_name:
+        from ..models.content import Feat as FeatModel
+        feat = db.query(FeatModel).filter(FeatModel.name.ilike(bg.origin_feat_name)).first()
+        if feat:
+            db.add(CharacterFeat(character_id=char_id, feat_id=feat.id, source="background"))
+    db.commit()
+    return {"ok": True, "background_name": bg.name}
+
+
+@router.get("/characters/{char_id}/detail")
+def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
+    """Return full proficiency/mastery data needed for the admin edit panel."""
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    return {
+        "id": char.id,
+        "character_name": char.character_name,
+        "background_id": char.background_id,
+        "background_name": char.background.name if char.background else None,
+        "skills": [{"name": s.skill_name, "expertise": bool(s.expertise)} for s in char.skill_proficiencies],
+        "tools": [t.tool_name for t in char.tool_proficiencies],
+        "languages": [l.language_name for l in char.language_proficiencies],
+        "masteries": [w.weapon_name for w in char.weapon_mastery_unlocks],
+    }
 
 
 # ---------------------------------------------------------------------------

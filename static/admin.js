@@ -84,6 +84,7 @@ async function loadRoster() {
         <button onclick="unlockStats(${c.id})">🔓 Stats</button>
         ${c.physical_locked ? `<button onclick="unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
         <button onclick="editBio(${c.id})">📜 Bio</button>
+        <button onclick="openEditPanel(${c.id})">✏ Edit</button>
         <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
         <a href="/api/admin/characters/${c.id}/export/json" target="_blank"><button>⬇ JSON</button></a>
         <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
@@ -718,6 +719,143 @@ function closeLorePreview() {
   const modal = document.getElementById("lore-preview-modal");
   modal.classList.add("hidden");
   modal.style.display = "none";
+}
+
+// ---------------------------------------------------------------------------
+// Admin Edit Panel — proficiencies, masteries, background
+// ---------------------------------------------------------------------------
+
+const ALL_SKILLS_ADMIN = [
+  "Acrobatics","Animal Handling","Arcana","Athletics","Deception",
+  "History","Insight","Intimidation","Investigation","Medicine",
+  "Nature","Perception","Performance","Persuasion","Religion",
+  "Sleight of Hand","Stealth","Survival",
+];
+
+let _editCharId = null;
+let _allBgsAdmin = [];
+
+async function openEditPanel(charId) {
+  _editCharId = charId;
+  // Fetch char detail + background list in parallel
+  const [detail, bgs] = await Promise.all([
+    api("GET", `/api/admin/characters/${charId}/detail`),
+    _allBgsAdmin.length ? Promise.resolve(_allBgsAdmin) : api("GET", "/api/admin/codex/backgrounds"),
+  ]);
+  _allBgsAdmin = bgs;
+
+  const skillSet = new Set(detail.skills.map(s => s.name));
+  const expertSet = new Set(detail.skills.filter(s => s.expertise).map(s => s.name));
+
+  const skillCheckboxes = ALL_SKILLS_ADMIN.map(s => `
+    <label class="ep-skill-row">
+      <input type="checkbox" class="ep-skill-cb" value="${s}" ${skillSet.has(s) ? "checked" : ""}>
+      ${s}
+      <input type="checkbox" class="ep-expert-cb" value="${s}" ${expertSet.has(s) ? "checked" : ""}
+        title="Expertise" style="margin-left:8px" ${skillSet.has(s) ? "" : "disabled"}>
+      <span style="font-size:0.75rem;opacity:0.6">exp</span>
+    </label>`).join("");
+
+  const bgOptions = bgs.map(b =>
+    `<option value="${b.id}" ${b.id === detail.background_id ? "selected" : ""}>${b.name}</option>`
+  ).join("");
+
+  const overlay = document.createElement("div");
+  overlay.id = "ep-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box ep-modal">
+      <div class="modal-header">
+        <h3>Edit — ${detail.character_name}</h3>
+        <button class="modal-close-btn" onclick="closeEditPanel()">✕</button>
+      </div>
+
+      <div class="ep-section">
+        <h4>Background</h4>
+        <select id="ep-bg-select" class="ep-select">
+          <option value="">— no change —</option>
+          ${bgOptions}
+        </select>
+        <p class="hint" style="margin-top:4px">Changing background re-applies its skill profs, tool prof, and origin feat.</p>
+      </div>
+
+      <div class="ep-section">
+        <h4>Skill Proficiencies <span class="hint">(check = proficient · "exp" = expertise)</span></h4>
+        <div class="ep-skill-grid">${skillCheckboxes}</div>
+      </div>
+
+      <div class="ep-section">
+        <h4>Tool Proficiencies <span class="hint">(one per line)</span></h4>
+        <textarea id="ep-tools" class="ep-textarea" rows="4">${detail.tools.join("\n")}</textarea>
+      </div>
+
+      <div class="ep-section">
+        <h4>Languages <span class="hint">(one per line)</span></h4>
+        <textarea id="ep-langs" class="ep-textarea" rows="4">${detail.languages.join("\n")}</textarea>
+      </div>
+
+      <div class="ep-section">
+        <h4>Weapon Masteries <span class="hint">(one per line)</span></h4>
+        <textarea id="ep-masteries" class="ep-textarea" rows="3">${detail.masteries.join("\n")}</textarea>
+      </div>
+
+      <div class="ep-footer">
+        <button class="btn-primary" onclick="saveEditPanel()">Save Changes</button>
+        <button onclick="closeEditPanel()">Cancel</button>
+      </div>
+    </div>`;
+
+  // Sync expertise checkboxes with skill checkboxes
+  overlay.addEventListener("change", e => {
+    if (e.target.classList.contains("ep-skill-cb")) {
+      const val = e.target.value;
+      const expertCb = overlay.querySelector(`.ep-expert-cb[value="${val}"]`);
+      if (expertCb) {
+        expertCb.disabled = !e.target.checked;
+        if (!e.target.checked) expertCb.checked = false;
+      }
+    }
+  });
+
+  document.body.appendChild(overlay);
+}
+
+function closeEditPanel() {
+  document.getElementById("ep-overlay")?.remove();
+}
+
+async function saveEditPanel() {
+  const id = _editCharId;
+  const errs = [];
+
+  // Background change
+  const bgSelect = document.getElementById("ep-bg-select");
+  const bgId = bgSelect?.value ? parseInt(bgSelect.value) : null;
+  if (bgId) {
+    try { await api("PATCH", `/api/admin/characters/${id}/background`, { background_id: bgId }); }
+    catch(e) { errs.push("Background: " + e.message); }
+  }
+
+  // Proficiencies
+  const skillCbs = [...document.querySelectorAll(".ep-skill-cb:checked")];
+  const skills = skillCbs.map(cb => cb.value);
+  const expertise = [...document.querySelectorAll(".ep-expert-cb:checked")].map(cb => cb.value);
+  const tools = document.getElementById("ep-tools").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const langs = document.getElementById("ep-langs").value.split("\n").map(s => s.trim()).filter(Boolean);
+  try {
+    await api("PATCH", `/api/admin/characters/${id}/proficiencies`, { skills, expertise, tools, languages: langs });
+  } catch(e) { errs.push("Proficiencies: " + e.message); }
+
+  // Masteries
+  const masteries = document.getElementById("ep-masteries").value.split("\n").map(s => s.trim()).filter(Boolean);
+  try {
+    await api("PATCH", `/api/admin/characters/${id}/masteries`, { weapon_names: masteries });
+  } catch(e) { errs.push("Masteries: " + e.message); }
+
+  if (errs.length) { err(errs.join("; ")); return; }
+  toast("Changes saved.");
+  closeEditPanel();
+  loadRoster();
 }
 
 // ---------------------------------------------------------------------------

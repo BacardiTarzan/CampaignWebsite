@@ -1172,6 +1172,63 @@ h2 {
 }
 .sr-btn-done:hover { background: rgba(107,196,107,0.25); }
 
+/* ── Admin Edit Panel ── */
+.ep-modal {
+  width: min(640px, 95vw);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.ep-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.ep-section h4 {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-accent);
+}
+.ep-select {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: var(--color-light);
+  padding: 6px 8px;
+  font-size: 0.9rem;
+}
+.ep-skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 12px;
+}
+.ep-skill-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.ep-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: var(--color-light);
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+}
+.ep-footer {
+  padding: 14px 18px;
+  display: flex;
+  gap: 10px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 600px) {
   .ability-grid { grid-template-columns: repeat(3, 1fr); }
