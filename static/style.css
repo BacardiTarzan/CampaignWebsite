@@ -971,6 +971,26 @@ button.btn-levelup:hover {
 /* ── Admin roster overflow fix ── */
 #roster-table { overflow-x: auto; }
 
+.roster-name {
+  font-weight: bold;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.15s;
+}
+.roster-name:hover { border-bottom-color: var(--color-ink-faded); }
+
+.roster-name-input {
+  font-weight: bold;
+  font-family: inherit;
+  font-size: inherit;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  color: inherit;
+  padding: 1px 5px;
+  width: 160px;
+}
+
 /* ── Custom scrollbar ── */
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); border-radius: 4px; }

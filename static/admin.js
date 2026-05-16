@@ -64,7 +64,7 @@ async function loadRoster() {
     return `
     <tr>
       <td>${c.id}</td>
-      <td><strong>${c.character_name}</strong></td>
+      <td><span class="roster-name" id="name-${c.id}" onclick="editCharName(${c.id})" title="Click to rename">${c.character_name}</span></td>
       <td>${c.created_by_display_name}</td>
       <td>${c.species_name || "—"}</td>
       <td>${c.class_name || "—"} ${c.level ? "Lv " + c.level : ""}</td>
@@ -118,6 +118,37 @@ async function adminRest(id) {
     toast(`Long rest — HP and hit dice fully restored (${r.hp_current} HP).`);
     loadRoster();
   } catch(e) { err(e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Inline character rename
+// ---------------------------------------------------------------------------
+function editCharName(id) {
+  const span = document.getElementById(`name-${id}`);
+  if (!span || span.querySelector("input")) return; // already editing
+  const current = span.textContent;
+  span.innerHTML = `<input type="text" class="roster-name-input" value="${current.replace(/"/g, '&quot;')}"
+    onblur="saveCharName(${id}, this)" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}">`;
+  const input = span.querySelector("input");
+  input.focus();
+  input.select();
+}
+
+async function saveCharName(id, input) {
+  if (input.dataset.cancel) {
+    loadRoster();
+    return;
+  }
+  const name = input.value.trim();
+  if (!name) { loadRoster(); return; }
+  const char = _rosterChars.find(x => x.id === id);
+  if (char && name === char.character_name) { loadRoster(); return; }
+  try {
+    const r = await api("PATCH", `/api/admin/characters/${id}/rename`, { character_name: name });
+    if (char) char.character_name = r.character_name;
+    toast(`Renamed to "${r.character_name}"`);
+    loadRoster();
+  } catch(e) { err(e.message); loadRoster(); }
 }
 
 // ---------------------------------------------------------------------------

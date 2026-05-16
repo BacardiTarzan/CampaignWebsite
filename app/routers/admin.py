@@ -96,6 +96,22 @@ def delete_character(char_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+class RenameCharIn(BaseModel):
+    character_name: str
+
+@router.patch("/characters/{char_id}/rename")
+def rename_character(char_id: int, data: RenameCharIn, db: Session = Depends(get_db)):
+    name = data.character_name.strip()
+    if not name:
+        raise HTTPException(400, "Name cannot be empty")
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    char.character_name = name
+    db.commit()
+    return {"ok": True, "character_name": char.character_name}
+
+
 @router.post("/characters/{char_id}/unlock-stats")
 def unlock_stats(char_id: int, db: Session = Depends(get_db)):
     char = db.get(Character, char_id)
