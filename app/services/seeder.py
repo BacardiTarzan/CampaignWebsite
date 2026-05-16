@@ -346,7 +346,7 @@ def _parse_class_file(path: Path) -> dict:
                     "Archery", "Defense", "Dueling", "Great Weapon Fighting",
                     "Protection", "Two-Weapon Fighting",
                 ]
-            elif slug == "fighter" and "weapon mastery" in feat_name.lower():
+            elif "weapon mastery" in feat_name.lower() and slug in ("fighter", "barbarian", "paladin", "ranger", "rogue"):
                 choice_required = True
                 choice_key = "weapon_mastery"
             elif slug == "cleric" and "divine order" in feat_name.lower():
@@ -864,9 +864,10 @@ def seed_all(db: Session) -> dict:
             existing_class_rows[data["name"]] = cls_obj
             counts["classes"] += 1
         else:
-            # Refresh tool_proficiencies (and skill data) on existing rows
+            # Refresh mutable columns on existing rows
             cls_obj = existing_class_rows[data["name"]]
             cls_obj.tool_proficiencies = data.get("tool_proficiencies")
+            cls_obj.features = data.get("features")
 
     # Backgrounds
     for f in sorted((REF / "backgrounds").glob("*.md")):

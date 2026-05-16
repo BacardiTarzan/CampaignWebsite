@@ -4,6 +4,9 @@ import math
 from sqlalchemy.orm import Session
 from ..models.character import Character
 from ..models.content import DnDClass, Equipment as EquipmentModel
+from .levelup_rules import ELDRITCH_INVOCATIONS
+
+_INVOCATION_LOOKUP = {inv["key"]: inv for inv in ELDRITCH_INVOCATIONS}
 
 
 def character_to_dict(char: Character, db: Session) -> dict:
@@ -253,6 +256,15 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         if c.feature_key and c.choice_value
     }
 
+    # Collect chosen invocations for Warlock expansion
+    chosen_invocations = [
+        _INVOCATION_LOOKUP[c.choice_value["key"]]
+        for c in char.choices
+        if c.feature_key == "invocation"
+        and isinstance(c.choice_value, dict)
+        and c.choice_value.get("key") in _INVOCATION_LOOKUP
+    ]
+
     # Class features at or below current level
     features = []
     if cls and cls.features:
@@ -261,6 +273,13 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
                 name = f["name"]
                 desc = f.get("description", "")
                 choice_key = f.get("choice_key")
+
+                # Expand "Eldritch Invocations" into individual invocation cards
+                if name == "Eldritch Invocations" and chosen_invocations:
+                    for inv in chosen_invocations:
+                        features.append({"name": inv["name"], "description": inv["desc"], "level": f["level"]})
+                    continue
+
                 if choice_key and choice_key in CHOICE_DESCRIPTIONS:
                     chosen = choice_lookup.get(choice_key)
                     if chosen:

@@ -743,12 +743,16 @@ const MASTERY_PROPERTIES = {
   Whip:          { name: "Slow",   desc: "On hit, reduce target's Speed by 10 ft until the start of your next turn." },
 };
 
-const WEAPON_LIST = [
+const MELEE_WEAPON_LIST = [
   "Club","Dagger","Greatclub","Handaxe","Javelin","Light Hammer","Mace",
-  "Quarterstaff","Sickle","Spear","Dart","Light Crossbow","Shortbow","Sling",
+  "Quarterstaff","Sickle","Spear",
   "Battleaxe","Flail","Glaive","Greataxe","Greatsword","Halberd","Lance",
   "Longsword","Maul","Morningstar","Pike","Rapier","Scimitar","Shortsword",
   "Trident","Warhammer","War Pick","Whip",
+];
+const WEAPON_LIST = [
+  ...MELEE_WEAPON_LIST,
+  "Dart","Light Crossbow","Shortbow","Sling",
 ];
 
 function renderFeaturesStep() {
@@ -765,14 +769,19 @@ function renderFeaturesStep() {
 
   container.innerHTML = level1Features.map(feat => {
     if (feat.choice_key === "weapon_mastery") {
-      // Weapon mastery — pick N weapons from the full list
-      const slots = cls.features.find(f => f.name === "Weapon Mastery")?.description.match(/(\d+) weapons/) ?
-        parseInt(cls.features.find(f => f.name === "Weapon Mastery").description.match(/(\d+) weapons/)[1]) : 3;
+      const desc = feat.description || "";
+      const slotsMatch = desc.match(/(\d+)\s+(?:Simple\/Martial\s+Melee|weapons?)/i);
+      const slots = slotsMatch ? parseInt(slotsMatch[1]) : 3;
+      const meleOnly = /melee/i.test(desc);
+      const list = meleOnly ? MELEE_WEAPON_LIST : WEAPON_LIST;
+      const subtitle = meleOnly
+        ? `Choose ${slots} Simple or Martial Melee weapons to apply mastery properties to.`
+        : `Choose ${slots} weapons to apply mastery properties to.`;
       return `<div class="mb-md">
         <h3>${feat.name}</h3>
-        <p class="hint mb-sm">Choose ${slots} weapons to apply mastery properties to. (Select exactly ${slots}.)</p>
+        <p class="hint mb-sm">${subtitle} (Select exactly ${slots}.)</p>
         <div class="checklist" id="mastery-checklist">
-          ${WEAPON_LIST.map(w => {
+          ${list.map(w => {
             const mp = MASTERY_PROPERTIES[w];
             const titleAttr = mp ? ` title="${mp.name}: ${mp.desc}"` : "";
             const tag = mp ? `<span class="mastery-tag" title="${mp.desc}">${mp.name}</span>` : "";
