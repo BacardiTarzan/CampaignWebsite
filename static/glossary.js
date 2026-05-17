@@ -105,7 +105,7 @@ function filterTerms() {
     if (!query) return true;
     return t.term.toLowerCase().includes(query) ||
            t.short_description.toLowerCase().includes(query) ||
-           t.full_description.toLowerCase().includes(query);
+           (t.full_description || "").toLowerCase().includes(query);
   });
   renderTerms(filtered);
 }
@@ -125,10 +125,10 @@ function renderTerms(terms) {
     return `<div class="gloss-card" id="gloss-${t.slug}" data-slug="${t.slug}" data-cat="${t.category}">
       <div class="gloss-card-header" onclick="toggleCard('${t.slug}')">
         <div class="gloss-card-title-row">
-          <h3 class="gloss-card-term">${t.term}</h3>
-          <span class="gloss-cat-badge gloss-cat-${t.category}">${catLabel}</span>
+          <h3 class="gloss-card-term">${_esc(t.term)}</h3>
+          <span class="gloss-cat-badge gloss-cat-${t.category}">${_esc(catLabel)}</span>
         </div>
-        <p class="gloss-card-short">${t.short_description}</p>
+        <p class="gloss-card-short">${_esc(t.short_description)}</p>
         ${hasMore ? `<span class="gloss-card-chevron" id="chev-${t.slug}">▼</span>` : ""}
       </div>
       ${hasMore ? `<div class="gloss-card-full" id="full-${t.slug}" hidden>
@@ -163,6 +163,13 @@ function openTerm(slug) {
   card.scrollIntoView({ behavior: "smooth", block: "start" });
   card.classList.add("gloss-card--highlight");
   setTimeout(() => card.classList.remove("gloss-card--highlight"), 1500);
+}
+
+// ---------------------------------------------------------------------------
+// HTML escape (for term/short_description)
+// ---------------------------------------------------------------------------
+function _esc(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ---------------------------------------------------------------------------
