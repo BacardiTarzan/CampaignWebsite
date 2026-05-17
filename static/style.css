@@ -1488,6 +1488,62 @@ h2 {
 }
 .combat-picker-row:hover { background: rgba(255,255,255,0.05); }
 .combat-picker-row strong { color: var(--color-light); }
+.combat-picker-section { margin-bottom: 12px; }
+.combat-picker-header {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-gold);
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2px;
+}
+.combat-monster-tag {
+  font-size: 0.65rem;
+  background: rgba(180, 120, 60, 0.2);
+  border: 1px solid rgba(180, 120, 60, 0.4);
+  color: #d4a843;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+
+/* ── Monster stat block modal ── */
+.monster-modal-box { max-width: 560px; max-height: 85vh; overflow-y: auto; }
+.monster-stat-block { font-size: 0.88rem; line-height: 1.5; }
+.msb-meta { color: var(--color-ink-faded); font-style: italic; margin-bottom: 10px; }
+.msb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  gap: 8px;
+}
+.msb-row span:first-child { color: var(--color-muted, #9a8a6a); font-size: 0.8rem; flex-shrink: 0; }
+.msb-row span:last-child { color: var(--color-light); text-align: right; }
+.msb-abilities {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin: 12px 0;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  padding: 8px 4px;
+}
+.msb-ab { text-align: center; }
+.msb-ab-label { font-size: 0.65rem; text-transform: uppercase; color: var(--color-gold); letter-spacing: 0.05em; }
+.msb-ab-val { font-family: var(--font-header); font-size: 0.95rem; color: var(--color-light); }
+.msb-ab-mod { font-size: 0.75rem; color: var(--color-ink-faded); }
+.msb-section-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--color-gold);
+  border-bottom: 1px solid rgba(180,140,60,0.3);
+  padding-bottom: 2px;
+  margin: 12px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
 /* ── Responsive ── */
 @media (max-width: 600px) {

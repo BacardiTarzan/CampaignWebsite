@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Any
 from ..database import get_db
 from ..dependencies import require_admin
-from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage
+from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage, Monster
 from ..models.character import (
     Character, CharacterSpell, SkillProficiency, ToolProficiency,
     LanguageProficiency, WeaponMasteryUnlock, CharacterWeaponProficiency,
@@ -723,8 +723,70 @@ def admin_set_lore_visibility(slug: str, visible: bool, db: Session = Depends(ge
 # Combat tracker
 # ---------------------------------------------------------------------------
 
-class CombatantIn(BaseModel):
+class CombatantCharIn(BaseModel):
     character_id: int
+
+class CombatantMonsterIn(BaseModel):
+    monster_id: int
+
+class CombatantHpIn(BaseModel):
+    hp_current: int
+
+
+def _cr_sort_key(cr: str | None) -> float:
+    if not cr:
+        return -1
+    if "/" in cr:
+        num, den = cr.split("/")
+        return int(num) / int(den)
+    try:
+        return float(cr)
+    except ValueError:
+        return -1
+
+
+@router.get("/monsters")
+def list_monsters(db: Session = Depends(get_db)):
+    monsters = db.query(Monster).order_by(Monster.name).all()
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "size": m.size,
+            "creature_type": m.creature_type,
+            "cr": m.cr,
+            "xp": m.xp,
+            "ac": m.ac,
+            "hp_max": m.hp_max,
+            "hp_formula": m.hp_formula,
+            "speed": m.speed,
+            "alignment": m.alignment,
+        }
+        for m in monsters
+    ]
+
+
+@router.get("/monsters/{monster_id}")
+def get_monster(monster_id: int, db: Session = Depends(get_db)):
+    m = db.get(Monster, monster_id)
+    if not m:
+        raise HTTPException(404)
+    return {
+        "id": m.id, "name": m.name, "size": m.size, "creature_type": m.creature_type,
+        "alignment": m.alignment, "ac": m.ac, "initiative": m.initiative,
+        "hp_max": m.hp_max, "hp_formula": m.hp_formula, "speed": m.speed,
+        "cr": m.cr, "xp": m.xp, "proficiency_bonus": m.proficiency_bonus,
+        "str": m.str_, "dex": m.dex_, "con": m.con_,
+        "int": m.int_, "wis": m.wis_, "cha": m.cha_,
+        "saving_throws": m.saving_throws, "skills": m.skills,
+        "resistances": m.resistances, "immunities": m.immunities,
+        "vulnerabilities": m.vulnerabilities, "senses": m.senses,
+        "languages": m.languages, "gear": m.gear,
+        "traits": m.traits or [], "actions": m.actions or [],
+        "bonus_actions": m.bonus_actions or [],
+        "reactions": m.reactions or [],
+        "legendary_actions": m.legendary_actions or [],
+    }
 
 
 @router.get("/combatants")
@@ -732,25 +794,43 @@ def list_combatants(db: Session = Depends(get_db)):
     rows = db.query(Combatant).order_by(Combatant.added_at).all()
     result = []
     for row in rows:
-        char = row.character
-        cc = char.character_classes[0] if char.character_classes else None
-        result.append({
-            "combatant_id": row.id,
-            "character_id": char.id,
-            "name": char.character_name,
-            "hp_current": char.hp_current,
-            "hp_max": char.hp_max,
-            "speed": char.speed or 30,
-            "class_name": cc.dnd_class.name if cc else None,
-            "level": cc.level if cc else None,
-            "species_name": char.species.name if char.species else None,
-            "species_lineage": char.species_lineage,
-        })
+        if row.character_id:
+            char = row.character
+            cc = char.character_classes[0] if char.character_classes else None
+            result.append({
+                "combatant_id": row.id,
+                "kind": "character",
+                "character_id": char.id,
+                "name": char.character_name,
+                "hp_current": char.hp_current,
+                "hp_max": char.hp_max,
+                "speed": char.speed or 30,
+                "class_name": cc.dnd_class.name if cc else None,
+                "level": cc.level if cc else None,
+                "species_name": char.species.name if char.species else None,
+                "species_lineage": char.species_lineage,
+            })
+        else:
+            m = db.get(Monster, row.monster_id)
+            if not m:
+                continue
+            result.append({
+                "combatant_id": row.id,
+                "kind": "monster",
+                "monster_id": m.id,
+                "name": row.custom_name or m.name,
+                "hp_current": row.hp_current,
+                "hp_max": row.hp_max_override or m.hp_max,
+                "ac": m.ac,
+                "speed": m.speed,
+                "cr": m.cr,
+                "creature_type": m.creature_type,
+            })
     return result
 
 
-@router.post("/combatants")
-def add_combatant(data: CombatantIn, db: Session = Depends(get_db)):
+@router.post("/combatants/character")
+def add_character_combatant(data: CombatantCharIn, db: Session = Depends(get_db)):
     char = db.get(Character, data.character_id)
     if not char:
         raise HTTPException(404, "Character not found")
@@ -762,6 +842,38 @@ def add_combatant(data: CombatantIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(c)
     return {"ok": True, "combatant_id": c.id}
+
+
+@router.post("/combatants/monster")
+def add_monster_combatant(data: CombatantMonsterIn, db: Session = Depends(get_db)):
+    m = db.get(Monster, data.monster_id)
+    if not m:
+        raise HTTPException(404, "Monster not found")
+    # Auto-number: count existing instances of this monster
+    existing_count = db.query(Combatant).filter_by(monster_id=data.monster_id).count()
+    custom_name = f"{m.name} {existing_count + 1}"
+    c = Combatant(
+        monster_id=data.monster_id,
+        custom_name=custom_name,
+        hp_current=m.hp_max,
+        hp_max_override=m.hp_max,
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return {"ok": True, "combatant_id": c.id, "name": custom_name}
+
+
+@router.patch("/combatants/{combatant_id}/hp")
+def set_combatant_hp(combatant_id: int, data: CombatantHpIn, db: Session = Depends(get_db)):
+    c = db.get(Combatant, combatant_id)
+    if not c:
+        raise HTTPException(404)
+    if c.monster_id:
+        c.hp_current = max(0, data.hp_current)
+        db.commit()
+        return {"ok": True, "hp_current": c.hp_current, "hp_max": c.hp_max_override}
+    raise HTTPException(400, "Use the character HP endpoint for PC combatants")
 
 
 @router.delete("/combatants/{combatant_id}")
@@ -828,8 +940,27 @@ def repair_schema(db: Session = Depends(get_db)):
     db.execute(text("""
         CREATE TABLE IF NOT EXISTS combatants (
             id SERIAL PRIMARY KEY,
-            character_id INTEGER NOT NULL UNIQUE REFERENCES characters(id) ON DELETE CASCADE,
+            character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+            monster_id INTEGER REFERENCES monsters(id) ON DELETE CASCADE,
+            custom_name VARCHAR,
+            hp_current INTEGER,
+            hp_max_override INTEGER,
             added_at TIMESTAMP
+        )
+    """))
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS monsters (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR UNIQUE NOT NULL,
+            size VARCHAR, creature_type VARCHAR, alignment VARCHAR,
+            ac INTEGER, initiative VARCHAR, hp_max INTEGER, hp_formula VARCHAR,
+            speed VARCHAR, cr VARCHAR, xp INTEGER, proficiency_bonus INTEGER,
+            str INTEGER, dex INTEGER, con INTEGER, "int" INTEGER, wis INTEGER, cha INTEGER,
+            saving_throws VARCHAR, skills VARCHAR, resistances VARCHAR,
+            immunities VARCHAR, vulnerabilities VARCHAR, senses VARCHAR,
+            languages VARCHAR, gear VARCHAR,
+            traits JSON, actions JSON, bonus_actions JSON, reactions JSON, legendary_actions JSON,
+            source VARCHAR, is_homebrew BOOLEAN DEFAULT FALSE
         )
     """))
     db.commit()

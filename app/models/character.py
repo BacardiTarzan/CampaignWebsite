@@ -182,7 +182,12 @@ class CharacterWeaponProficiency(Base):
 class Combatant(Base):
     __tablename__ = "combatants"
     id = Column(Integer, primary_key=True)
-    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, unique=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=True)
+    monster_id = Column(Integer, ForeignKey("monsters.id", ondelete="CASCADE"), nullable=True)
+    custom_name = Column(String, nullable=True)       # "Goblin 1", "Goblin 2"
+    hp_current = Column(Integer, nullable=True)       # only used for monster instances
+    hp_max_override = Column(Integer, nullable=True)  # set from monster.hp_max at spawn
     added_at = Column(DateTime, default=datetime.utcnow)
 
     character = relationship("Character")
+    # monster relationship resolved at query time to avoid circular import

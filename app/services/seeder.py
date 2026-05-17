@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage, GlossaryTerm
+from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, LorePage, GlossaryTerm, Monster
 
 REF = Path(settings.reference_dir)
 
@@ -839,13 +839,143 @@ def _parse_armor_file(path: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Monster parser
+# ---------------------------------------------------------------------------
+
+def _parse_stat_table(text: str) -> dict:
+    """Extract key-value pairs from the '## Stat Block' two-column table."""
+    result = {}
+    for m in re.finditer(r"\|\s*\*\*([^*]+?)\*\*\s*\|\s*([^|\n]+?)\s*\|", text):
+        key = m.group(1).strip().rstrip(":")
+        val = m.group(2).strip()
+        result[key] = val
+    return result
+
+
+def _parse_ability_row(text: str) -> dict[str, int]:
+    """Extract ability scores from the two-row ability table."""
+    scores = {}
+    headers = re.findall(r"\*\*(STR|DEX|CON|INT|WIS|CHA)\*\*", text)
+    values_m = re.search(
+        r"\|\s*(\d+)[^|]*\|\s*(\d+)[^|]*\|\s*(\d+)[^|]*\|\s*(\d+)[^|]*\|\s*(\d+)[^|]*\|\s*(\d+)[^|]*\|",
+        text
+    )
+    if headers and values_m:
+        for i, h in enumerate(headers[:6]):
+            try:
+                scores[h.lower()] = int(values_m.group(i + 1))
+            except (ValueError, IndexError):
+                pass
+    return scores
+
+
+def _parse_ability_sections(text: str) -> list[dict]:
+    """Parse ### section (Traits/Actions/etc.) into [{name, description}] list."""
+    items = []
+    for block in re.split(r"\n(?=\*\*[A-Z])", text):
+        m = re.match(r"\*\*([^.*]+?)[\.\*]?\*\*[.\s]*(.*)", block.strip(), re.DOTALL)
+        if m:
+            desc = re.sub(r"\s+", " ", m.group(2)).strip()
+            # Strip trailing separator and control characters
+            desc = re.sub(r"\s*---\s*$", "", desc).strip()
+            desc = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", desc)
+            items.append({
+                "name": m.group(1).strip(),
+                "description": desc,
+            })
+    return items
+
+
+def _parse_monster_file(path: Path) -> dict | None:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    name_m = re.match(r"#\s+(.+)", text)
+    if not name_m:
+        return None
+    name = name_m.group(1).strip()
+
+    # Stat block table
+    stat = _parse_stat_table(text)
+
+    # Size / Type — "Large Elemental"
+    size_type = stat.get("Size / Type", "")
+    parts = size_type.split(None, 1)
+    size = parts[0] if parts else None
+    creature_type = parts[1] if len(parts) > 1 else None
+
+    # AC
+    ac_m = re.search(r"^(\d+)", stat.get("AC", ""))
+    ac = int(ac_m.group(1)) if ac_m else None
+
+    # HP
+    hp_str = stat.get("HP", "")
+    hp_m = re.match(r"(\d+)\s*(?:\((.+?)\))?", hp_str)
+    hp_max = int(hp_m.group(1)) if hp_m else None
+    hp_formula = hp_m.group(2) if hp_m and hp_m.group(2) else None
+
+    # CR / XP / PB
+    cr_str = stat.get("CR", "")
+    cr_m = re.match(r"CR\s*([\d/]+)", cr_str)
+    cr = cr_m.group(1) if cr_m else None
+    xp_m = re.search(r"XP\s*([\d,]+)", cr_str)
+    xp = int(xp_m.group(1).replace(",", "")) if xp_m else None
+    pb_m = re.search(r"PB\s*\+(\d+)", cr_str)
+    pb = int(pb_m.group(1)) if pb_m else None
+
+    # Ability scores
+    abilities = _parse_ability_row(text)
+
+    # Additional stats
+    add = _parse_stat_table(text)
+
+    def _section(header: str) -> str:
+        m = re.search(rf"##\s+{re.escape(header)}\s*\n(.*?)(?=\n##\s|\Z)", text, re.DOTALL | re.IGNORECASE)
+        return m.group(1).strip() if m else ""
+
+    return {
+        "name": name,
+        "size": size,
+        "creature_type": creature_type,
+        "alignment": stat.get("Alignment"),
+        "ac": ac,
+        "initiative": stat.get("Initiative"),
+        "hp_max": hp_max,
+        "hp_formula": hp_formula,
+        "speed": stat.get("Speed"),
+        "cr": cr,
+        "xp": xp,
+        "proficiency_bonus": pb,
+        "str_": abilities.get("str"),
+        "dex_": abilities.get("dex"),
+        "con_": abilities.get("con"),
+        "int_": abilities.get("int"),
+        "wis_": abilities.get("wis"),
+        "cha_": abilities.get("cha"),
+        "saving_throws": add.get("Saving Throws"),
+        "skills": add.get("Skills"),
+        "resistances": add.get("Resistances"),
+        "immunities": add.get("Immunities"),
+        "vulnerabilities": add.get("Vulnerabilities"),
+        "senses": add.get("Senses"),
+        "languages": add.get("Languages"),
+        "gear": add.get("Gear"),
+        "traits": _parse_ability_sections(_section("Traits")) or None,
+        "actions": _parse_ability_sections(_section("Actions")) or None,
+        "bonus_actions": _parse_ability_sections(_section("Bonus Actions")) or None,
+        "reactions": _parse_ability_sections(_section("Reactions")) or None,
+        "legendary_actions": _parse_ability_sections(_section("Legendary Actions")) or None,
+        "source": "MM 2024",
+        "is_homebrew": False,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main seed function
 # ---------------------------------------------------------------------------
 
 def seed_all(db: Session) -> dict:
     counts = {
         "species": 0, "classes": 0, "subclasses": 0, "backgrounds": 0,
-        "feats": 0, "spells": 0, "equipment": 0, "glossary": 0,
+        "feats": 0, "spells": 0, "equipment": 0, "glossary": 0, "monsters": 0,
     }
 
     # Pre-load existing names to avoid duplicate checks failing on unflushed adds
@@ -979,6 +1109,27 @@ def seed_all(db: Session) -> dict:
             db.add(Equipment(**item))
             existing_equip_rows[item["name"]] = None
             counts["equipment"] += 1
+
+    # Monsters
+    monster_dir = REF / "Monsters"
+    if monster_dir.exists():
+        existing_monsters = {r.name for r in db.query(Monster.name)}
+        for f in sorted(monster_dir.glob("*.md")):
+            if "Zone.Identifier" in f.name:
+                continue
+            data = _parse_monster_file(f)
+            if not data:
+                continue
+            if data["name"] not in existing_monsters:
+                db.add(Monster(**data))
+                existing_monsters.add(data["name"])
+                counts["monsters"] += 1
+            else:
+                # Refresh all fields on existing rows (idempotent update)
+                row = db.query(Monster).filter_by(name=data["name"]).first()
+                if row:
+                    for k, v in data.items():
+                        setattr(row, k, v)
 
     db.commit()
 

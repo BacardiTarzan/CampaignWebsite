@@ -30,8 +30,10 @@ function err(msg) { toast("⚠ " + msg, 5000); }
 function switchTab(tab) {
   document.querySelectorAll(".tab-bar > .tab-btn").forEach(b => b.classList.remove("active"));
   event.target.classList.add("active");
-  ["roster", "codex", "grimoire", "lore", "import", "combat"].forEach(t =>
-    document.getElementById(`tab-${t}`).classList.toggle("hidden", t !== tab));
+  ["roster", "codex", "grimoire", "lore", "import", "combat"].forEach(t => {
+    const el = document.getElementById(`tab-${t}`);
+    if (el) el.classList.toggle("hidden", t !== tab);
+  });
   if (tab === "roster") loadRoster();
   if (tab === "codex") loadCodex();
   if (tab === "grimoire") loadGrimoireSpells();
@@ -42,11 +44,12 @@ function switchTab(tab) {
 function switchCodexTab(sub) {
   document.querySelectorAll("#tab-codex .tab-bar .tab-btn").forEach(b => b.classList.remove("active"));
   event.target.classList.add("active");
-  ["species", "backgrounds", "feats"].forEach(t =>
+  ["species", "backgrounds", "feats", "monsters"].forEach(t =>
     document.getElementById(`codex-${t}`).classList.toggle("hidden", t !== sub));
   if (sub === "species") loadSpeciesList();
   if (sub === "backgrounds") loadBgList();
   if (sub === "feats") loadFeatList();
+  if (sub === "monsters") loadMonsters();
 }
 
 // ---------------------------------------------------------------------------
@@ -1002,6 +1005,102 @@ async function saveEditPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// Monster codex
+// ---------------------------------------------------------------------------
+let _allMonsters = [];
+
+function _crNum(cr) {
+  if (!cr) return -1;
+  if (cr.includes("/")) { const [n, d] = cr.split("/"); return parseInt(n) / parseInt(d); }
+  return parseFloat(cr) || -1;
+}
+
+async function loadMonsters() {
+  if (_allMonsters.length) { _renderMonsters(); return; }
+  _allMonsters = await api("GET", "/api/admin/monsters");
+  // Populate CR filter
+  const crs = [...new Set(_allMonsters.map(m => m.cr).filter(Boolean))]
+    .sort((a, b) => _crNum(a) - _crNum(b));
+  const sel = document.getElementById("monster-cr-filter");
+  if (sel) sel.innerHTML = '<option value="">All CR</option>' + crs.map(cr => `<option value="${cr}">CR ${cr}</option>`).join("");
+  _renderMonsters();
+}
+
+function _renderMonsters() {
+  const q = (document.getElementById("monster-search")?.value || "").toLowerCase();
+  const crFilter = document.getElementById("monster-cr-filter")?.value || "";
+  const filtered = _allMonsters.filter(m =>
+    (!q || m.name.toLowerCase().includes(q)) &&
+    (!crFilter || m.cr === crFilter)
+  );
+  const el = document.getElementById("monster-list");
+  if (!el) return;
+  if (!filtered.length) { el.innerHTML = `<p class="hint">No monsters found.</p>`; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Name</th><th>Type</th><th>CR</th><th>AC</th><th>HP</th><th>Speed</th><th></th></tr></thead>
+    <tbody>${filtered.map(m => `<tr>
+      <td><strong>${m.name}</strong></td>
+      <td>${[m.size, m.creature_type].filter(Boolean).join(" ") || "—"}</td>
+      <td>${m.cr ?? "—"}</td>
+      <td>${m.ac ?? "—"}</td>
+      <td>${m.hp_max ? `${m.hp_max}${m.hp_formula ? ` (${m.hp_formula})` : ""}` : "—"}</td>
+      <td>${m.speed || "—"}</td>
+      <td><button onclick="openMonsterModal(${m.id})">View</button></td>
+    </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function filterMonsters() { _renderMonsters(); }
+
+async function openMonsterModal(monsterId) {
+  const m = await api("GET", `/api/admin/monsters/${monsterId}`);
+  document.getElementById("monster-modal-name").textContent = m.name;
+  const mod = n => { const v = Math.floor((n - 10) / 2); return (v >= 0 ? "+" : "") + v; };
+  const fmtSection = (items) => (items || []).map(i =>
+    `<p class="mb-sm"><strong>${i.name}.</strong> ${i.description}</p>`
+  ).join("") || "";
+
+  document.getElementById("monster-modal-body").innerHTML = `
+    <div class="monster-stat-block">
+      <div class="msb-meta">${[m.size, m.creature_type].filter(Boolean).join(" ")}${m.alignment ? ` · ${m.alignment}` : ""}</div>
+      <div class="msb-row"><span>AC</span><span>${m.ac ?? "—"}</span></div>
+      <div class="msb-row"><span>HP</span><span>${m.hp_max ?? "—"}${m.hp_formula ? ` (${m.hp_formula})` : ""}</span></div>
+      <div class="msb-row"><span>Speed</span><span>${m.speed || "—"}</span></div>
+      <div class="msb-row"><span>CR</span><span>${m.cr ?? "—"}${m.xp ? ` (${m.xp.toLocaleString()} XP)` : ""}</span></div>
+      ${m.initiative ? `<div class="msb-row"><span>Initiative</span><span>${m.initiative}</span></div>` : ""}
+
+      <div class="msb-abilities">
+        ${["str","dex","con","int","wis","cha"].map(ab => `
+          <div class="msb-ab"><div class="msb-ab-label">${ab.toUpperCase()}</div>
+          <div class="msb-ab-val">${m[ab] ?? "—"}</div>
+          <div class="msb-ab-mod">${m[ab] != null ? mod(m[ab]) : ""}</div></div>`).join("")}
+      </div>
+
+      ${m.saving_throws ? `<div class="msb-row"><span>Saves</span><span>${m.saving_throws}</span></div>` : ""}
+      ${m.skills ? `<div class="msb-row"><span>Skills</span><span>${m.skills}</span></div>` : ""}
+      ${m.resistances ? `<div class="msb-row"><span>Resistances</span><span>${m.resistances}</span></div>` : ""}
+      ${m.immunities ? `<div class="msb-row"><span>Immunities</span><span>${m.immunities}</span></div>` : ""}
+      ${m.vulnerabilities ? `<div class="msb-row"><span>Vulnerabilities</span><span>${m.vulnerabilities}</span></div>` : ""}
+      ${m.senses ? `<div class="msb-row"><span>Senses</span><span>${m.senses}</span></div>` : ""}
+      ${m.languages ? `<div class="msb-row"><span>Languages</span><span>${m.languages}</span></div>` : ""}
+      ${m.gear ? `<div class="msb-row"><span>Gear</span><span>${m.gear}</span></div>` : ""}
+
+      ${m.traits?.length ? `<div class="msb-section-title">Traits</div>${fmtSection(m.traits)}` : ""}
+      ${m.actions?.length ? `<div class="msb-section-title">Actions</div>${fmtSection(m.actions)}` : ""}
+      ${m.bonus_actions?.length ? `<div class="msb-section-title">Bonus Actions</div>${fmtSection(m.bonus_actions)}` : ""}
+      ${m.reactions?.length ? `<div class="msb-section-title">Reactions</div>${fmtSection(m.reactions)}` : ""}
+      ${m.legendary_actions?.length ? `<div class="msb-section-title">Legendary Actions</div>${fmtSection(m.legendary_actions)}` : ""}
+    </div>`;
+  document.getElementById("monster-modal").classList.remove("hidden");
+}
+
+function closeMonsterModal(e) {
+  if (e && e.target !== document.getElementById("monster-modal")) return;
+  document.getElementById("monster-modal").classList.add("hidden");
+}
+
+// ---------------------------------------------------------------------------
 // Combat tracker
 // ---------------------------------------------------------------------------
 let _combatants = [];
@@ -1014,50 +1113,73 @@ async function loadCombat() {
     return;
   }
   el.innerHTML = `<div class="combat-grid">${_combatants.map((c, i) => {
-    const species = [c.species_lineage, c.species_name].filter(Boolean).join(" ");
-    const cls = [c.class_name, c.level ? `Lv ${c.level}` : ""].filter(Boolean).join(" ");
-    const subtitle = [species, cls].filter(Boolean).join(" · ");
+    const isMonster = c.kind === "monster";
     const hp = c.hp_max ? `${c.hp_current ?? "?"}/${c.hp_max}` : "—";
-    return `<div class="combat-card" onclick="combatOpenSheet(${c.character_id}, event)">
+    const hpId = `chp-${c.combatant_id}`;
+    const subtitle = isMonster
+      ? [c.creature_type, c.cr ? `CR ${c.cr}` : ""].filter(Boolean).join(" · ")
+      : [[c.species_lineage, c.species_name].filter(Boolean).join(" "),
+         [c.class_name, c.level ? `Lv ${c.level}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+    const clickHandler = isMonster
+      ? `openMonsterModal(${c.monster_id})`
+      : `combatOpenSheet(${c.character_id}, event)`;
+    const speed = isMonster ? (c.speed || "—") : `${c.speed || 30} ft`;
+    const acBadge = isMonster && c.ac != null ? `<span class="combat-stat"><span class="combat-stat-label">AC</span> ${c.ac}</span>` : "";
+    const tag = isMonster ? `<span class="combat-monster-tag">Monster</span>` : "";
+    return `<div class="combat-card" onclick="${clickHandler}">
       <div class="combat-card-header">
         <span class="combat-card-num">${i + 1}</span>
         <span class="combat-card-name">${c.name}</span>
+        ${tag}
         <button class="combat-remove-btn" onclick="removeCombatant(${c.combatant_id}, event)" title="Remove">✕</button>
       </div>
       ${subtitle ? `<div class="combat-card-sub">${subtitle}</div>` : ""}
       <div class="combat-card-stats">
-        <span class="combat-stat"><span class="combat-stat-label">HP</span> <span id="chp-${c.character_id}">${hp}</span></span>
-        <span class="combat-stat"><span class="combat-stat-label">Speed</span> ${c.speed} ft</span>
+        <span class="combat-stat"><span class="combat-stat-label">HP</span> <span id="${hpId}">${hp}</span></span>
+        ${acBadge}
+        <span class="combat-stat"><span class="combat-stat-label">Speed</span> ${speed}</span>
       </div>
       <div class="combat-card-actions" onclick="event.stopPropagation()">
-        <button class="combat-hp-btn" onclick="combatAdjHp(${c.character_id}, -1)">−1</button>
-        <button class="combat-hp-btn" onclick="combatAdjHp(${c.character_id}, +1)">+1</button>
-        <input type="number" id="combat-adj-${c.character_id}" class="combat-hp-input" placeholder="±HP">
-        <button class="combat-hp-btn" onclick="combatApplyAdj(${c.character_id})">Apply</button>
+        <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, -1)">−1</button>
+        <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, +1)">+1</button>
+        <input type="number" id="combat-adj-${c.combatant_id}" class="combat-hp-input" placeholder="±HP">
+        <button class="combat-hp-btn" onclick="combatApplyAdj(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id})">Apply</button>
       </div>
     </div>`;
   }).join("")}</div>`;
 }
 
 function combatOpenSheet(charId, e) {
-  if (e.target.closest("button, input")) return;
+  if (e?.target?.closest("button, input")) return;
   window.open(`/characters/${charId}/sheet`, "_blank");
 }
 
-async function combatAdjHp(charId, delta) {
-  try {
-    const r = await api("POST", `/api/admin/characters/${charId}/hp`, { delta });
-    const el = document.getElementById(`chp-${charId}`);
-    if (el) el.textContent = `${r.hp_current}/${r.hp_max}`;
-  } catch(e) { err(e.message); }
+async function combatAdjHpBtn(combatantId, isMonster, charId, delta) {
+  if (isMonster) {
+    const c = _combatants.find(x => x.combatant_id === combatantId);
+    if (!c) return;
+    const newHp = Math.max(0, (c.hp_current ?? c.hp_max ?? 0) + delta);
+    try {
+      const r = await api("PATCH", `/api/admin/combatants/${combatantId}/hp`, { hp_current: newHp });
+      c.hp_current = r.hp_current;
+      const el = document.getElementById(`chp-${combatantId}`);
+      if (el) el.textContent = `${r.hp_current}/${r.hp_max}`;
+    } catch(e) { err(e.message); }
+  } else {
+    try {
+      const r = await api("POST", `/api/admin/characters/${charId}/hp`, { delta });
+      const el = document.getElementById(`chp-${combatantId}`);
+      if (el) el.textContent = `${r.hp_current}/${r.hp_max}`;
+    } catch(e) { err(e.message); }
+  }
 }
 
-async function combatApplyAdj(charId) {
-  const input = document.getElementById(`combat-adj-${charId}`);
+async function combatApplyAdj(combatantId, isMonster, charId) {
+  const input = document.getElementById(`combat-adj-${combatantId}`);
   const delta = parseInt(input?.value);
   if (!delta || isNaN(delta)) { toast("Enter a number first."); return; }
   input.value = "";
-  await combatAdjHp(charId, delta);
+  await combatAdjHpBtn(combatantId, isMonster, charId, delta);
 }
 
 async function removeCombatant(combatantId, e) {
@@ -1078,20 +1200,33 @@ async function clearCombat() {
 }
 
 function openCombatAddModal() {
-  const inCombat = new Set(_combatants.map(c => c.character_id));
-  const available = _rosterChars.filter(c => !inCombat.has(c.id));
-  const el = document.getElementById("combat-picker-list");
-  el.innerHTML = available.length
-    ? available.map(c => {
-        const cls = c.class_name ? ` · ${c.class_name} Lv ${c.level || "?"}` : "";
-        return `<div class="combat-picker-row" onclick="addCombatant(${c.id})">
-          <strong>${c.character_name}</strong>
-          <span class="hint">${c.created_by_display_name}${cls}</span>
-        </div>`;
-      }).join("")
-    : `<p class="hint">All characters are already in combat.</p>`;
+  const inCombatCharIds = new Set(_combatants.filter(c => c.kind === "character").map(c => c.character_id));
+  const charRows = _rosterChars.filter(c => !inCombatCharIds.has(c.id)).map(c => {
+    const cls = c.class_name ? ` · ${c.class_name} Lv ${c.level || "?"}` : "";
+    return `<div class="combat-picker-row" data-search="${c.character_name.toLowerCase()}" onclick="addCharacterCombatant(${c.id})">
+      <strong>${c.character_name}</strong>
+      <span class="hint">${c.created_by_display_name}${cls}</span>
+    </div>`;
+  }).join("") || `<p class="hint" style="padding:8px 12px">All characters are already in combat.</p>`;
+
+  // Sort monsters by CR for the picker
+  const sortedMonsters = [..._allMonsters].sort((a, b) => _crNum(a.cr) - _crNum(b.cr));
+  const monsterRows = sortedMonsters.map(m => {
+    const sub = [m.creature_type, m.cr ? `CR ${m.cr}` : ""].filter(Boolean).join(" · ");
+    return `<div class="combat-picker-row" data-search="${m.name.toLowerCase()}" onclick="addMonsterCombatant(${m.id})">
+      <strong>${m.name}</strong>
+      <span class="hint">${sub}</span>
+    </div>`;
+  }).join("");
+
+  document.getElementById("combat-picker-list").innerHTML = `
+    <div class="combat-picker-section"><div class="combat-picker-header">Characters</div>${charRows}</div>
+    ${monsterRows ? `<div class="combat-picker-section"><div class="combat-picker-header">Monsters</div>${monsterRows}</div>` : ""}`;
   document.getElementById("combat-search").value = "";
   document.getElementById("combat-add-modal").classList.remove("hidden");
+
+  // Ensure monsters are loaded for the picker
+  if (!_allMonsters.length) loadMonsters().then(() => openCombatAddModal());
 }
 
 function closeCombatAddModal(e) {
@@ -1102,20 +1237,27 @@ function closeCombatAddModal(e) {
 function filterCombatPicker() {
   const q = document.getElementById("combat-search").value.toLowerCase();
   document.querySelectorAll(".combat-picker-row").forEach(row => {
-    row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+    row.style.display = (row.dataset.search || "").includes(q) ? "" : "none";
   });
 }
 
-async function addCombatant(charId) {
+async function addCharacterCombatant(charId) {
   try {
-    await api("POST", "/api/admin/combatants", { character_id: charId });
+    await api("POST", "/api/admin/combatants/character", { character_id: charId });
     document.getElementById("combat-add-modal").classList.add("hidden");
     loadCombat();
   } catch(e) {
-    if (e.message.includes("409") || e.message.toLowerCase().includes("already")) {
-      toast("Already in combat.");
-    } else { err(e.message); }
+    if (e.message.includes("409") || e.message.toLowerCase().includes("already")) toast("Already in combat.");
+    else err(e.message);
   }
+}
+
+async function addMonsterCombatant(monsterId) {
+  try {
+    await api("POST", "/api/admin/combatants/monster", { monster_id: monsterId });
+    document.getElementById("combat-add-modal").classList.add("hidden");
+    loadCombat();
+  } catch(e) { err(e.message); }
 }
 
 // ---------------------------------------------------------------------------

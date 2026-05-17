@@ -118,6 +118,44 @@ class GlossaryTerm(Base):
     source = Column(String, default="PHB 2024")
 
 
+class Monster(Base):
+    __tablename__ = "monsters"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    size = Column(String, nullable=True)
+    creature_type = Column(String, nullable=True)
+    alignment = Column(String, nullable=True)
+    ac = Column(Integer, nullable=True)
+    initiative = Column(String, nullable=True)      # "+5 (15)"
+    hp_max = Column(Integer, nullable=True)
+    hp_formula = Column(String, nullable=True)      # "12d10 + 24"
+    speed = Column(String, nullable=True)
+    cr = Column(String, nullable=True)              # "5", "1/2", "1/8"
+    xp = Column(Integer, nullable=True)
+    proficiency_bonus = Column(Integer, nullable=True)
+    str_ = Column("str", Integer, nullable=True)
+    dex_ = Column("dex", Integer, nullable=True)
+    con_ = Column("con", Integer, nullable=True)
+    int_ = Column("int", Integer, nullable=True)
+    wis_ = Column("wis", Integer, nullable=True)
+    cha_ = Column("cha", Integer, nullable=True)
+    saving_throws = Column(String, nullable=True)
+    skills = Column(String, nullable=True)
+    resistances = Column(String, nullable=True)
+    immunities = Column(String, nullable=True)
+    vulnerabilities = Column(String, nullable=True)
+    senses = Column(String, nullable=True)
+    languages = Column(String, nullable=True)
+    gear = Column(String, nullable=True)
+    traits = Column(JSON, nullable=True)        # [{"name": "...", "description": "..."}]
+    actions = Column(JSON, nullable=True)
+    bonus_actions = Column(JSON, nullable=True)
+    reactions = Column(JSON, nullable=True)
+    legendary_actions = Column(JSON, nullable=True)
+    source = Column(String, default="MM 2024")
+    is_homebrew = Column(Boolean, default=False)
+
+
 class Equipment(Base):
     __tablename__ = "equipment"
     id = Column(Integer, primary_key=True)

@@ -46,6 +46,7 @@
         <button class="tab-btn active" onclick="switchCodexTab('species')">Species</button>
         <button class="tab-btn" onclick="switchCodexTab('backgrounds')">Backgrounds</button>
         <button class="tab-btn" onclick="switchCodexTab('feats')">Feats</button>
+        <button class="tab-btn" onclick="switchCodexTab('monsters')">Monsters</button>
       </div>
       <div id="codex-species">
         <div class="flex-between mb-sm mt-md">
@@ -118,6 +119,19 @@
           </div>
         </div>
         <div id="feat-list"></div>
+      </div>
+      <div id="codex-monsters" class="hidden">
+        <div class="flex-between mb-sm mt-md" style="align-items:center;flex-wrap:wrap;gap:8px">
+          <h3 style="margin:0">Monsters</h3>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="monster-search" class="ep-input" placeholder="Search by name…"
+              oninput="filterMonsters()" style="width:200px">
+            <select id="monster-cr-filter" onchange="filterMonsters()" style="width:120px">
+              <option value="">All CR</option>
+            </select>
+          </div>
+        </div>
+        <div id="monster-list"></div>
       </div>
     </div>
 
@@ -243,6 +257,17 @@
       </div>
       <div id="combat-list"><p class="hint">No combatants. Click "+ Add Combatant" to begin.</p></div>
     </div>
+  </div>
+</div>
+
+<!-- Monster stat block modal -->
+<div id="monster-modal" class="modal-overlay hidden" onclick="closeMonsterModal(event)">
+  <div class="modal-box monster-modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="monster-modal-name">Monster</h3>
+      <button class="modal-close-btn" onclick="closeMonsterModal()">✕</button>
+    </div>
+    <div id="monster-modal-body"></div>
   </div>
 </div>
 
