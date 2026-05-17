@@ -1,0 +1,186 @@
+/* ─────────────────────────────────────────────────────────────────
+   RULES GLOSSARY — term cards and search
+   ───────────────────────────────────────────────────────────────── */
+
+/* ─── Search bar ─── */
+.gloss-search-bar {
+  flex-shrink: 0;
+  padding: var(--sp-3) clamp(20px, 4vw, 52px) 0;
+  background: linear-gradient(175deg, var(--parchment-bright) 0%, var(--parchment) 100%);
+}
+
+#gloss-search {
+  width: 100%;
+  max-width: 480px;
+  padding: 8px 14px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(168,120,43,0.35);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#gloss-search::placeholder { color: var(--ink-faded); }
+#gloss-search:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(168,120,43,0.18);
+}
+
+/* ─── Content scroll area ─── */
+.gloss-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-4) clamp(20px, 4vw, 52px) clamp(28px, 5vw, 52px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168,120,43,0.35) transparent;
+}
+.gloss-content::-webkit-scrollbar { width: 5px; }
+.gloss-content::-webkit-scrollbar-track { background: transparent; }
+.gloss-content::-webkit-scrollbar-thumb { background: rgba(168,120,43,0.35); border-radius: 3px; }
+
+/* ─── Sidebar category count badges ─── */
+.gloss-cat-count {
+  display: inline-block;
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-family: var(--font-body);
+  color: var(--ink-faded);
+  background: rgba(168,120,43,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* ─── Term card ─── */
+.gloss-card {
+  border: 1px solid rgba(168,120,43,0.22);
+  border-left: 3px solid rgba(168,120,43,0.4);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-3);
+  background: rgba(255,255,255,0.28);
+  transition: border-left-color 0.15s, box-shadow 0.15s;
+  scroll-margin-top: 12px;
+}
+.gloss-card:hover {
+  border-left-color: var(--gold);
+  box-shadow: 0 2px 12px rgba(60,30,10,0.1);
+}
+
+/* Category accent colors on left border */
+.gloss-card[data-cat="combat"]          { border-left-color: var(--rubric); }
+.gloss-card[data-cat="condition"]       { border-left-color: #7a4a00; }
+.gloss-card[data-cat="action"]          { border-left-color: var(--green); }
+.gloss-card[data-cat="weapon_property"] { border-left-color: var(--gold-deep); }
+.gloss-card[data-cat="mastery"]         { border-left-color: var(--gold-bright); }
+.gloss-card[data-cat="skill"]           { border-left-color: #4a7070; }
+
+.gloss-card-header {
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.gloss-card-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-1);
+}
+
+.gloss-card-term {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--rubric);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* ─── Category badge pill ─── */
+.gloss-cat-badge {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(168,120,43,0.3);
+  color: var(--gold-deep);
+  background: rgba(168,120,43,0.1);
+  white-space: nowrap;
+}
+.gloss-cat-badge.gloss-cat-combat          { color: var(--rubric); border-color: rgba(139,26,26,0.3); background: rgba(139,26,26,0.08); }
+.gloss-cat-badge.gloss-cat-condition       { color: #7a4a00; border-color: rgba(122,74,0,0.3); background: rgba(122,74,0,0.08); }
+.gloss-cat-badge.gloss-cat-action          { color: var(--green); border-color: rgba(46,122,66,0.3); background: rgba(46,122,66,0.08); }
+.gloss-cat-badge.gloss-cat-weapon_property { color: var(--gold-deep); border-color: rgba(107,74,24,0.35); background: rgba(107,74,24,0.08); }
+.gloss-cat-badge.gloss-cat-mastery         { color: var(--gold); border-color: rgba(168,120,43,0.35); background: rgba(168,120,43,0.1); }
+.gloss-cat-badge.gloss-cat-skill           { color: #4a7070; border-color: rgba(74,112,112,0.3); background: rgba(74,112,112,0.08); }
+
+.gloss-card-short {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  margin: 0;
+  padding-right: var(--sp-5);
+}
+
+.gloss-card-chevron {
+  position: absolute;
+  right: var(--sp-4);
+  top: var(--sp-3);
+  font-size: 0.7rem;
+  color: var(--ink-faded);
+  pointer-events: none;
+}
+
+/* ─── Expanded full description ─── */
+.gloss-card-full {
+  padding: 0 var(--sp-4) var(--sp-3);
+  border-top: 1px solid rgba(168,120,43,0.15);
+}
+.gloss-card-full[hidden] { display: none; }
+
+.gloss-full-body {
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--ink);
+  padding-top: var(--sp-3);
+}
+.gloss-full-body p { margin: 0 0 var(--sp-2); }
+.gloss-full-body p:last-child { margin-bottom: 0; }
+.gloss-full-body strong { color: var(--ink); font-weight: 700; }
+.gloss-full-body em { color: var(--ink-soft); }
+
+/* ─── Hash anchor highlight flash ─── */
+@keyframes gloss-highlight {
+  0%   { box-shadow: 0 0 0 3px rgba(168,120,43,0.6); }
+  100% { box-shadow: none; }
+}
+.gloss-card--highlight {
+  animation: gloss-highlight 1.5s ease-out forwards;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   RESPONSIVE — mobile sidebar
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .lore-nav-toggle { display: inline-flex; }
+
+  #gloss-sidebar {
+    position: fixed;
+    left: -270px;
+    top: 0;
+    bottom: 0;
+    z-index: 300;
+    transition: left 0.25s ease;
+  }
+  #gloss-sidebar.is-open { left: 0; }
+}
