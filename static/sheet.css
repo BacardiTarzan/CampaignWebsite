@@ -269,6 +269,13 @@
   color: var(--color-ink-faded);
 }
 
+.skill-bonus-tag {
+  font-size: 0.7rem;
+  color: var(--color-gold);
+  margin-left: 4px;
+  opacity: 0.85;
+}
+
 .save-val {
   font-family: var(--font-header);
   font-size: 0.9rem;

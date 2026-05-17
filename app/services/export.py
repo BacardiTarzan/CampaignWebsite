@@ -221,6 +221,18 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         if ch.feature_key.startswith("species_skill_") and isinstance(ch.choice_value, str):
             prof_skills.add(ch.choice_value)
 
+    # Flat extra bonuses per skill from features (skill_name → bonus int)
+    skill_bonuses: dict[str, int] = {}
+    # Thaumaturge Divine Order: +Wis mod to Arcana and Religion
+    divine_order_choice = next(
+        (ch.choice_value for ch in char.choices if ch.feature_key == "divine_order"),
+        None
+    )
+    if divine_order_choice == "Thaumaturge":
+        wis_mod = _mod(attrs.get("wis", 10))
+        for skill in ("Arcana", "Religion"):
+            skill_bonuses[skill] = skill_bonuses.get(skill, 0) + wis_mod
+
     # Proficient saving throws from class
     save_profs = set(cls.saving_throws or []) if cls else set()
 
@@ -502,6 +514,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "attributes": attrs,
         "prof_skills": list(prof_skills),
         "expert_skills": list(expert_skills),
+        "skill_bonuses": skill_bonuses,
         "save_profs": list(save_profs),
         "skill_proficiencies": [{"skill_name": s.skill_name, "expertise": s.expertise} for s in char.skill_proficiencies],
         "tool_proficiencies": [t.tool_name for t in char.tool_proficiencies],

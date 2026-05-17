@@ -368,7 +368,7 @@ function renderStatsTab(c, prof, attrs) {
       <div class="sh-col-left">
         ${renderAbilityScores(attrs)}
         ${renderSavingThrows(attrs, saveProfs, prof)}
-        ${renderSkills(attrs, profSkills, expertSkills, prof)}
+        ${renderSkills(attrs, profSkills, expertSkills, prof, c.skill_bonuses || {})}
       </div>
       <div class="sh-col-right">
         ${renderProficiencies(c, prof, attrs)}
@@ -424,16 +424,18 @@ function renderSavingThrows(attrs, saveProfs, prof) {
 // ---------------------------------------------------------------------------
 // Skills
 // ---------------------------------------------------------------------------
-function renderSkills(attrs, profSkills, expertSkills, prof) {
+function renderSkills(attrs, profSkills, expertSkills, prof, skillBonuses = {}) {
   const rows = Object.entries(SKILL_ABILITY).sort(([a],[b]) => a.localeCompare(b)).map(([skill, ab]) => {
     const base = mod(attrs[ab] || 10);
     const isProf = profSkills.has(skill);
     const isExpert = expertSkills.has(skill);
-    const bonus = base + (isExpert ? prof * 2 : isProf ? prof : 0);
+    const extra = skillBonuses[skill] || 0;
+    const bonus = base + (isExpert ? prof * 2 : isProf ? prof : 0) + extra;
     const dot = isExpert ? "expert" : isProf ? "prof" : "";
+    const extraTag = extra ? ` <span class="skill-bonus-tag" title="Thaumaturge: +Wis">+${extra}</span>` : "";
     return `<div class="save-row">
       <span class="prof-dot ${dot}" title="${isExpert ? "Expertise" : isProf ? "Proficient" : ""}"></span>
-      <span class="save-name">${gloss(skill)} <span class="skill-ab">(${ab.toUpperCase()})</span></span>
+      <span class="save-name">${gloss(skill)} <span class="skill-ab">(${ab.toUpperCase()})</span>${extraTag}</span>
       <span class="save-val">${fmtMod(bonus)}</span>
     </div>`;
   }).join("");
