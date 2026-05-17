@@ -109,6 +109,11 @@ def serve_lore():
     return FileResponse(str(static_path / "lore.html"))
 
 
+@app.get("/glossary")
+def serve_glossary():
+    return FileResponse(str(static_path / "glossary.html"))
+
+
 @app.get("/characters/{char_id}/sheet")
 def serve_sheet(char_id: int):
     return FileResponse(str(static_path / "sheet.html"))
