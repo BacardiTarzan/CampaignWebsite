@@ -14,7 +14,17 @@ const CATEGORY_LABELS = {
 };
 
 // ---------------------------------------------------------------------------
-// Boot
+// Mobile sidebar toggle
+// ---------------------------------------------------------------------------
+function toggleSidebar() {
+  const sidebar = document.getElementById("lore-sidebar");
+  const btn = document.querySelector(".lore-nav-toggle");
+  const open = sidebar.classList.toggle("is-open");
+  if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+// ---------------------------------------------------------------------------
+// Boot — check auth, load nav
 // ---------------------------------------------------------------------------
 async function boot() {
   try {
@@ -36,7 +46,6 @@ async function boot() {
 
   renderNav(pages || []);
 
-  // Open page from URL hash if present
   const slug = window.location.hash.slice(1);
   if (slug) openPage(slug);
 }
@@ -75,12 +84,19 @@ function renderNav(pages) {
 // Page viewer
 // ---------------------------------------------------------------------------
 async function openPage(slug) {
-  // Highlight active nav item
   document.querySelectorAll(".lore-nav-item").forEach(b => b.classList.remove("active"));
   const btn = document.getElementById(`nav-${slug}`);
   if (btn) btn.classList.add("active");
 
   window.location.hash = slug;
+
+  // Close sidebar on mobile after selection
+  const sidebar = document.getElementById("lore-sidebar");
+  if (sidebar.classList.contains("is-open")) {
+    sidebar.classList.remove("is-open");
+    const toggle = document.querySelector(".lore-nav-toggle");
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+  }
 
   const content = document.getElementById("lore-content");
   content.innerHTML = `<p class="hint" style="padding:24px">Loading…</p>`;

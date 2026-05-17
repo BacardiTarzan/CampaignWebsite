@@ -55,9 +55,9 @@ async function loadRoster() {
     const chars = await api("GET", "/api/characters");
     if (!chars || chars.length === 0) {
       roster.innerHTML = `
-        <div style="text-align:center;padding:48px 0">
-          <p class="hint mb-md">No characters yet.</p>
-          <a href="/charactercreator"><button class="btn-primary">Create Your First Character</button></a>
+        <div class="text-center" style="padding:48px 0">
+          <p class="text-muted mb-md">Your chronicle is empty — begin your first adventure.</p>
+          <a href="/charactercreator"><button class="btn-gold">Begin a New Chronicle</button></a>
         </div>`;
       return;
     }

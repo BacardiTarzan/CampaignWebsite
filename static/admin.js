@@ -64,34 +64,31 @@ async function loadRoster() {
   _rosterBios = {};
   chars.forEach(c => { _rosterBios[c.id] = c.bio || ""; });
   const tbody = chars.map((c, i) => {
-    const hp = c.hp_max ? `<span class="roster-hp" id="hp-${c.id}">${c.hp_current ?? "?"}/${c.hp_max}</span>` : "—";
+    const restsGroup = c.hp_max ? `
+        <button onclick="event.stopPropagation();adminRest(${c.id})">💤 Long</button>
+        <button onclick="event.stopPropagation();adminShortRest(${c.id})">⏱ Short</button>` : "";
+    const lockGroup = `
+        ${c.physical_locked ? `<button onclick="event.stopPropagation();unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
+        <button onclick="event.stopPropagation();editBio(${c.id})">📜 Bio</button>
+        <button onclick="event.stopPropagation();openEditPanel(${c.id})">✏ Edit</button>`;
+    const statsBtn = !c.is_complete
+      ? `<button onclick="event.stopPropagation();unlockStats(${c.id})">🔓 Stats</button>` : "";
     return `
-    <tr>
+    <tr class="roster-row" onclick="window.open('/characters/${c.id}/sheet','_blank')" title="Open sheet">
       <td>${i + 1}</td>
-      <td><span class="roster-name" id="name-${c.id}" onclick="editCharName(${c.id})" title="Click to rename">${c.character_name}</span></td>
+      <td><span class="roster-name" id="name-${c.id}" onclick="event.stopPropagation();editCharName(${c.id})" title="Click to rename">${c.character_name}</span></td>
       <td>${c.created_by_display_name}</td>
       <td>${c.species_name || "—"}</td>
       <td>${c.class_name || "—"} ${c.level ? "Lv " + c.level : ""}</td>
       <td>${c.background_name || "—"}</td>
       <td>${c.is_complete ? "✅ Done" : `Step ${c.wizard_step}`}</td>
-      <td class="roster-hp-cell">
-        ${hp}
-        ${c.hp_max ? `<div class="hp-adj-row">
-          <input type="number" id="hp-adj-${c.id}" class="hp-adj-input" placeholder="±" style="width:50px">
-          <button onclick="adminAdjHp(${c.id})">±HP</button>
-          <button onclick="adminRest(${c.id})">💤 Long Rest</button>
-          <button onclick="adminShortRest(${c.id})">⏱ Short Rest</button>
-        </div>` : ""}
-      </td>
-      <td><div class="actions">
+      <td onclick="event.stopPropagation()"><div class="actions">
         <button onclick="levelUp(${c.id})" title="Grant level (current: ${c.level}, granted: ${c.level_granted ?? c.level})">+Lv ${c.level_granted != null && c.level_granted > c.level ? `<span style="color:#8fc88f">(${c.level}→${c.level_granted})</span>` : ""}</button>
-        <button onclick="unlockStats(${c.id})">🔓 Stats</button>
-        ${c.physical_locked ? `<button onclick="unlockPhysical(${c.id})">🔓 Physical</button>` : ""}
-        <button onclick="editBio(${c.id})">📜 Bio</button>
-        <button onclick="openEditPanel(${c.id})">✏ Edit</button>
-        <a href="/characters/${c.id}/sheet" target="_blank"><button>📋 Sheet</button></a>
-        <a href="/api/admin/characters/${c.id}/export/json" target="_blank"><button>⬇ JSON</button></a>
-        <button class="btn-danger" onclick="deleteChar(${c.id})">✕</button>
+        ${restsGroup}
+        ${lockGroup}
+        ${statsBtn}
+        <a href="/api/admin/characters/${c.id}/export/json" target="_blank" onclick="event.stopPropagation()"><button>⬇ JSON</button></a>
+        <button class="btn-danger" onclick="event.stopPropagation();deleteChar(${c.id})">✕</button>
       </div></td>
     </tr>`;
   }).join("");
@@ -99,9 +96,9 @@ async function loadRoster() {
     <table class="data-table">
       <thead><tr>
         <th>#</th><th>Character</th><th>Player</th><th>Species</th>
-        <th>Class</th><th>Background</th><th>Status</th><th>HP</th><th>Actions</th>
+        <th>Class</th><th>Background</th><th>Status</th><th>Actions</th>
       </tr></thead>
-      <tbody>${tbody || '<tr><td colspan="9" class="text-muted">No characters yet.</td></tr>'}</tbody>
+      <tbody>${tbody || '<tr><td colspan="8" class="text-muted">No characters yet.</td></tr>'}</tbody>
     </table>`;
 }
 
@@ -720,7 +717,6 @@ async function previewLore(slug) {
   const titleEl = document.getElementById("lore-preview-title");
   const body = document.getElementById("lore-preview-body");
   modal.classList.remove("hidden");
-  modal.style.display = "flex";
   body.innerHTML = `<p class="hint">Loading…</p>`;
   try {
     const page = await api("GET", `/api/admin/lore/${slug}`);
@@ -730,9 +726,7 @@ async function previewLore(slug) {
 }
 
 function closeLorePreview() {
-  const modal = document.getElementById("lore-preview-modal");
-  modal.classList.add("hidden");
-  modal.style.display = "none";
+  document.getElementById("lore-preview-modal").classList.add("hidden");
 }
 
 // ---------------------------------------------------------------------------

@@ -189,15 +189,28 @@ def short_rest(char_id: int, data: ShortRestIn, db: Session = Depends(get_db)):
             "hp_gained": total, "hit_dice_remaining": cc.hit_dice_remaining}
 
 
+class AdminHpIn(BaseModel):
+    delta: int | None = None
+    set_hp: int | None = None
+
 @router.post("/characters/{char_id}/hp")
-def admin_adjust_hp(char_id: int, delta: int | None = None, set_hp: int | None = None, db: Session = Depends(get_db)):
+def admin_adjust_hp(
+    char_id: int,
+    data: AdminHpIn,
+    delta: int | None = None,
+    set_hp: int | None = None,
+    db: Session = Depends(get_db),
+):
     char = db.get(Character, char_id)
     if not char:
         raise HTTPException(404)
-    if set_hp is not None:
-        char.hp_current = max(0, min(set_hp, char.hp_max or 0))
-    elif delta is not None:
-        char.hp_current = max(0, min((char.hp_current or 0) + delta, char.hp_max or 0))
+    # Body takes priority over query params
+    effective_set = data.set_hp if data.set_hp is not None else set_hp
+    effective_delta = data.delta if data.delta is not None else delta
+    if effective_set is not None:
+        char.hp_current = max(0, min(effective_set, char.hp_max or 0))
+    elif effective_delta is not None:
+        char.hp_current = max(0, min((char.hp_current or 0) + effective_delta, char.hp_max or 0))
     db.commit()
     return {"hp_current": char.hp_current, "hp_max": char.hp_max}
 
@@ -895,38 +908,52 @@ def clear_combatants(db: Session = Depends(get_db)):
 
 @router.post("/repair-schema")
 def repair_schema(db: Session = Depends(get_db)):
-    """Add source/notes columns to character_spells if missing. Safe to re-run."""
-    from sqlalchemy import text
-    stmts = [
-        "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS source VARCHAR",
-        "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS notes TEXT",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS height VARCHAR",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS weight VARCHAR",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS deity VARCHAR",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS journal TEXT",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS currency JSON",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS physical_locked BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS age INTEGER",
-        "ALTER TABLE character_classes ADD COLUMN IF NOT EXISTS level_granted INTEGER",
-        "ALTER TABLE character_spells ADD COLUMN IF NOT EXISTS always_prepared BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE character_choices ADD COLUMN IF NOT EXISTS level INTEGER",
-        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS hp_roll_log JSON",
-        "ALTER TABLE classes ADD COLUMN IF NOT EXISTS tool_proficiencies JSON",
-    ]
-    for stmt in stmts:
-        db.execute(text(stmt))
-    # Create character_weapon_proficiencies table if missing
-    db.execute(text("""
+    """Add missing columns and tables. Safe to re-run on both SQLite and PostgreSQL."""
+    from sqlalchemy import text, inspect as sa_inspect
+    from ..database import engine
+
+    is_pg = engine.dialect.name == "postgresql"
+
+    # ALTER TABLE: PostgreSQL supports IF NOT EXISTS; SQLite does not, so check via inspector.
+    def add_col(table, col, col_def):
+        if is_pg:
+            db.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_def}"))
+        else:
+            try:
+                existing = {c["name"] for c in sa_inspect(engine).get_columns(table)}
+            except Exception:
+                return  # table doesn't exist yet; CREATE TABLE below will handle it
+            if col not in existing:
+                db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}"))
+
+    add_col("character_spells", "source", "VARCHAR")
+    add_col("character_spells", "notes", "TEXT")
+    add_col("characters", "height", "VARCHAR")
+    add_col("characters", "weight", "VARCHAR")
+    add_col("characters", "deity", "VARCHAR")
+    add_col("characters", "journal", "TEXT")
+    add_col("characters", "currency", "JSON")
+    add_col("characters", "physical_locked", "BOOLEAN DEFAULT FALSE")
+    add_col("characters", "age", "INTEGER")
+    add_col("character_classes", "level_granted", "INTEGER")
+    add_col("character_spells", "always_prepared", "BOOLEAN DEFAULT FALSE")
+    add_col("character_choices", "level", "INTEGER")
+    add_col("characters", "hp_roll_log", "JSON")
+    add_col("classes", "tool_proficiencies", "JSON")
+
+    # CREATE TABLE: SERIAL is PostgreSQL; INTEGER PRIMARY KEY is the SQLite equivalent.
+    pk = "SERIAL" if is_pg else "INTEGER"
+
+    db.execute(text(f"""
         CREATE TABLE IF NOT EXISTS character_weapon_proficiencies (
-            id SERIAL PRIMARY KEY,
+            id {pk} PRIMARY KEY,
             character_id INTEGER NOT NULL REFERENCES characters(id),
             proficiency_type VARCHAR NOT NULL
         )
     """))
-    # Create glossary_terms table if it doesn't exist (Phase 6)
-    db.execute(text("""
+    db.execute(text(f"""
         CREATE TABLE IF NOT EXISTS glossary_terms (
-            id SERIAL PRIMARY KEY,
+            id {pk} PRIMARY KEY,
             slug VARCHAR UNIQUE NOT NULL,
             term VARCHAR NOT NULL,
             category VARCHAR NOT NULL,
@@ -937,20 +964,10 @@ def repair_schema(db: Session = Depends(get_db)):
         )
     """))
     db.execute(text("CREATE INDEX IF NOT EXISTS ix_glossary_terms_slug ON glossary_terms (slug)"))
-    db.execute(text("""
-        CREATE TABLE IF NOT EXISTS combatants (
-            id SERIAL PRIMARY KEY,
-            character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
-            monster_id INTEGER REFERENCES monsters(id) ON DELETE CASCADE,
-            custom_name VARCHAR,
-            hp_current INTEGER,
-            hp_max_override INTEGER,
-            added_at TIMESTAMP
-        )
-    """))
-    db.execute(text("""
+    # monsters must be created before combatants (FK dependency)
+    db.execute(text(f"""
         CREATE TABLE IF NOT EXISTS monsters (
-            id SERIAL PRIMARY KEY,
+            id {pk} PRIMARY KEY,
             name VARCHAR UNIQUE NOT NULL,
             size VARCHAR, creature_type VARCHAR, alignment VARCHAR,
             ac INTEGER, initiative VARCHAR, hp_max INTEGER, hp_formula VARCHAR,
@@ -963,8 +980,36 @@ def repair_schema(db: Session = Depends(get_db)):
             source VARCHAR, is_homebrew BOOLEAN DEFAULT FALSE
         )
     """))
+    # On SQLite, the combatants table may have been created with character_id NOT NULL
+    # (from an earlier create_all before the model was fixed). SQLite can't ALTER COLUMN,
+    # so drop and recreate. Combatants are ephemeral combat state — no data loss concern.
+    if not is_pg:
+        try:
+            cols = sa_inspect(engine).get_columns("combatants")
+            char_col = next((c for c in cols if c["name"] == "character_id"), None)
+            if char_col and not char_col.get("nullable", True):
+                db.execute(text("DROP TABLE IF EXISTS combatants"))
+        except Exception:
+            pass
+    db.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS combatants (
+            id {pk} PRIMARY KEY,
+            character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+            monster_id INTEGER REFERENCES monsters(id) ON DELETE CASCADE,
+            custom_name VARCHAR,
+            hp_current INTEGER,
+            hp_max_override INTEGER,
+            added_at TIMESTAMP
+        )
+    """))
     db.commit()
-    return {"ok": True, "applied": stmts}
+    applied = [
+        "character_spells.source", "character_spells.notes", "character_spells.always_prepared",
+        "characters.height/weight/deity/journal/currency/physical_locked/age/hp_roll_log",
+        "character_classes.level_granted", "character_choices.level", "classes.tool_proficiencies",
+        "tables: character_weapon_proficiencies, glossary_terms, monsters, combatants",
+    ]
+    return {"ok": True, "applied": applied}
 
 
 # ---------------------------------------------------------------------------

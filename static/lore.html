@@ -11,9 +11,9 @@
 <body>
 <div class="lore-layout">
 
-  <div class="lore-sidebar">
+  <div class="lore-sidebar" id="lore-sidebar">
     <div class="lore-sidebar-header">
-      <a href="/portal" class="lore-back">← Portal</a>
+      <a href="/portal" class="lore-back">← My Characters</a>
       <h2 class="lore-sidebar-title">Lore Library</h2>
     </div>
     <div id="lore-nav"><p class="hint" style="padding:12px">Loading…</p></div>
@@ -21,12 +21,15 @@
 
   <div class="lore-main">
     <div class="lore-topbar">
+      <button class="lore-nav-toggle" onclick="toggleSidebar()" aria-expanded="false" aria-controls="lore-sidebar">
+        📖 Contents
+      </button>
       <span id="lore-user-name" class="lore-user"></span>
     </div>
     <div id="lore-content" class="lore-content">
       <div class="lore-welcome">
         <h1>Campaign Lore</h1>
-        <p class="hint">Select a page from the sidebar to begin reading.</p>
+        <p>Select a page from the table of contents to begin reading.</p>
       </div>
     </div>
   </div>

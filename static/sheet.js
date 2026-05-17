@@ -91,7 +91,7 @@ async function loadGlossary() {
     if (!list) return;
     _glossaryMap = new Map(list.map(t => [t.slug, t]));
     _glossarySlugByName = new Map(list.map(t => [t.term.toLowerCase(), t.slug]));
-  } catch (_) { /* glossary optional — degrade gracefully */ }
+  } catch (e) { console.warn("Glossary load failed:", e?.message || e); }
 }
 
 function _buildGlossRx() {
@@ -182,17 +182,16 @@ function _showGlossPopover(slug, anchorEl) {
 
   document.body.appendChild(pop);
 
-  // Position: prefer below, flip above if off-screen
+  // Position: prefer below, flip above if off-screen.
+  // getBoundingClientRect() is already viewport-relative; position:fixed uses viewport coords.
   const rect = anchorEl.getBoundingClientRect();
   const popW = 300;
-  let left = rect.left + window.scrollX;
-  let top  = rect.bottom + window.scrollY + 6;
+  let left = rect.left;
+  let top  = rect.bottom + 6;
   if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
-  if (top + pop.offsetHeight > window.innerHeight + window.scrollY - 8) {
-    top = rect.top + window.scrollY - pop.offsetHeight - 6;
-  }
+  if (top + 120 > window.innerHeight - 8) top = rect.top - 120 - 6;
   pop.style.left = Math.max(8, left) + "px";
-  pop.style.top  = top + "px";
+  pop.style.top  = Math.max(8, top) + "px";
 }
 
 // Delegated click handler for all .gloss-term spans

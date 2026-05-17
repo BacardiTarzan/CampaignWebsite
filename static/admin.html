@@ -42,7 +42,7 @@
 
     <!-- Codex -->
     <div id="tab-codex" class="hidden">
-      <div class="tab-bar" style="border-color: var(--color-ink-faded);">
+      <div class="tab-bar">
         <button class="tab-btn active" onclick="switchCodexTab('species')">Species</button>
         <button class="tab-btn" onclick="switchCodexTab('backgrounds')">Backgrounds</button>
         <button class="tab-btn" onclick="switchCodexTab('feats')">Feats</button>
@@ -53,7 +53,7 @@
           <h3>Species</h3>
           <button onclick="showSpeciesForm()">+ New Species</button>
         </div>
-        <div id="species-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+        <div id="species-form" class="hidden mb-md tome-inset">
           <label>Name</label><input type="text" id="sp-name">
           <label>Creature Type</label><input type="text" id="sp-type" value="Humanoid">
           <label>Size Options (comma-sep)</label><input type="text" id="sp-sizes" placeholder="Medium">
@@ -72,7 +72,7 @@
           <h3>Backgrounds</h3>
           <button onclick="showBgForm()">+ New Background</button>
         </div>
-        <div id="bg-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+        <div id="bg-form" class="hidden mb-md tome-inset">
           <div class="grid-2">
             <div><label>Name</label><input type="text" id="bg-name"></div>
             <div><label>Origin Feat Name</label><input type="text" id="bg-feat"></div>
@@ -97,7 +97,7 @@
           <h3>Feats</h3>
           <button onclick="showFeatForm()">+ New Feat</button>
         </div>
-        <div id="feat-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+        <div id="feat-form" class="hidden mb-md tome-inset">
           <div class="grid-2">
             <div><label>Name</label><input type="text" id="feat-name"></div>
             <div><label>Category</label>
@@ -121,12 +121,11 @@
         <div id="feat-list"></div>
       </div>
       <div id="codex-monsters" class="hidden">
-        <div class="flex-between mb-sm mt-md" style="align-items:center;flex-wrap:wrap;gap:8px">
-          <h3 style="margin:0">Monsters</h3>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="text" id="monster-search" class="ep-input" placeholder="Search by name…"
-              oninput="filterMonsters()" style="width:200px">
-            <select id="monster-cr-filter" onchange="filterMonsters()" style="width:120px">
+        <div class="flex-between flex-wrap mb-sm mt-md">
+          <h3>Monsters</h3>
+          <div class="flex-row">
+            <input type="text" id="monster-search" class="ep-input" placeholder="Search by name…" oninput="filterMonsters()">
+            <select id="monster-cr-filter" onchange="filterMonsters()">
               <option value="">All CR</option>
             </select>
           </div>
@@ -147,7 +146,7 @@
           <button onclick="showSpellForm()">+ New Spell</button>
         </div>
       </div>
-      <div id="spell-form" class="hidden mb-md" style="background:rgba(255,255,255,0.15);padding:16px;border-radius:5px;">
+      <div id="spell-form" class="hidden mb-md tome-inset">
         <div class="grid-2">
           <div><label>Name</label><input type="text" id="spell-name"></div>
           <div><label>Level (0 = cantrip)</label><input type="number" id="spell-level" value="1" min="0" max="9"></div>
@@ -180,17 +179,6 @@
       </div>
       <p class="hint mb-md">Toggle which pages players can see in their Lore Library. Content is loaded from <code>reference/Lore/</code> on seed.</p>
       <div id="lore-admin-list"></div>
-
-      <!-- Preview modal -->
-      <div id="lore-preview-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;align-items:center;justify-content:center;">
-        <div style="background:var(--color-panel);border:1px solid var(--color-border);border-radius:8px;max-width:720px;width:90%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
-          <div class="flex-between" style="padding:16px 20px;border-bottom:1px solid var(--color-border);flex-shrink:0;">
-            <strong id="lore-preview-title"></strong>
-            <button onclick="closeLorePreview()">✕ Close</button>
-          </div>
-          <div id="lore-preview-body" style="overflow-y:auto;padding:20px 24px;line-height:1.7;"></div>
-        </div>
-      </div>
     </div>
 
     <!-- Import -->
@@ -248,9 +236,9 @@
 
     <!-- Combat Tracker -->
     <div id="tab-combat" class="hidden">
-      <div class="flex-between mb-md" style="align-items:center">
-        <h3 style="margin:0">Combat Tracker</h3>
-        <div style="display:flex;gap:8px">
+      <div class="flex-between mb-md">
+        <h3>Combat Tracker</h3>
+        <div class="flex-row">
           <button class="btn-primary" onclick="openCombatAddModal()">+ Add Combatant</button>
           <button class="btn-secondary" onclick="clearCombat()">✕ Clear All</button>
         </div>
@@ -273,30 +261,40 @@
 
 <!-- Combat: Add Combatant modal -->
 <div id="combat-add-modal" class="modal-overlay hidden" onclick="closeCombatAddModal(event)">
-  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+  <div class="modal-box admin-combat-modal" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h3>Add Combatant</h3>
       <button class="modal-close-btn" onclick="closeCombatAddModal()">✕</button>
     </div>
-    <input type="text" id="combat-search" class="ep-input" placeholder="Search characters…"
-      oninput="filterCombatPicker()" style="width:100%;margin-bottom:10px">
-    <div id="combat-picker-list" style="max-height:360px;overflow-y:auto"></div>
+    <input type="text" id="combat-search" class="ep-input admin-search-input" placeholder="Search characters…" oninput="filterCombatPicker()">
+    <div id="combat-picker-list" class="admin-picker-list"></div>
+  </div>
+</div>
+
+<!-- Lore preview modal -->
+<div id="lore-preview-modal" class="scroll-modal hidden" onclick="closeLorePreview()">
+  <div class="scroll-modal__page" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <strong id="lore-preview-title" class="modal-title"></strong>
+      <button class="modal-close-btn" onclick="closeLorePreview()">✕</button>
+    </div>
+    <div id="lore-preview-body" class="admin-lore-body"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <!-- Bio edit modal -->
-<div id="bio-edit-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:center;justify-content:center;">
-  <div style="background:#1e1a14;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:24px;width:680px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;gap:14px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <strong id="bio-edit-title" style="font-family:'Cinzel',serif;font-size:1rem;color:#d4af70;">Edit Backstory</strong>
-      <button onclick="closeBioModal()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer;">✕</button>
+<div id="bio-edit-modal" class="scroll-modal hidden" onclick="closeBioModal()">
+  <div class="scroll-modal__page admin-bio-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <strong id="bio-edit-title" class="modal-title">Edit Backstory</strong>
+      <button class="modal-close-btn" onclick="closeBioModal()">✕</button>
     </div>
-    <textarea id="bio-edit-text" style="flex:1;min-height:400px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#f0eadc;font-family:'Crimson Pro',serif;font-size:0.95rem;padding:10px;resize:vertical;"></textarea>
-    <div style="display:flex;justify-content:flex-end;gap:10px;">
+    <textarea id="bio-edit-text" class="admin-bio-textarea"></textarea>
+    <div class="flex-end">
       <button onclick="closeBioModal()">Cancel</button>
-      <button onclick="saveBio()" style="background:#8b1a1a;color:#f0eadc;border-color:#a02020;">Save Backstory</button>
+      <button class="btn-danger" onclick="saveBio()">Save Backstory</button>
     </div>
   </div>
 </div>

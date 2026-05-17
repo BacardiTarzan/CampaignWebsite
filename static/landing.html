@@ -6,109 +6,46 @@
   <title>D&D 2024 Character Creator</title>
   <link rel="icon" type="image/png" href="/static/d20.png">
   <link rel="stylesheet" href="/static/style.css">
-  <style>
-    .landing-wrap {
-      max-width: 640px;
-      margin: 0 auto;
-      padding: 48px 16px 64px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    .landing-title {
-      font-family: var(--font-header);
-      font-size: 2.4rem;
-      color: var(--color-light);
-      text-align: center;
-      margin: 0 0 4px;
-      letter-spacing: 1px;
-    }
-    .landing-subtitle {
-      font-family: var(--font-book);
-      font-size: 1.05rem;
-      color: var(--color-light-dim);
-      text-align: center;
-      margin: 0 0 32px;
-    }
-    .nav-card {
-      width: 100%;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: var(--radius-lg);
-      padding: 24px 28px;
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      text-decoration: none;
-      color: inherit;
-      transition: background 0.15s, transform 0.12s;
-      cursor: pointer;
-    }
-    .nav-card:hover {
-      background: rgba(255,255,255,0.17);
-      transform: translateY(-2px);
-    }
-    .nav-card-icon {
-      font-size: 2rem;
-      line-height: 1;
-      flex-shrink: 0;
-    }
-    .nav-card-title {
-      font-family: var(--font-header);
-      font-size: 1.25rem;
-      color: var(--color-light);
-      margin-bottom: 3px;
-    }
-    .nav-card-desc {
-      font-family: var(--font-book);
-      font-size: 0.92rem;
-      color: var(--color-light-dim);
-    }
-    .landing-user {
-      position: absolute;
-      top: 18px;
-      right: 24px;
-      display: none;
-      align-items: center;
-      gap: 12px;
-      font-family: var(--font-book);
-      font-size: 0.9rem;
-      color: var(--color-light);
-    }
-  </style>
 </head>
 <body>
-  <div class="landing-user" id="landing-user">
+  <div class="entry-portal-user" id="landing-user">
     <span id="landing-user-name"></span>
     <a href="/auth/logout" class="btn-logout">Sign out</a>
   </div>
 
-  <div class="landing-wrap">
-    <div class="landing-title">D&D 2024</div>
-    <p class="landing-subtitle">Character Creator &amp; Campaign Companion</p>
+  <div class="entry-portal">
+    <h1 class="page-title">D&amp;D 2024</h1>
+    <p class="page-subtitle">Character Creator &amp; Campaign Companion</p>
 
-    <a class="nav-card" href="/portal">
-      <span class="nav-card-icon">⚔</span>
+    <a class="entry-nav-card" href="/portal">
+      <span class="entry-nav-icon">⚔</span>
       <div>
-        <div class="nav-card-title">My Characters</div>
-        <div class="nav-card-desc">View your roster, continue a character in progress, or download your sheet.</div>
+        <div class="entry-nav-title">My Characters</div>
+        <div class="entry-nav-desc">View your roster, continue a character in progress, or open your sheet.</div>
       </div>
     </a>
 
-    <a class="nav-card" href="/charactercreator">
-      <span class="nav-card-icon">📜</span>
+    <a class="entry-nav-card" href="/charactercreator">
+      <span class="entry-nav-icon">📜</span>
       <div>
-        <div class="nav-card-title">New Character</div>
-        <div class="nav-card-desc">Run the 10-step Session Zero wizard to build a fresh level 1 adventurer.</div>
+        <div class="entry-nav-title">New Character</div>
+        <div class="entry-nav-desc">Run the 10-step Session Zero wizard to build a fresh level 1 adventurer.</div>
       </div>
     </a>
 
-    <a class="nav-card" href="/admin" id="admin-card" style="display:none">
-      <span class="nav-card-icon">🛡</span>
+    <a class="entry-nav-card" href="/lore">
+      <span class="entry-nav-icon">📖</span>
       <div>
-        <div class="nav-card-title">DM Admin</div>
-        <div class="nav-card-desc">Manage the full roster, grant levels, edit the codex, and seed the database.</div>
+        <div class="entry-nav-title">Lore Library</div>
+        <div class="entry-nav-desc">Browse the campaign's lore, world-building notes, and reference articles.</div>
+      </div>
+    </a>
+
+    <a class="entry-nav-card" href="/admin" id="admin-card" style="display:none">
+      <span class="entry-nav-icon">🛡</span>
+      <div>
+        <div class="entry-nav-title">DM Admin</div>
+        <div class="entry-nav-desc">Manage the full roster, grant levels, edit the codex, and seed the database.</div>
       </div>
     </a>
   </div>
