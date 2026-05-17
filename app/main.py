@@ -39,21 +39,41 @@ def _seed():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
-        alembic_cfg = AlembicConfig(str(alembic_ini))
-        alembic_command.upgrade(alembic_cfg, "head")
-        log.info("Alembic migrations applied.")
-    except Exception as e:
-        log.error("Alembic migration failed: %s", e, exc_info=True)
+    from .database import Base
+    from sqlalchemy import text
 
-    # Safety net: create any tables alembic may have missed (idempotent)
+    alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+    alembic_cfg = AlembicConfig(str(alembic_ini))
+
+    # Step 1: create all tables from models (idempotent, checkfirst=True by default).
+    # This must happen before alembic runs so add_column migrations don't fail on
+    # tables that don't exist yet (the initial schema migration is intentionally empty).
     try:
-        from .database import Base
         Base.metadata.create_all(bind=engine)
         log.info("create_all complete.")
     except Exception as e:
         log.error("create_all failed: %s", e, exc_info=True)
+
+    # Step 2: if this is a fresh DB (alembic_version empty or missing), stamp to head
+    # so alembic doesn't try to add columns that create_all already created.
+    # For existing DBs with partial migrations, run upgrade normally.
+    try:
+        with engine.connect() as conn:
+            try:
+                version_count = conn.execute(
+                    text("SELECT count(*) FROM alembic_version")
+                ).scalar()
+            except Exception:
+                version_count = 0
+
+        if version_count == 0:
+            alembic_command.stamp(alembic_cfg, "head")
+            log.info("Fresh DB: stamped alembic to head.")
+        else:
+            alembic_command.upgrade(alembic_cfg, "head")
+            log.info("Alembic migrations applied.")
+    except Exception as e:
+        log.error("Alembic failed: %s", e, exc_info=True)
 
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _seed)
