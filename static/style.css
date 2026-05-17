@@ -1395,6 +1395,100 @@ h2 {
 .wt-props  { color: rgba(255,255,255,0.6); font-size: 0.78rem; margin-top: 2px; }
 .wt-mastery { color: #d4a843; font-size: 0.78rem; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 4px; }
 
+/* ── Combat tracker ── */
+.combat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+.combat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.combat-card:hover { border-color: var(--color-gold); box-shadow: 0 0 0 1px var(--color-gold); }
+.combat-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.combat-card-num {
+  font-family: var(--font-header);
+  font-size: 0.78rem;
+  color: var(--color-gold);
+  min-width: 18px;
+}
+.combat-card-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--color-light);
+  flex: 1;
+}
+.combat-remove-btn {
+  background: none;
+  border: none;
+  color: var(--color-muted, #9a8a6a);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.combat-remove-btn:hover { background: rgba(200,80,80,0.15); color: #e08080; }
+.combat-card-sub {
+  font-size: 0.78rem;
+  color: var(--color-ink-faded);
+  margin-bottom: 8px;
+}
+.combat-card-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.combat-stat { font-size: 0.85rem; }
+.combat-stat-label { color: var(--color-muted, #9a8a6a); font-size: 0.75rem; margin-right: 3px; }
+.combat-card-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.combat-hp-btn {
+  padding: 3px 10px;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-light);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.combat-hp-btn:hover { border-color: var(--color-gold); color: var(--color-gold); }
+.combat-hp-input {
+  width: 64px;
+  padding: 3px 6px;
+  font-size: 0.85rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-light);
+  text-align: center;
+}
+.combat-picker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  gap: 8px;
+}
+.combat-picker-row:hover { background: rgba(255,255,255,0.05); }
+.combat-picker-row strong { color: var(--color-light); }
+
 /* ── Responsive ── */
 @media (max-width: 600px) {
   .ability-grid { grid-template-columns: repeat(3, 1fr); }

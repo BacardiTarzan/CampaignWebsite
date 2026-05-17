@@ -30,12 +30,13 @@ function err(msg) { toast("⚠ " + msg, 5000); }
 function switchTab(tab) {
   document.querySelectorAll(".tab-bar > .tab-btn").forEach(b => b.classList.remove("active"));
   event.target.classList.add("active");
-  ["roster", "codex", "grimoire", "lore", "import"].forEach(t =>
+  ["roster", "codex", "grimoire", "lore", "import", "combat"].forEach(t =>
     document.getElementById(`tab-${t}`).classList.toggle("hidden", t !== tab));
   if (tab === "roster") loadRoster();
   if (tab === "codex") loadCodex();
   if (tab === "grimoire") loadGrimoireSpells();
   if (tab === "lore") loadLore();
+  if (tab === "combat") loadCombat();
 }
 
 function switchCodexTab(sub) {
@@ -59,11 +60,11 @@ async function loadRoster() {
   _rosterChars = chars;
   _rosterBios = {};
   chars.forEach(c => { _rosterBios[c.id] = c.bio || ""; });
-  const tbody = chars.map(c => {
+  const tbody = chars.map((c, i) => {
     const hp = c.hp_max ? `<span class="roster-hp" id="hp-${c.id}">${c.hp_current ?? "?"}/${c.hp_max}</span>` : "—";
     return `
     <tr>
-      <td>${c.id}</td>
+      <td>${i + 1}</td>
       <td><span class="roster-name" id="name-${c.id}" onclick="editCharName(${c.id})" title="Click to rename">${c.character_name}</span></td>
       <td>${c.created_by_display_name}</td>
       <td>${c.species_name || "—"}</td>
@@ -998,6 +999,123 @@ async function saveEditPanel() {
   toast("Changes saved.");
   closeEditPanel();
   loadRoster();
+}
+
+// ---------------------------------------------------------------------------
+// Combat tracker
+// ---------------------------------------------------------------------------
+let _combatants = [];
+
+async function loadCombat() {
+  _combatants = await api("GET", "/api/admin/combatants");
+  const el = document.getElementById("combat-list");
+  if (!_combatants.length) {
+    el.innerHTML = `<p class="hint">No combatants. Click "+ Add Combatant" to begin.</p>`;
+    return;
+  }
+  el.innerHTML = `<div class="combat-grid">${_combatants.map((c, i) => {
+    const species = [c.species_lineage, c.species_name].filter(Boolean).join(" ");
+    const cls = [c.class_name, c.level ? `Lv ${c.level}` : ""].filter(Boolean).join(" ");
+    const subtitle = [species, cls].filter(Boolean).join(" · ");
+    const hp = c.hp_max ? `${c.hp_current ?? "?"}/${c.hp_max}` : "—";
+    return `<div class="combat-card" onclick="combatOpenSheet(${c.character_id}, event)">
+      <div class="combat-card-header">
+        <span class="combat-card-num">${i + 1}</span>
+        <span class="combat-card-name">${c.name}</span>
+        <button class="combat-remove-btn" onclick="removeCombatant(${c.combatant_id}, event)" title="Remove">✕</button>
+      </div>
+      ${subtitle ? `<div class="combat-card-sub">${subtitle}</div>` : ""}
+      <div class="combat-card-stats">
+        <span class="combat-stat"><span class="combat-stat-label">HP</span> <span id="chp-${c.character_id}">${hp}</span></span>
+        <span class="combat-stat"><span class="combat-stat-label">Speed</span> ${c.speed} ft</span>
+      </div>
+      <div class="combat-card-actions" onclick="event.stopPropagation()">
+        <button class="combat-hp-btn" onclick="combatAdjHp(${c.character_id}, -1)">−1</button>
+        <button class="combat-hp-btn" onclick="combatAdjHp(${c.character_id}, +1)">+1</button>
+        <input type="number" id="combat-adj-${c.character_id}" class="combat-hp-input" placeholder="±HP">
+        <button class="combat-hp-btn" onclick="combatApplyAdj(${c.character_id})">Apply</button>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function combatOpenSheet(charId, e) {
+  if (e.target.closest("button, input")) return;
+  window.open(`/characters/${charId}/sheet`, "_blank");
+}
+
+async function combatAdjHp(charId, delta) {
+  try {
+    const r = await api("POST", `/api/admin/characters/${charId}/hp`, { delta });
+    const el = document.getElementById(`chp-${charId}`);
+    if (el) el.textContent = `${r.hp_current}/${r.hp_max}`;
+  } catch(e) { err(e.message); }
+}
+
+async function combatApplyAdj(charId) {
+  const input = document.getElementById(`combat-adj-${charId}`);
+  const delta = parseInt(input?.value);
+  if (!delta || isNaN(delta)) { toast("Enter a number first."); return; }
+  input.value = "";
+  await combatAdjHp(charId, delta);
+}
+
+async function removeCombatant(combatantId, e) {
+  e?.stopPropagation();
+  try {
+    await api("DELETE", `/api/admin/combatants/${combatantId}`);
+    loadCombat();
+  } catch(e) { err(e.message); }
+}
+
+async function clearCombat() {
+  if (!_combatants.length) { toast("Combat is already empty."); return; }
+  if (!confirm("Remove all combatants?")) return;
+  try {
+    await api("POST", "/api/admin/combatants/clear");
+    loadCombat();
+  } catch(e) { err(e.message); }
+}
+
+function openCombatAddModal() {
+  const inCombat = new Set(_combatants.map(c => c.character_id));
+  const available = _rosterChars.filter(c => !inCombat.has(c.id));
+  const el = document.getElementById("combat-picker-list");
+  el.innerHTML = available.length
+    ? available.map(c => {
+        const cls = c.class_name ? ` · ${c.class_name} Lv ${c.level || "?"}` : "";
+        return `<div class="combat-picker-row" onclick="addCombatant(${c.id})">
+          <strong>${c.character_name}</strong>
+          <span class="hint">${c.created_by_display_name}${cls}</span>
+        </div>`;
+      }).join("")
+    : `<p class="hint">All characters are already in combat.</p>`;
+  document.getElementById("combat-search").value = "";
+  document.getElementById("combat-add-modal").classList.remove("hidden");
+}
+
+function closeCombatAddModal(e) {
+  if (e && e.target !== document.getElementById("combat-add-modal")) return;
+  document.getElementById("combat-add-modal").classList.add("hidden");
+}
+
+function filterCombatPicker() {
+  const q = document.getElementById("combat-search").value.toLowerCase();
+  document.querySelectorAll(".combat-picker-row").forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+async function addCombatant(charId) {
+  try {
+    await api("POST", "/api/admin/combatants", { character_id: charId });
+    document.getElementById("combat-add-modal").classList.add("hidden");
+    loadCombat();
+  } catch(e) {
+    if (e.message.includes("409") || e.message.toLowerCase().includes("already")) {
+      toast("Already in combat.");
+    } else { err(e.message); }
+  }
 }
 
 // ---------------------------------------------------------------------------

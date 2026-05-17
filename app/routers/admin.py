@@ -10,7 +10,7 @@ from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spel
 from ..models.character import (
     Character, CharacterSpell, SkillProficiency, ToolProficiency,
     LanguageProficiency, WeaponMasteryUnlock, CharacterWeaponProficiency,
-    CharacterFeat, CharacterClass,
+    CharacterFeat, CharacterClass, Combatant,
 )
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
@@ -719,6 +719,68 @@ def admin_set_lore_visibility(slug: str, visible: bool, db: Session = Depends(ge
 # Schema repair — add missing columns if alembic didn't apply them
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Combat tracker
+# ---------------------------------------------------------------------------
+
+class CombatantIn(BaseModel):
+    character_id: int
+
+
+@router.get("/combatants")
+def list_combatants(db: Session = Depends(get_db)):
+    rows = db.query(Combatant).order_by(Combatant.added_at).all()
+    result = []
+    for row in rows:
+        char = row.character
+        cc = char.character_classes[0] if char.character_classes else None
+        result.append({
+            "combatant_id": row.id,
+            "character_id": char.id,
+            "name": char.character_name,
+            "hp_current": char.hp_current,
+            "hp_max": char.hp_max,
+            "speed": char.speed or 30,
+            "class_name": cc.dnd_class.name if cc else None,
+            "level": cc.level if cc else None,
+            "species_name": char.species.name if char.species else None,
+            "species_lineage": char.species_lineage,
+        })
+    return result
+
+
+@router.post("/combatants")
+def add_combatant(data: CombatantIn, db: Session = Depends(get_db)):
+    char = db.get(Character, data.character_id)
+    if not char:
+        raise HTTPException(404, "Character not found")
+    existing = db.query(Combatant).filter_by(character_id=data.character_id).first()
+    if existing:
+        raise HTTPException(409, "Character is already in combat")
+    c = Combatant(character_id=data.character_id)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return {"ok": True, "combatant_id": c.id}
+
+
+@router.delete("/combatants/{combatant_id}")
+def remove_combatant(combatant_id: int, db: Session = Depends(get_db)):
+    c = db.get(Combatant, combatant_id)
+    if not c:
+        raise HTTPException(404)
+    db.delete(c)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/combatants/clear")
+def clear_combatants(db: Session = Depends(get_db)):
+    removed = db.query(Combatant).delete()
+    db.commit()
+    return {"ok": True, "removed": removed}
+
+
 @router.post("/repair-schema")
 def repair_schema(db: Session = Depends(get_db)):
     """Add source/notes columns to character_spells if missing. Safe to re-run."""
@@ -763,6 +825,13 @@ def repair_schema(db: Session = Depends(get_db)):
         )
     """))
     db.execute(text("CREATE INDEX IF NOT EXISTS ix_glossary_terms_slug ON glossary_terms (slug)"))
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS combatants (
+            id SERIAL PRIMARY KEY,
+            character_id INTEGER NOT NULL UNIQUE REFERENCES characters(id) ON DELETE CASCADE,
+            added_at TIMESTAMP
+        )
+    """))
     db.commit()
     return {"ok": True, "applied": stmts}
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, func
 from sqlalchemy.orm import relationship
 from ..database import Base
@@ -176,3 +177,12 @@ class CharacterWeaponProficiency(Base):
     proficiency_type = Column(String, nullable=False)  # category like "Simple Weapons" or specific weapon name
 
     character = relationship("Character", back_populates="weapon_proficiencies")
+
+
+class Combatant(Base):
+    __tablename__ = "combatants"
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, unique=True)
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    character = relationship("Character")

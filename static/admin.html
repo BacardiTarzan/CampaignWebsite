@@ -28,6 +28,7 @@
       <button class="tab-btn" onclick="switchTab('grimoire')">🔮 Grimoire</button>
       <button class="tab-btn" onclick="switchTab('lore')">📖 Lore</button>
       <button class="tab-btn" onclick="switchTab('import')">⬆ Import</button>
+      <button class="tab-btn" onclick="switchTab('combat')">⚔ Combat</button>
     </div>
 
     <!-- Roster -->
@@ -230,6 +231,31 @@
       <button class="btn-secondary" onclick="backfillClassSpells()">⚗ Backfill Class Spells</button>
       <div id="backfill-class-result" class="hint mt-sm"></div>
     </div>
+
+    <!-- Combat Tracker -->
+    <div id="tab-combat" class="hidden">
+      <div class="flex-between mb-md" style="align-items:center">
+        <h3 style="margin:0">Combat Tracker</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" onclick="openCombatAddModal()">+ Add Combatant</button>
+          <button class="btn-secondary" onclick="clearCombat()">✕ Clear All</button>
+        </div>
+      </div>
+      <div id="combat-list"><p class="hint">No combatants. Click "+ Add Combatant" to begin.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Combat: Add Combatant modal -->
+<div id="combat-add-modal" class="modal-overlay hidden" onclick="closeCombatAddModal(event)">
+  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Add Combatant</h3>
+      <button class="modal-close-btn" onclick="closeCombatAddModal()">✕</button>
+    </div>
+    <input type="text" id="combat-search" class="ep-input" placeholder="Search characters…"
+      oninput="filterCombatPicker()" style="width:100%;margin-bottom:10px">
+    <div id="combat-picker-list" style="max-height:360px;overflow-y:auto"></div>
   </div>
 </div>
 
