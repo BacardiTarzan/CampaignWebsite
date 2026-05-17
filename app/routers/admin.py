@@ -844,37 +844,48 @@ def list_combatants(db: Session = Depends(get_db)):
 
 @router.post("/combatants/character")
 def add_character_combatant(data: CombatantCharIn, db: Session = Depends(get_db)):
-    char = db.get(Character, data.character_id)
-    if not char:
-        raise HTTPException(404, "Character not found")
-    existing = db.query(Combatant).filter_by(character_id=data.character_id).first()
-    if existing:
-        raise HTTPException(409, "Character is already in combat")
-    c = Combatant(character_id=data.character_id)
-    db.add(c)
-    db.commit()
-    db.refresh(c)
-    return {"ok": True, "combatant_id": c.id}
+    import traceback as _tb
+    try:
+        char = db.get(Character, data.character_id)
+        if not char:
+            raise HTTPException(404, "Character not found")
+        existing = db.query(Combatant).filter_by(character_id=data.character_id).first()
+        if existing:
+            raise HTTPException(409, "Character is already in combat")
+        c = Combatant(character_id=data.character_id)
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        return {"ok": True, "combatant_id": c.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"{e}\n{_tb.format_exc()}")
 
 
 @router.post("/combatants/monster")
 def add_monster_combatant(data: CombatantMonsterIn, db: Session = Depends(get_db)):
-    m = db.get(Monster, data.monster_id)
-    if not m:
-        raise HTTPException(404, "Monster not found")
-    # Auto-number: count existing instances of this monster
-    existing_count = db.query(Combatant).filter_by(monster_id=data.monster_id).count()
-    custom_name = f"{m.name} {existing_count + 1}"
-    c = Combatant(
-        monster_id=data.monster_id,
-        custom_name=custom_name,
-        hp_current=m.hp_max,
-        hp_max_override=m.hp_max,
-    )
-    db.add(c)
-    db.commit()
-    db.refresh(c)
-    return {"ok": True, "combatant_id": c.id, "name": custom_name}
+    import traceback as _tb
+    try:
+        m = db.get(Monster, data.monster_id)
+        if not m:
+            raise HTTPException(404, "Monster not found")
+        existing_count = db.query(Combatant).filter_by(monster_id=data.monster_id).count()
+        custom_name = f"{m.name} {existing_count + 1}"
+        c = Combatant(
+            monster_id=data.monster_id,
+            custom_name=custom_name,
+            hp_current=m.hp_max,
+            hp_max_override=m.hp_max,
+        )
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        return {"ok": True, "combatant_id": c.id, "name": custom_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"{e}\n{_tb.format_exc()}")
 
 
 @router.patch("/combatants/{combatant_id}/hp")
