@@ -150,7 +150,7 @@ function openGlossaryModal(slug) {
       <div class="gloss-modal-body"><p>${_simpleMarkdown(term.full_description)}</p></div>
     </div>
     <div style="text-align:right;padding:8px 20px 16px">
-      <a href="/glossary#${slug}" target="_blank" class="gloss-glossary-link">View in Glossary ↗</a>
+      <a href="/glossary#${slug}" target="_blank" rel="noopener noreferrer" class="gloss-glossary-link">View in Glossary ↗</a>
     </div>
   </div>`;
   overlay.addEventListener("click", e => { if (e.target === overlay) closeGlossaryModal(); });
