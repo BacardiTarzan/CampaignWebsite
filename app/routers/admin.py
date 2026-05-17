@@ -15,6 +15,7 @@ from ..models.character import (
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
 from ..services.pdf import render_character_html, render_character_pdf
+from ..services.levelup_rules import CLASS_ALWAYS_PREPARED
 from .characters import _parse_species_spell_grants
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -337,6 +338,28 @@ def admin_set_weapon_proficiencies(char_id: int, data: AdminWeaponProficienciesI
     return {"ok": True}
 
 
+class AdminSpeedCurrencyIn(BaseModel):
+    speed: int | None = None
+    pp: int = 0
+    gp: int = 0
+    sp: int = 0
+    cp: int = 0
+
+
+@router.patch("/characters/{char_id}/speed-currency")
+def admin_set_speed_currency(char_id: int, data: AdminSpeedCurrencyIn, db: Session = Depends(get_db)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if data.speed is not None:
+        char.speed = data.speed
+    cur = dict(char.currency or {})
+    cur.update({"pp": data.pp, "gp": data.gp, "sp": data.sp, "cp": data.cp})
+    char.currency = cur
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/characters/{char_id}/detail")
 def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
     """Return full proficiency/mastery/weapon data for the admin edit panel."""
@@ -395,6 +418,7 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
                 elif isinstance(val, str) and val:
                     mastery_names.append(val)
 
+    cur = dict(char.currency or {})
     return {
         "id": char.id,
         "character_name": char.character_name,
@@ -407,6 +431,13 @@ def admin_char_detail(char_id: int, db: Session = Depends(get_db)):
         "weapon_proficiencies": weapon_proficiencies,
         "all_weapons": all_weapons,
         "all_tools": all_tools,
+        "speed": char.speed or 30,
+        "currency": {
+            "pp": cur.get("pp", 0),
+            "gp": cur.get("gp", 0),
+            "sp": cur.get("sp", 0),
+            "cp": cur.get("cp", 0),
+        },
     }
 
 
@@ -775,6 +806,53 @@ def backfill_species_spells(db: Session = Depends(get_db)):
                 added += 1
             total_added += added
             results.append({"character": char.character_name, "added": added})
+        db.commit()
+        return {"total_added": total_added, "characters": results}
+    except Exception as e:
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{e}\n\n{tb}")
+
+
+# ---------------------------------------------------------------------------
+# Backfill class always-prepared spells (e.g. Ranger → Hunter's Mark)
+# ---------------------------------------------------------------------------
+
+@router.post("/backfill-class-spells")
+def backfill_class_spells(db: Session = Depends(get_db)):
+    """Add missing class always-prepared spells to existing characters. Idempotent."""
+    import traceback
+    try:
+        chars = db.query(Character).all()
+        total_added = 0
+        results = []
+        for char in chars:
+            cc = char.character_classes[0] if char.character_classes else None
+            if not cc:
+                continue
+            cls_obj = db.get(DnDClass, cc.class_id)
+            if not cls_obj or cls_obj.name not in CLASS_ALWAYS_PREPARED:
+                continue
+            existing_ids = {cs.spell_id for cs in char.spells}
+            added = 0
+            for min_lvl, spell_names in CLASS_ALWAYS_PREPARED[cls_obj.name].items():
+                for name in spell_names:
+                    spell = db.query(Spell).filter(func.lower(Spell.name) == name.lower()).first()
+                    if not spell or spell.id in existing_ids:
+                        continue
+                    db.add(CharacterSpell(
+                        character_id=char.id,
+                        spell_id=spell.id,
+                        prepared=True,
+                        always_prepared=True,
+                        source="class",
+                        source_class_id=cc.class_id,
+                        notes="Favored Enemy",
+                    ))
+                    existing_ids.add(spell.id)
+                    added += 1
+            total_added += added
+            if added:
+                results.append({"character": char.character_name, "added": added})
         db.commit()
         return {"total_added": total_added, "characters": results}
     except Exception as e:

@@ -214,9 +214,12 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     initiative = _mod(attrs["dex"]) + (_prof_bonus(total_level) if has_alert else 0)
     initiative_source = "alert" if has_alert else "dex"
 
-    # Proficient skill names for quick lookup
+    # Proficient skill names for quick lookup (include species-granted skill choices)
     prof_skills = {s.skill_name for s in char.skill_proficiencies}
     expert_skills = {s.skill_name for s in char.skill_proficiencies if s.expertise}
+    for ch in char.choices:
+        if ch.feature_key.startswith("species_skill_") and isinstance(ch.choice_value, str):
+            prof_skills.add(ch.choice_value)
 
     # Proficient saving throws from class
     save_profs = set(cls.saving_throws or []) if cls else set()
@@ -293,11 +296,23 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     species_traits = []
     if char.species:
         selected = char.species_lineage
+        # Species skill choices (e.g. Keen Senses) keyed by choice_key
+        species_skill_choices = {
+            ch.feature_key: ch.choice_value
+            for ch in char.choices
+            if ch.feature_key.startswith("species_skill_") and isinstance(ch.choice_value, str)
+        }
         for trait in (char.species.traits or []):
             if selected and re.search(r'lineage|legacy|ancestry', trait.get('name', ''), re.IGNORECASE):
                 continue
             if trait.get('level', 1) <= total_level:
-                species_traits.append(trait)
+                t = dict(trait)
+                # Resolve species skill choice: replace generic description with chosen skill
+                if t.get('choice_key') == 'species_skill':
+                    chosen_skill = species_skill_choices.get('species_skill_keen_senses')
+                    if chosen_skill:
+                        t = {**t, 'description': f'Proficiency in {chosen_skill}.'}
+                species_traits.append(t)
         if selected and char.species.lineages:
             for lin in char.species.lineages:
                 if lin.get('name') == selected:

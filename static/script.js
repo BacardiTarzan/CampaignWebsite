@@ -201,6 +201,23 @@ function selectSpecies(id) {
     lineageSec.classList.add("hidden");
   }
 
+  // Species trait skill choices (e.g. Keen Senses)
+  state.speciesSkillChoices = {};
+  const skillSec = document.getElementById("species-skill-section");
+  const skillTraits = (sp.traits || []).filter(t => t.choice_key === "species_skill");
+  if (skillTraits.length) {
+    skillSec.innerHTML = skillTraits.map(t => `
+      <div class="mb-sm">
+        <label class="field-label">${t.name}: choose one skill proficiency</label>
+        <div class="pill-group mt-sm" id="skill-choice-${t.name.replace(/\s+/g,'-')}">
+          ${(t.options || []).map(opt => `<button type="button" class="pill" onclick="selectSpeciesSkill('${t.name}','${opt}')">${opt}</button>`).join("")}
+        </div>
+      </div>`).join("");
+    skillSec.classList.remove("hidden");
+  } else {
+    skillSec.classList.add("hidden");
+  }
+
   // Size selector
   const sizeSec = document.getElementById("species-size-section");
   if ((sp.size_options||[]).length > 1) {
@@ -244,12 +261,23 @@ function selectSize(sz) {
   _updateSpeciesNextBtn();
 }
 
+function selectSpeciesSkill(traitName, skill) {
+  if (!state.speciesSkillChoices) state.speciesSkillChoices = {};
+  state.speciesSkillChoices[traitName] = skill;
+  const key = traitName.replace(/\s+/g, '-');
+  document.querySelectorAll(`#skill-choice-${key} .pill`).forEach(p =>
+    p.classList.toggle("selected", p.textContent === skill));
+  _updateSpeciesNextBtn();
+}
+
 function _updateSpeciesNextBtn() {
   const sp = state.currentSpecies;
   if (!sp) { document.getElementById("btn-species-next").disabled = true; return; }
   const needsLineage = sp.lineages && sp.lineages.length && !state.speciesLineage;
   const needsSize = (sp.size_options||[]).length > 1 && !state.speciesSizeChoice;
-  document.getElementById("btn-species-next").disabled = !!(needsLineage || needsSize);
+  const skillTraits = (sp.traits || []).filter(t => t.choice_key === "species_skill");
+  const needsSkill = skillTraits.some(t => !(state.speciesSkillChoices || {})[t.name]);
+  document.getElementById("btn-species-next").disabled = !!(needsLineage || needsSize || needsSkill);
 }
 
 function saveSpecies() {
@@ -261,10 +289,17 @@ function saveSpecies() {
   if (sp && (sp.size_options||[]).length > 1 && !state.speciesSizeChoice) {
     toast("Choose a size before continuing."); return;
   }
+  const skillTraits = (sp.traits || []).filter(t => t.choice_key === "species_skill");
+  for (const t of skillTraits) {
+    if (!(state.speciesSkillChoices || {})[t.name]) {
+      toast(`Choose a skill for ${t.name} before continuing.`); return;
+    }
+  }
   api("POST", `/api/characters/${state.charId}/step/species`, {
     species_id: state.speciesId,
     species_lineage: state.speciesLineage,
     species_size_choice: state.speciesSizeChoice,
+    species_skill_choices: Object.values(state.speciesSkillChoices || []),
   })
     .then(() => { loadBackgrounds(); showStep(3); })
     .catch(e => err(e.message));
@@ -770,7 +805,7 @@ function renderFeaturesStep() {
   container.innerHTML = level1Features.map(feat => {
     if (feat.choice_key === "weapon_mastery") {
       const desc = feat.description || "";
-      const slotsMatch = desc.match(/(\d+)\s+(?:Simple\/Martial\s+Melee|weapons?)/i);
+      const slotsMatch = desc.match(/of\s+(\d+)/i);
       const slots = slotsMatch ? parseInt(slotsMatch[1]) : 3;
       const meleOnly = /melee/i.test(desc);
       const list = meleOnly ? MELEE_WEAPON_LIST : WEAPON_LIST;

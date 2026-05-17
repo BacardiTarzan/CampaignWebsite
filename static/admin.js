@@ -642,6 +642,16 @@ async function backfillSpeciesSpells() {
   } catch(e) { err(e.message); el.textContent = ""; }
 }
 
+async function backfillClassSpells() {
+  const el = document.getElementById("backfill-class-result");
+  el.textContent = "Running backfill…";
+  try {
+    const r = await api("POST", "/api/admin/backfill-class-spells");
+    const lines = r.characters.map(c => `${c.character}: +${c.added}`).join(", ");
+    el.textContent = `✓ Total added: ${r.total_added}${lines ? ` (${lines})` : " — nothing new to add"}`;
+  } catch(e) { err(e.message); el.textContent = ""; }
+}
+
 // ---------------------------------------------------------------------------
 // Lore management
 // ---------------------------------------------------------------------------
@@ -896,6 +906,21 @@ async function openEditPanel(charId) {
         <div class="ep-weapon-table">${weaponRows}</div>
       </div>
 
+      <div class="ep-section">
+        <h4>Speed &amp; Currency</h4>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <label class="field-label" style="margin:0">Speed (ft)
+            <input type="number" id="ep-speed" class="ep-input" value="${detail.speed}" min="0" style="width:72px;margin-left:6px">
+          </label>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <label class="field-label" style="margin:0">PP <input type="number" id="ep-pp" class="ep-input" value="${detail.currency.pp}" min="0" style="width:72px;margin-left:6px"></label>
+          <label class="field-label" style="margin:0">GP <input type="number" id="ep-gp" class="ep-input" value="${detail.currency.gp}" min="0" style="width:72px;margin-left:6px"></label>
+          <label class="field-label" style="margin:0">SP <input type="number" id="ep-sp" class="ep-input" value="${detail.currency.sp}" min="0" style="width:72px;margin-left:6px"></label>
+          <label class="field-label" style="margin:0">CP <input type="number" id="ep-cp" class="ep-input" value="${detail.currency.cp}" min="0" style="width:72px;margin-left:6px"></label>
+        </div>
+      </div>
+
       <div class="ep-footer">
         <button class="btn-primary" onclick="saveEditPanel()">Save Changes</button>
         <button onclick="closeEditPanel()">Cancel</button>
@@ -958,6 +983,16 @@ async function saveEditPanel() {
   try {
     await api("PATCH", `/api/admin/characters/${id}/masteries`, { weapon_names: masteries });
   } catch(e) { errs.push("Masteries: " + e.message); }
+
+  // Speed & currency
+  const speed = parseInt(document.getElementById("ep-speed")?.value) || 30;
+  const pp = parseInt(document.getElementById("ep-pp")?.value) || 0;
+  const gp = parseInt(document.getElementById("ep-gp")?.value) || 0;
+  const sp = parseInt(document.getElementById("ep-sp")?.value) || 0;
+  const cp = parseInt(document.getElementById("ep-cp")?.value) || 0;
+  try {
+    await api("PATCH", `/api/admin/characters/${id}/speed-currency`, { speed, pp, gp, sp, cp });
+  } catch(e) { errs.push("Speed/Currency: " + e.message); }
 
   if (errs.length) { err(errs.join("; ")); return; }
   toast("Changes saved.");

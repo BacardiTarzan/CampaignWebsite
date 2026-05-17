@@ -166,6 +166,11 @@ def _parse_lineage_table(raw: str) -> list[dict]:
             entry["level5_spell"] = cols[3]
         elif len(cols) >= 2:
             entry["description"] = cols[1]
+        # Extract speed override from description e.g. "Speed increases to 35 ft."
+        if "description" in entry:
+            sm = re.search(r'[Ss]peed\s+(?:increases?\s+to|is)\s+(\d+)', entry["description"])
+            if sm:
+                entry["speed"] = int(sm.group(1))
         result.append(entry)
     return result
 
@@ -227,7 +232,25 @@ def _parse_species_file(path: Path) -> dict:
                 if lm:
                     tname = lm.group(1).strip()
                     tlevel = int(lm.group(2))
-                traits.append({"name": tname, "description": re.sub(r"\s+", " ", tdesc_raw).strip(), "level": tlevel})
+                # Detect "Proficiency in X, Y, or Z (choose one)" skill-choice traits
+                trait_choice_required = False
+                trait_choice_key = None
+                trait_options: list[str] = []
+                skill_pick_m = re.search(r'Proficiency in (.+?)\s*\(choose one\)', tdesc_raw, re.IGNORECASE)
+                if skill_pick_m:
+                    raw_opts = skill_pick_m.group(1)
+                    trait_options = [s.strip() for s in re.split(r',\s*|\s+or\s+', raw_opts) if s.strip()]
+                    if trait_options:
+                        trait_choice_required = True
+                        trait_choice_key = "species_skill"
+                traits.append({
+                    "name": tname,
+                    "description": re.sub(r"\s+", " ", tdesc_raw).strip(),
+                    "level": tlevel,
+                    "choice_required": trait_choice_required,
+                    "choice_key": trait_choice_key,
+                    "options": trait_options,
+                })
 
                 # Parse lineages from traits named with choice keywords
                 if not lineages and any(kw in tname.lower() for kw in ("lineage", "legacy", "ancestry")):

@@ -15,6 +15,7 @@ from ..services.export import character_to_dict, character_to_sheet_dict, comput
 from ..services.levelup_rules import (
     required_steps, auto_grants, subclass_auto_grants, max_spell_level,
     METAMAGIC_OPTIONS, ELDRITCH_INVOCATIONS, AASIMAR_REVELATIONS, _species_lineage_spells,
+    CLASS_ALWAYS_PREPARED,
 )
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
@@ -86,6 +87,7 @@ class StepSpeciesIn(BaseModel):
     species_id: int
     species_lineage: str | None = None
     species_size_choice: str | None = None
+    species_skill_choices: list[str] = []
 
 
 class StepBackgroundIn(BaseModel):
@@ -260,6 +262,12 @@ def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db
     species = db.get(Species, data.species_id)
     if species:
         char.speed = species.speed
+        # Apply lineage speed override if present (e.g. Wood Elf 35 ft.)
+        if data.species_lineage and species.lineages:
+            for lin in species.lineages:
+                if lin.get("name") == data.species_lineage and lin.get("speed"):
+                    char.speed = lin["speed"]
+                    break
         # Clear previous species spell grants and re-derive from new selection
         for cs in list(char.spells):
             if cs.source == "species":
@@ -277,6 +285,19 @@ def save_species(char_id: int, data: StepSpeciesIn, db: Session = Depends(get_db
                     source="species",
                     notes=grant["notes"],
                 ))
+    # Store species trait skill choices (e.g. Keen Senses: Insight/Perception/Survival)
+    # Clear old species_skill choices first so re-selecting species is idempotent
+    for old in list(char.choices):
+        if old.feature_key.startswith("species_skill_"):
+            db.delete(old)
+    db.flush()
+    for skill in data.species_skill_choices:
+        db.add(CharacterChoice(
+            character_id=char.id,
+            feature_key="species_skill_keen_senses",
+            choice_value=skill,
+        ))
+
     char.wizard_step = max(char.wizard_step, 3)
     db.commit()
     return {"ok": True}
@@ -495,6 +516,26 @@ def save_spells(char_id: int, data: StepSpellsIn, db: Session = Depends(get_db),
             source="class",
             source_class_id=src_class_id,
         ))
+
+    # Auto-add class always-prepared spells (e.g. Ranger Favored Enemy → Hunter's Mark)
+    cls_obj = db.get(DnDClass, cc.class_id) if cc else None
+    if cls_obj:
+        existing_ids = {sid for sid in data.cantrip_ids + data.spell_ids}
+        existing_ids |= {cs.spell_id for cs in char.spells if cs.source == "species"}
+        for min_lvl, spell_names in CLASS_ALWAYS_PREPARED.get(cls_obj.name, {}).items():
+            for name in spell_names:
+                spell = db.query(Spell).filter(Spell.name == name).first()
+                if spell and spell.id not in existing_ids:
+                    db.add(CharacterSpell(
+                        character_id=char.id,
+                        spell_id=spell.id,
+                        prepared=True,
+                        always_prepared=True,
+                        source="class",
+                        source_class_id=cc.class_id,
+                        notes="Favored Enemy",
+                    ))
+                    existing_ids.add(spell.id)
 
     char.wizard_step = max(char.wizard_step, 10)
     db.commit()

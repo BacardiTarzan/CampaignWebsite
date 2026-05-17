@@ -172,6 +172,14 @@ ELDRITCH_INVOCATIONS = [
      "desc": "Cast Arcane Eye at will, without a spell slot."},
 ]
 
+# Class-level always-prepared spells (granted by class features, not subclass)
+# class_name → {min_level: [spell_names]}
+CLASS_ALWAYS_PREPARED: dict[str, dict[int, list[str]]] = {
+    "Ranger": {
+        1: ["Hunter's Mark"],   # Favored Enemy
+    },
+}
+
 # Subclass always-prepared spell grants by subclass name → {tier_level: [spell_names]}
 # "tier_level" is the character level at which the tier kicks in (3/5/7/9 for most)
 SUBCLASS_ALWAYS_PREPARED: dict[str, dict[int, list[str]]] = {
@@ -710,6 +718,16 @@ def auto_grants(char, cc, cls, subclass, next_level: int, db: Session) -> list[i
     """
     owned_ids = {cs.spell_id for cs in char.spells}
     spell_ids = []
+
+    # Class always-prepared spells (e.g. Ranger Favored Enemy → Hunter's Mark)
+    if cls:
+        for min_lvl, spell_names in CLASS_ALWAYS_PREPARED.get(cls.name, {}).items():
+            if next_level >= min_lvl:
+                for name in spell_names:
+                    spell = db.query(Spell).filter(Spell.name == name).first()
+                    if spell and spell.id not in owned_ids:
+                        spell_ids.append(spell.id)
+                        owned_ids.add(spell.id)
 
     # Subclass tier spells
     if subclass:
