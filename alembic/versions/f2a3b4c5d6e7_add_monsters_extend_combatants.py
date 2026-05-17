@@ -60,19 +60,26 @@ def upgrade():
             sa.UniqueConstraint('name'),
         )
 
-    # Extend combatants: make character_id nullable, add monster columns
-    cols = {c['name'] for c in inspect(bind).get_columns('combatants')}
-    for col, ddl in [
-        ('monster_id', 'INTEGER REFERENCES monsters(id) ON DELETE CASCADE'),
-        ('custom_name', 'VARCHAR'),
-        ('hp_current', 'INTEGER'),
-        ('hp_max_override', 'INTEGER'),
-    ]:
-        if col not in cols:
-            bind.execute(text(f'ALTER TABLE combatants ADD COLUMN {col} {ddl}'))
-
-    # Drop unique constraint on character_id so monsters can coexist (SQLite: recreate; Postgres: drop)
-    # We leave uniqueness enforcement to application logic for portability.
+    # Extend combatants: add monster columns
+    dialect = bind.dialect.name
+    if dialect == 'postgresql':
+        for stmt in [
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS monster_id INTEGER REFERENCES monsters(id) ON DELETE CASCADE",
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS custom_name VARCHAR",
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS hp_current INTEGER",
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS hp_max_override INTEGER",
+        ]:
+            op.execute(text(stmt))
+    else:
+        cols = {c['name'] for c in inspect(bind).get_columns('combatants')}
+        for col, ddl in [
+            ('monster_id', 'INTEGER REFERENCES monsters(id) ON DELETE CASCADE'),
+            ('custom_name', 'VARCHAR'),
+            ('hp_current', 'INTEGER'),
+            ('hp_max_override', 'INTEGER'),
+        ]:
+            if col not in cols:
+                op.execute(text(f'ALTER TABLE combatants ADD COLUMN {col} {ddl}'))
 
 
 def downgrade():

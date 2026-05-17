@@ -6,6 +6,7 @@ Create Date: 2026-05-17
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text, inspect as sa_inspect
 
 revision = 'h4i5j6k7l8m9'
 down_revision = 'g3h4i5j6k7l8'
@@ -14,12 +15,11 @@ depends_on = None
 
 
 def upgrade():
-    from sqlalchemy import inspect, text
     bind = op.get_bind()
     dialect = bind.dialect.name
-    tables = inspect(bind).get_table_names()
+    tables = sa_inspect(bind).get_table_names()
 
-    # Ensure monsters table exists
+    # Ensure monsters table exists first (FK target for monster_id)
     if 'monsters' not in tables:
         op.create_table(
             'monsters',
@@ -61,46 +61,28 @@ def upgrade():
             sa.UniqueConstraint('name'),
         )
 
-    # Add any missing combatants columns
-    existing_cols = {c['name'] for c in inspect(bind).get_columns('combatants')}
-    missing = [
-        ('monster_id',      'INTEGER'),
-        ('custom_name',     'VARCHAR'),
-        ('hp_current',      'INTEGER'),
-        ('hp_max_override', 'INTEGER'),
-        ('added_at',        'TIMESTAMP'),
-    ]
-    for col, col_type in missing:
-        if col not in existing_cols:
-            # monster_id FK — only add the FK clause when monsters table exists
-            if col == 'monster_id':
-                bind.execute(text(
-                    "ALTER TABLE combatants ADD COLUMN monster_id INTEGER "
-                    "REFERENCES monsters(id) ON DELETE CASCADE"
-                ))
-            else:
-                bind.execute(text(
-                    f"ALTER TABLE combatants ADD COLUMN {col} {col_type}"
-                ))
-
-    # Make character_id nullable if still NOT NULL (PostgreSQL only — SQLite
-    # was handled in g3h4i5j6k7l8 via table-recreate)
     if dialect == 'postgresql':
-        bind.execute(text("""
+        # ADD COLUMN IF NOT EXISTS is idempotent — no inspect caching issues.
+        # bind.execute() silently no-ops in newer SQLAlchemy; op.execute() is correct.
+        for stmt in [
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS monster_id INTEGER REFERENCES monsters(id) ON DELETE CASCADE",
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS custom_name VARCHAR",
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS hp_current INTEGER",
+            "ALTER TABLE combatants ADD COLUMN IF NOT EXISTS hp_max_override INTEGER",
+        ]:
+            op.execute(text(stmt))
+
+        # Drop NOT NULL on character_id (ignore error if already nullable)
+        op.execute(text("""
             DO $$
             BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name = 'combatants'
-                      AND column_name = 'character_id'
-                      AND is_nullable = 'NO'
-                ) THEN
-                    ALTER TABLE combatants ALTER COLUMN character_id DROP NOT NULL;
-                END IF;
+                ALTER TABLE combatants ALTER COLUMN character_id DROP NOT NULL;
+            EXCEPTION WHEN OTHERS THEN NULL;
             END$$;
         """))
-        # Drop any remaining unique constraints on character_id
-        bind.execute(text("""
+
+        # Drop all unique constraints on combatants (character_id had one)
+        op.execute(text("""
             DO $$
             DECLARE r RECORD;
             BEGIN
@@ -112,6 +94,18 @@ def upgrade():
                 END LOOP;
             END$$;
         """))
+
+    else:
+        # SQLite: inspect then add only missing columns (no IF NOT EXISTS support)
+        existing = {c['name'] for c in sa_inspect(bind).get_columns('combatants')}
+        for col, ddl in [
+            ('monster_id',      'INTEGER REFERENCES monsters(id) ON DELETE CASCADE'),
+            ('custom_name',     'VARCHAR'),
+            ('hp_current',      'INTEGER'),
+            ('hp_max_override', 'INTEGER'),
+        ]:
+            if col not in existing:
+                op.execute(text(f"ALTER TABLE combatants ADD COLUMN {col} {ddl}"))
 
 
 def downgrade():
