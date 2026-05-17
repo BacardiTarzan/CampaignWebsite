@@ -9,9 +9,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 On first start the server auto-seeds from `reference/`. If you need to reseed, delete `campaign.db` and restart.
 
-## Current status (as of 2026-05-15)
+## Current status (as of 2026-05-17)
 
-**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Next: Phase 4 — Sheet Spellcasting Tracking.**
+**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Rules Glossary complete. Next: Phase 4 — Sheet Spellcasting Tracking.**
 
 ### Phase 1 — Character Creation Wizard (complete)
 The full 10-step wizard runs end-to-end:
@@ -79,6 +79,23 @@ Full dynamic level-up wizard replacing the old 3-choice flow. Every D&D 2024 dec
 
 **Audit trail:** Every choice stored in `CharacterChoice` with `level=next_level` and `feature_key="lvlup:{level}:{step_id}"`.
 
+### Phase 3.5 — Rules Glossary (complete as of 2026-05-17)
+Standalone `/glossary` page + inline tooltips on the character sheet.
+
+**What was built:**
+- `static/glossary.html` / `glossary.js` / `glossary.css` — standalone page reusing lore layout (leather sidebar + parchment content area). Sidebar shows category counts; accordion cards expand to full description; hash-anchor deep-linking (`/glossary#advantage`); search filters across all fields.
+- `GET /api/content/glossary` — auth-guarded endpoint returning all `GlossaryTerm` rows.
+- `GlossaryTerm` model + migration `b2c3d4e5f6a7` — `slug`, `term`, `category`, `short_description`, `full_description`, `ability`, `source`.
+- 94 terms seeded from `reference_claude/rules/glossary.md` across 6 categories: combat, condition, action, weapon_property, mastery, skill.
+- Sheet tooltip system (`sheet.js`) — `loadGlossary()` fetches terms on boot; `gloss(name)` wraps matching text in `<span class="gloss-term">`; `glossifyDescription(text)` auto-links descriptions. Click opens a popover; "Read full rule ›" (only shown when `full_description ≠ short_description`) opens a modal; modal footer has "View in Glossary ↗" link.
+- Portal `portal.html` — added "📜 Rules Glossary" button alongside Lore Library.
+
+**Key CSS:**
+- `.gloss-term` — dotted gold underline, `cursor: help`
+- `.gloss-popover` — `position: fixed`, `z-index: 2000`, `pointer-events: none` (child `.gloss-popover-more` has `pointer-events: auto`)
+- Popover positioned using viewport coords from `getBoundingClientRect()` only — do NOT add `scrollX`/`scrollY` (popover is `position: fixed`, not absolute)
+- `.char-card-name` on portal — `color: #fff; font-weight: 700` (was too-pale `var(--light)` against dark card background)
+
 ## Next: Phase 4 — Sheet Spellcasting Tracking
 
 The Spells tab shows spells but has no way to manage prepared spells per long rest, no Wizard spellbook/prepared split, no Pact Magic block, no Mystic Arcanum section, and no always-prepared badges for domain/patron/oath spells.
@@ -141,13 +158,17 @@ Restructure into sections:
 - Gold stored as custom equipment row — admin "Convert Gold" button moves it to `currency.gp`; sheet filters it from gear display.
 - Spell stats (casting_time, range, duration) were empty on Railway from old seed — seeder now refreshes rows missing any of those fields; admin "Refresh Spells" button triggers it.
 - Railway missing `source`/`notes` columns on `character_spells` and `height`/`weight`/`deity`/`journal`/`currency` on `characters` — admin "Repair Schema" button applies all missing columns via `ALTER TABLE ... IF NOT EXISTS`.
+- Repair Schema used `ADD COLUMN IF NOT EXISTS` (PostgreSQL-only syntax) — fixed to use dialect-aware inspector check on SQLite.
+- `combatants` table created with `character_id NOT NULL` and unique constraint by migration `e1f2a3b4c5d6`; monster columns (`monster_id`, `custom_name`, `hp_current`, `hp_max_override`) never applied on Railway because `bind.execute()` silently no-ops in newer SQLAlchemy — fixed in migration `h4i5j6k7l8m9` using `op.execute()` + `ADD COLUMN IF NOT EXISTS`.
+- Admin character HP endpoint read `delta` from query params but combat tracker sent it as JSON body — fixed with `AdminHpIn` Pydantic model; endpoint accepts both body and query param for backward compat.
+- Fresh Railway DB failed on startup because initial schema migration is empty (`pass`) so `add_column` migrations failed on non-existent tables — fixed in `app/main.py`: run `create_all` first, then stamp alembic to head if `alembic_version` is empty (fresh DB), else run `upgrade head` for existing DBs.
 
 ## Phase 1.5 — Google Auth + Railway (complete)
 
 - Google OAuth via Authlib + server-side sessions (cookie-backed)
 - `ALLOWED_EMAILS` controls who can log in; `ADMIN_EMAIL` controls admin access
 - All `/api/characters` routes scoped to `owner_email`; all `/api/admin` routes require admin
-- Railway deployed with PostgreSQL; auto-migrates via `alembic upgrade head` on startup + `create_all` safety net
+- Railway deployed with PostgreSQL; startup order: `create_all` first (idempotent), then stamp alembic to head on fresh DB or `upgrade head` on existing DB
 - `app/config.py` `reference_dir` points to `reference_claude/`
 
 ## Architecture notes
@@ -161,7 +182,9 @@ Restructure into sections:
 - `Character` has `height`, `weight`, `deity`, `journal`, `currency` (JSON), `hp_roll_log` (JSON — level-up HP audit) columns.
 - `CharacterChoice` has `level` (Integer) column — all level-up choices stored with `feature_key="lvlup:{level}:{step_id}"`.
 - `app/services/levelup_rules.py` — pure rules engine for level-up wizard. No DB writes; only reads class/subclass/char data.
-- Admin Import tab has one-shot maintenance buttons: Repair Schema, Convert Gold, Refresh Spells, Backfill Species Spells. Repair Schema covers all columns through migration `a1b2c3d4e5f6`.
+- Admin Import tab has one-shot maintenance buttons: Repair Schema, Convert Gold, Refresh Spells, Backfill Species Spells. Repair Schema covers all columns through migration `h4i5j6k7l8m9`.
+- `Monster` model in `content.py`; `Combatant` model in `character.py`. `Combatant.character_id` nullable (PC combatants); `Combatant.monster_id` nullable (monster combatants). Combat tracker in admin Combat tab.
+- **Migration rule:** always use `op.execute(text(...))` for raw SQL in alembic migrations — never `bind.execute()` which silently no-ops on PostgreSQL in SQLAlchemy 2.x. Use `ADD COLUMN IF NOT EXISTS` on PostgreSQL for idempotent column additions.
 
 ## Project structure
 
@@ -189,8 +212,10 @@ static/
   index.html / script.js   — Player wizard
   portal.html / portal.js  — Player character roster
   sheet.html / sheet.js / sheet.css — Live character sheet (4-tab)
+  glossary.html / glossary.js / glossary.css — Rules Glossary page
   admin.html / admin.js    — DM admin panel
   style.css                — Design system (CSS variables)
+  lore.html / lore.js / lore.css — Lore Library page
 reference_claude/          — 2024 PHB markdown (authoritative source)
 reference_old/             — Old reference files (do not use)
 alembic/                   — Migrations
