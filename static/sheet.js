@@ -149,6 +149,9 @@ function openGlossaryModal(slug) {
       <p class="gloss-modal-category">${term.category.replace(/_/g, ' ')}</p>
       <div class="gloss-modal-body"><p>${_simpleMarkdown(term.full_description)}</p></div>
     </div>
+    <div style="text-align:right;padding:8px 20px 16px">
+      <a href="/glossary#${slug}" target="_blank" class="gloss-glossary-link">View in Glossary ↗</a>
+    </div>
   </div>`;
   overlay.addEventListener("click", e => { if (e.target === overlay) closeGlossaryModal(); });
   document.body.appendChild(overlay);
@@ -172,9 +175,10 @@ function _showGlossPopover(slug, anchorEl) {
   const pop = document.createElement("div");
   pop.className = "gloss-popover";
   pop.id = "gloss-popover";
+  const hasMore = term.full_description && term.full_description !== term.short_description;
   pop.innerHTML = `<div class="gloss-popover-term">${term.term}</div>
     <div class="gloss-popover-body">${term.short_description}</div>
-    <span class="gloss-popover-more" onclick="openGlossaryModal('${slug}')">Read full rule ›</span>`;
+    ${hasMore ? `<span class="gloss-popover-more" onclick="openGlossaryModal('${slug}')">Read full rule ›</span>` : ""}`;
 
   document.body.appendChild(pop);
 
@@ -733,29 +737,35 @@ function renderBioTab(c) {
     <div class="bio-details-col">
       <div class="sh-section">
         <h4 class="sh-section-title">Identity</h4>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Alignment</label>
-          <span class="bio-field-value">${c.alignment || "—"}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Background</label>
-          <span class="bio-field-value">${c.background_name || "—"}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Age</label>
-          <span class="bio-field-value">${ageDisplay}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Height${sizeHint}</label>
-          <span class="bio-field-value">${heightDisplay}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Weight</label>
-          <span class="bio-field-value">${weightDisplay}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Deity / Patron</label>
-          <span class="bio-field-value">${deityDisplay}</span>
+        <div class="bio-identity-grid">
+          <div class="bio-identity-col">
+            <div class="bio-field-row">
+              <label class="bio-field-label">Alignment</label>
+              <span class="bio-field-value">${c.alignment || "—"}</span>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Background</label>
+              <span class="bio-field-value">${c.background_name || "—"}</span>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Deity / Patron</label>
+              <span class="bio-field-value">${deityDisplay}</span>
+            </div>
+          </div>
+          <div class="bio-identity-col">
+            <div class="bio-field-row">
+              <label class="bio-field-label">Age</label>
+              <span class="bio-field-value">${ageDisplay}</span>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Height${sizeHint}</label>
+              <span class="bio-field-value">${heightDisplay}</span>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Weight</label>
+              <span class="bio-field-value">${weightDisplay}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -786,42 +796,48 @@ function renderBioTab(c) {
     <div class="bio-details-col">
       <div class="sh-section">
         <h4 class="sh-section-title">Identity</h4>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Alignment</label>
-          <span class="bio-field-value">${c.alignment || "—"}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Background</label>
-          <span class="bio-field-value">${c.background_name || "—"}</span>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Age</label>
-          <div class="bio-counter">
-            <input id="bio-age-val" class="bio-counter-input" type="number"
-                   min="${getSpeciesAge(c.species_name).min}" max="${getSpeciesAge(c.species_name).max}" step="1" value="${c.age || ""}">
-            <span id="bio-age-label" class="bio-range-hint">${ageLabel(c.age, c.species_name)}</span>
+        <div class="bio-identity-grid">
+          <div class="bio-identity-col">
+            <div class="bio-field-row">
+              <label class="bio-field-label">Alignment</label>
+              <span class="bio-field-value">${c.alignment || "—"}</span>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Background</label>
+              <span class="bio-field-value">${c.background_name || "—"}</span>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Deity / Patron</label>
+              <input class="bio-input" id="bio-deity" type="text" placeholder="None" value="${c.deity || ""}">
+            </div>
           </div>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Height${sizeHint}</label>
-          <select id="bio-height-sel" class="bio-select">
-            ${heightOpts}
-          </select>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Weight</label>
-          <div class="bio-counter">
-            <button class="bio-counter-btn" onclick="adjustWeight(-1)" type="button">−</button>
-            <input id="bio-weight-val" class="bio-counter-input" type="number"
-                   min="${range.wMin}" max="${range.wMax}" step="1" value="${initW}">
-            <button class="bio-counter-btn" onclick="adjustWeight(1)" type="button">+</button>
-            <span class="bio-unit">lbs</span>
-            <span class="bio-range-hint">${range.wMin}–${range.wMax}</span>
+          <div class="bio-identity-col">
+            <div class="bio-field-row">
+              <label class="bio-field-label">Age</label>
+              <div class="bio-counter">
+                <input id="bio-age-val" class="bio-counter-input" type="number"
+                       min="${getSpeciesAge(c.species_name).min}" max="${getSpeciesAge(c.species_name).max}" step="1" value="${c.age || ""}">
+                <span id="bio-age-label" class="bio-range-hint">${ageLabel(c.age, c.species_name)}</span>
+              </div>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Height${sizeHint}</label>
+              <select id="bio-height-sel" class="bio-select">
+                ${heightOpts}
+              </select>
+            </div>
+            <div class="bio-field-row">
+              <label class="bio-field-label">Weight</label>
+              <div class="bio-counter">
+                <button class="bio-counter-btn" onclick="adjustWeight(-1)" type="button">−</button>
+                <input id="bio-weight-val" class="bio-counter-input" type="number"
+                       min="${range.wMin}" max="${range.wMax}" step="1" value="${initW}">
+                <button class="bio-counter-btn" onclick="adjustWeight(1)" type="button">+</button>
+                <span class="bio-unit">lbs</span>
+                <span class="bio-range-hint">${range.wMin}–${range.wMax}</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="bio-field-row">
-          <label class="bio-field-label">Deity / Patron</label>
-          <input class="bio-input" id="bio-deity" type="text" placeholder="None" value="${c.deity || ""}">
         </div>
         <div class="bio-lock-row">
           <button class="btn-gold bio-lock-btn" onclick="saveAndLockPhysical()" type="button">
@@ -1289,13 +1305,15 @@ function renderSpellsTab(c, prof, attrs) {
         <div class="spell-header-top">
           <span class="spell-name">${s.name}</span>
           <span class="spell-level-label">${levelLabel}</span>
-          ${prepBadge ? `<span class="spell-badges">${prepBadge}</span>` : ""}
+          ${prepBadge ? `<div class="spell-badges">${prepBadge}</div>` : ""}
           ${flags}
           <span class="spell-chevron">▶</span>
         </div>
-        ${stats ? `<div class="spell-stats-row">${stats}</div>` : ""}
       </div>
-      <div class="spell-card-body">${notesLine}${desc}</div>
+      <div class="spell-card-body">
+        ${stats ? `<div class="spell-stats-row">${stats}</div>` : ""}
+        ${notesLine}${desc}
+      </div>
     </div>`;
   };
 
@@ -1349,8 +1367,17 @@ function renderSpellsTab(c, prof, attrs) {
 
   const levelGroups = Object.keys(byLevel).sort((a,b) => a-b).map(lvl => {
     const levelName = lvl === "0" ? "Cantrips" : `${ORDINAL[lvl]} Level`;
-    return `<h4 class="sh-section-title mt-md">${levelName}</h4>
-      ${byLevel[lvl].map(s => renderSpell(s)).join("")}`;
+    const gid = `sg-${lvl}`;
+    const count = byLevel[lvl].length;
+    return `<div class="spell-level-group">
+      <h4 class="sh-section-title mt-md spell-group-toggle" onclick="toggleSpellGroup('${gid}',this)">
+        ${levelName} <span class="spell-group-count">(${count})</span>
+        <span class="spell-group-chevron">▾</span>
+      </h4>
+      <div class="spell-group-body" id="${gid}">
+        ${byLevel[lvl].map(s => renderSpell(s)).join("")}
+      </div>
+    </div>`;
   }).join("");
 
   return `<div class="sh-section">
@@ -1503,6 +1530,13 @@ async function savePreparedSpells() {
 // ---------------------------------------------------------------------------
 // Tab switching
 // ---------------------------------------------------------------------------
+function toggleSpellGroup(id, headerEl) {
+  const body = document.getElementById(id);
+  if (!body) return;
+  const collapsed = body.classList.toggle("collapsed");
+  headerEl.classList.toggle("collapsed", collapsed);
+}
+
 function switchSheetTab(tab, btn) {
   ["stats","bio","equipment","spells"].forEach(t => {
     const el = document.getElementById(`sh-tab-${t}`);
