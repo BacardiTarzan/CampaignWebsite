@@ -1,7 +1,7 @@
 """fix combatants character_id nullable and drop unique constraint
 
 Revision ID: g3h4i5j6k7l8
-Revises: b2c3d4e5f6a7
+Revises: f2a3b4c5d6e7
 Create Date: 2026-05-17
 """
 from alembic import op
@@ -21,17 +21,25 @@ def upgrade():
     cols = {c['name']: c for c in inspect(bind).get_columns('combatants')}
 
     if dialect == 'postgresql':
-        # Drop unique constraint on character_id (name varies; try common patterns)
-        for constraint_name in ('combatants_character_id_key', 'uq_combatants_character_id'):
-            try:
-                op.drop_constraint(constraint_name, 'combatants', type_='unique')
-                break
-            except Exception:
-                pass
-
-        # Make character_id nullable
+        # Use raw SQL with IF EXISTS — avoids aborted-transaction issues from try/except
+        # around op.drop_constraint with a wrong constraint name.
+        bind.execute(text("""
+            DO $$
+            DECLARE r RECORD;
+            BEGIN
+                FOR r IN
+                    SELECT conname FROM pg_constraint
+                    WHERE conrelid = 'combatants'::regclass AND contype = 'u'
+                LOOP
+                    EXECUTE 'ALTER TABLE combatants DROP CONSTRAINT ' || quote_ident(r.conname);
+                END LOOP;
+            END$$;
+        """))
+        # Make character_id nullable if it currently is NOT NULL
         if not cols.get('character_id', {}).get('nullable', True):
-            op.alter_column('combatants', 'character_id', nullable=True)
+            bind.execute(text(
+                "ALTER TABLE combatants ALTER COLUMN character_id DROP NOT NULL"
+            ))
 
     else:
         # SQLite cannot ALTER COLUMN; recreate the table if character_id is NOT NULL
