@@ -115,7 +115,7 @@ def list_equipment(item_type: str | None = None, db: Session = Depends(get_db)):
     return q.order_by(Equipment.name).all()
 
 
-@router.get("/glossary")
+@router.get("/glossary", dependencies=[Depends(require_user)])
 def list_glossary(db: Session = Depends(get_db)):
     return [
         {
