@@ -171,7 +171,7 @@
 /* ─────────────────────────────────────────────────────────────────
    RESPONSIVE — mobile sidebar
    ───────────────────────────────────────────────────────────────── */
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   .lore-nav-toggle { display: inline-flex; }
 
   #gloss-sidebar {
