@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rules Glossary</title>
+  <link rel="icon" type="image/png" href="/static/d20.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/lore.css">
+  <link rel="stylesheet" href="/static/glossary.css">
+</head>
+<body>
+<div class="lore-layout">
+
+  <div class="lore-sidebar" id="gloss-sidebar">
+    <div class="lore-sidebar-header">
+      <a href="/portal" class="lore-back">← My Characters</a>
+      <h2 class="lore-sidebar-title">Rules Glossary</h2>
+    </div>
+    <div id="gloss-nav"></div>
+  </div>
+
+  <div class="lore-main">
+    <div class="lore-topbar">
+      <button class="lore-nav-toggle" onclick="toggleSidebar()" aria-expanded="false" aria-controls="gloss-sidebar">
+        ☰ Categories
+      </button>
+      <span id="gloss-user-name" class="lore-user"></span>
+    </div>
+    <div class="gloss-search-bar">
+      <input type="search" id="gloss-search" placeholder="Search rules…" oninput="filterTerms()">
+    </div>
+    <div id="gloss-content" class="gloss-content">
+      <p class="hint" style="padding:24px">Loading…</p>
+    </div>
+  </div>
+
+</div>
+<script src="/static/glossary.js"></script>
+</body>
+</html>
