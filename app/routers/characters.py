@@ -1441,6 +1441,29 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
             if spell_obj:
                 auto_added_spells.append(spell_obj.name)
 
+    # ── Prepared-caster spell list population (Cleric / Ranger) ─────────────
+    # These classes don't pick spells at level-up; instead they always have
+    # access to their full class list up to their max slot level. Populate any
+    # newly available spells as prepared=False so the sheet can display them.
+    PREPARED_CASTERS = {"Cleric", "Ranger"}
+    if cls.name in PREPARED_CASTERS and max_sl > 0:
+        owned_ids_now = {cs.spell_id for cs in char.spells}
+        candidate_spells = (
+            db.query(Spell)
+            .filter(Spell.level <= max_sl, Spell.level > 0)
+            .all()
+        )
+        class_spells = [s for s in candidate_spells if cls.name in (s.classes or [])]
+        for sp in class_spells:
+            if sp.id not in owned_ids_now:
+                db.add(CharacterSpell(
+                    character_id=char.id,
+                    spell_id=sp.id,
+                    source="class",
+                    prepared=False,
+                ))
+                owned_ids_now.add(sp.id)
+
     # ── Capstone stat boosts ──────────────────────────────────────────────────
     capstone_changes = _apply_capstone(char, cc, next_level)
     if capstone_changes:
