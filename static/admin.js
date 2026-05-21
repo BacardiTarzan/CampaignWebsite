@@ -653,6 +653,16 @@ async function backfillClassSpells() {
   } catch(e) { err(e.message); el.textContent = ""; }
 }
 
+async function backfillPreparedCasterSpells() {
+  const el = document.getElementById("backfill-prepared-result");
+  el.textContent = "Running backfill…";
+  try {
+    const r = await api("POST", "/api/admin/backfill-prepared-caster-spells");
+    const lines = r.characters.map(c => `${c.character}: +${c.added}`).join(", ");
+    el.textContent = `✓ Total added: ${r.total_added}${lines ? ` (${lines})` : " — nothing new to add"}`;
+  } catch(e) { err(e.message); el.textContent = ""; }
+}
+
 // ---------------------------------------------------------------------------
 // Lore management
 // ---------------------------------------------------------------------------

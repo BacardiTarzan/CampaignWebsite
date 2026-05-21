@@ -15,7 +15,7 @@ from ..models.character import (
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
 from ..services.pdf import render_character_html, render_character_pdf
-from ..services.levelup_rules import CLASS_ALWAYS_PREPARED
+from ..services.levelup_rules import CLASS_ALWAYS_PREPARED, max_spell_level
 from .characters import _parse_species_spell_grants
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -1093,6 +1093,54 @@ def backfill_class_spells(db: Session = Depends(get_db)):
                         notes="Favored Enemy",
                     ))
                     existing_ids.add(spell.id)
+                    added += 1
+            total_added += added
+            if added:
+                results.append({"character": char.character_name, "added": added})
+        db.commit()
+        return {"total_added": total_added, "characters": results}
+    except Exception as e:
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{e}\n\n{tb}")
+
+
+@router.post("/backfill-prepared-caster-spells")
+def backfill_prepared_caster_spells(db: Session = Depends(get_db)):
+    """Populate full class spell list (prepared=False) for existing Cleric/Ranger characters."""
+    import traceback
+    try:
+        PREPARED_CASTERS = {"Cleric", "Ranger"}
+        chars = db.query(Character).all()
+        total_added = 0
+        results = []
+        for char in chars:
+            cc = char.character_classes[0] if char.character_classes else None
+            if not cc:
+                continue
+            cls_obj = db.get(DnDClass, cc.class_id)
+            if not cls_obj or cls_obj.name not in PREPARED_CASTERS:
+                continue
+            sp_type = cls_obj.spellcasting_type or ""
+            max_sl = max_spell_level(sp_type, cc.level) if sp_type else 0
+            if max_sl == 0:
+                continue
+            owned_ids = {cs.spell_id for cs in char.spells}
+            candidate_spells = (
+                db.query(Spell)
+                .filter(Spell.level <= max_sl, Spell.level > 0)
+                .all()
+            )
+            class_spells = [s for s in candidate_spells if cls_obj.name in (s.classes or [])]
+            added = 0
+            for sp in class_spells:
+                if sp.id not in owned_ids:
+                    db.add(CharacterSpell(
+                        character_id=char.id,
+                        spell_id=sp.id,
+                        source="class",
+                        prepared=False,
+                    ))
+                    owned_ids.add(sp.id)
                     added += 1
             total_added += added
             if added:
