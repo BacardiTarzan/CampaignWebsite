@@ -1021,6 +1021,14 @@ def seed_all(db: Session) -> dict:
             cls_obj = existing_class_rows[data["name"]]
             cls_obj.tool_proficiencies = data.get("tool_proficiencies")
             cls_obj.features = data.get("features")
+            # Upsert subclasses — insert any that don't exist yet
+            existing_sc_names = {
+                sc.name for sc in db.query(Subclass).filter(Subclass.class_id == cls_obj.id)
+            }
+            for sc in subclasses_data:
+                if sc["name"] not in existing_sc_names:
+                    db.add(Subclass(class_id=cls_obj.id, **sc))
+                    counts["subclasses"] += 1
 
     # Backgrounds
     for f in sorted((REF / "backgrounds").glob("*.md")):
