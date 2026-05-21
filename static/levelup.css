@@ -837,6 +837,127 @@
   cursor: not-allowed;
 }
 
+/* ── Weapon Mastery categories ── */
+.lu-wm-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.lu-wm-category {}
+
+.lu-wm-cat-label {
+  font-family: var(--font-header);
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-faded);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.lu-wm-weapon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lu-wm-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  cursor: pointer;
+  padding: 6px 12px;
+  font-family: var(--font-book);
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 110px;
+}
+
+.lu-wm-btn:hover {
+  border-color: rgba(212,175,80,0.35);
+}
+
+.lu-wm-btn.chosen {
+  border-color: var(--color-gold);
+  background: rgba(212,175,80,0.1);
+}
+
+.lu-wm-name {
+  font-size: 0.88rem;
+  color: var(--color-ink);
+}
+
+.lu-wm-mastery {
+  font-size: 0.72rem;
+  color: var(--color-ink-faded);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* ── Student of War ── */
+.lu-sow-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.lu-sow-group {}
+
+.lu-sow-label {
+  font-family: var(--font-header);
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-faded);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.lu-sow-select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  font-family: var(--font-book);
+  font-size: 0.92rem;
+  padding: 8px 12px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.lu-sow-select option {
+  background: #2a2010;
+  color: var(--color-ink);
+}
+
+/* ── Info option list (acknowledge steps) ── */
+.lu-info-option {
+  margin-bottom: 10px;
+  font-family: var(--font-book);
+  font-size: 0.88rem;
+  color: var(--color-light);
+  line-height: 1.5;
+}
+
+.lu-info-option:last-child { margin-bottom: 0; }
+
+/* ── Mage Hand note (third-caster cantrips) ── */
+.lu-mage-hand-note {
+  color: var(--color-ink-faded);
+  font-size: 0.85rem;
+}
+
+/* ── School filter btn (third-caster spells) ── */
+.lu-filter-btn.active {
+  background: rgba(212,175,80,0.15);
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+}
+
 /* Species info notice (lineage spell grant) */
 .lu-info-notice {
   background: rgba(168,120,43,0.12);

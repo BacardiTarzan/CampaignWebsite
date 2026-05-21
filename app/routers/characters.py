@@ -15,7 +15,7 @@ from ..services.export import character_to_dict, character_to_sheet_dict, comput
 from ..services.levelup_rules import (
     required_steps, auto_grants, subclass_auto_grants, max_spell_level,
     METAMAGIC_OPTIONS, ELDRITCH_INVOCATIONS, AASIMAR_REVELATIONS, _species_lineage_spells,
-    CLASS_ALWAYS_PREPARED,
+    CLASS_ALWAYS_PREPARED, BATTLE_MASTER_MANEUVERS,
 )
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
@@ -849,6 +849,54 @@ def _apply_hp(char, cc, cls, hp: HpChoice, next_level: int) -> int:
     return total
 
 
+def _recompute_hp_from_con_delta(char, old_con_mod: int, new_con_mod: int) -> int:
+    """Retroactively adjust hp_max/hp_current when the Con modifier changes.
+
+    Each entry in hp_roll_log represents one level (L2+). L1 HP (set at
+    character creation) is not logged, so total levels = len(log) + 1.
+    """
+    delta_mod = new_con_mod - old_con_mod
+    if delta_mod == 0:
+        return 0
+    num_levels = len(char.hp_roll_log or []) + 1
+    total_delta = delta_mod * num_levels
+    char.hp_max = (char.hp_max or 0) + total_delta
+    char.hp_current = (char.hp_current or 0) + total_delta
+    return total_delta
+
+
+def _apply_capstone(char, cc, next_level: int) -> dict | None:
+    """Apply L20 capstone stat boosts. Currently handles Barbarian Primal Champion."""
+    if next_level != 20:
+        return None
+    cls_name = cc.dnd_class.name if cc.dnd_class else ""
+    if cls_name != "Barbarian":
+        return None
+    if any(c.feature_key == "capstone:primal_champion" for c in char.choices):
+        return None  # already applied (idempotent guard)
+
+    base = dict(char.base_attributes or {})
+    bg = char.background_asi or {}
+    changes: dict = {}
+
+    for ab in ("str", "con"):
+        cur_total = base.get(ab, 10) + bg.get(ab, 0)
+        new_total = min(25, cur_total + 4)  # cap raised to 25 for this capstone
+        gain = new_total - cur_total
+        if gain > 0:
+            old_mod = (cur_total - 10) // 2
+            base[ab] = base.get(ab, 10) + gain
+            changes[ab] = gain
+            if ab == "con":
+                new_mod = (new_total - 10) // 2
+                if new_mod != old_mod:
+                    _recompute_hp_from_con_delta(char, old_mod, new_mod)
+
+    if changes:
+        char.base_attributes = base
+    return changes or None
+
+
 def _audit(char, db, feature_key: str, value: Any, level: int):
     """Save a CharacterChoice audit row."""
     db.add(CharacterChoice(character_id=char.id, feature_key=feature_key,
@@ -856,7 +904,12 @@ def _audit(char, db, feature_key: str, value: Any, level: int):
 
 
 @router.get("/{char_id}/levelup-options")
-def levelup_options(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+def levelup_options(
+    char_id: int,
+    pending_subclass_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_user),
+):
     char = _get_char(char_id, db)
     _check_owner_or_admin(char, user)
     cc = char.character_classes[0] if char.character_classes else None
@@ -878,8 +931,8 @@ def levelup_options(char_id: int, db: Session = Depends(get_db), user: dict = De
     if cc.subclass:
         subclass_features = [f for f in (cc.subclass.features or []) if f.get("level") == next_level]
 
-    # Build dynamic steps
-    steps = required_steps(char, cc, cls, db)
+    # Build dynamic steps (pending_subclass_id enables mid-wizard L3 subclass step injection)
+    steps = required_steps(char, cc, cls, db, pending_subclass_id=pending_subclass_id)
 
     # Fighting-style feats for the frontend
     fighting_styles = [
@@ -984,22 +1037,23 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
             if ab and ab in base:
                 cur_total = base.get(ab, 10) + bg.get(ab, 0)
                 gain = min(2, 20 - cur_total)
+                old_mod = (cur_total - 10) // 2
                 base[ab] = base.get(ab, 10) + gain
                 if ab == "con" and gain > 0:
-                    con_delta = gain // 2
-                    extra_hp = con_delta * (next_level - 1)
-                    char.hp_max = (char.hp_max or 0) + extra_hp
-                    char.hp_current = (char.hp_current or 0) + extra_hp
+                    new_mod = ((cur_total + gain) - 10) // 2
+                    if new_mod != old_mod:
+                        _recompute_hp_from_con_delta(char, old_mod, new_mod)
         elif mode == "+1+1":
             for ab in asi.get("abilities", [])[:2]:
                 if ab in base:
                     cur_total = base.get(ab, 10) + bg.get(ab, 0)
                     gain = min(1, 20 - cur_total)
+                    old_mod = (cur_total - 10) // 2
                     base[ab] = base.get(ab, 10) + gain
                     if ab == "con" and gain > 0:
-                        extra_hp = (gain // 2) * (next_level - 1)
-                        char.hp_max = (char.hp_max or 0) + extra_hp
-                        char.hp_current = (char.hp_current or 0) + extra_hp
+                        new_mod = ((cur_total + gain) - 10) // 2
+                        if new_mod != old_mod:
+                            _recompute_hp_from_con_delta(char, old_mod, new_mod)
         elif mode == "feat":
             feat_id = asi.get("feat_id")
             if feat_id:
@@ -1145,9 +1199,218 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
             owned_ids.add(sid)
         _audit(char, db, f"lvlup:{next_level}:arcanum", choices[arcanum_step_id], next_level)
 
-    # ── Feature choices (generic) ─────────────────────────────────────────────
+    # ── Weapon Mastery ────────────────────────────────────────────────────────
+    wm_step_id = f"weapon_mastery_l{next_level}"
+    if wm_step_id in choices:
+        existing_masteries = {wu.weapon_name for wu in char.weapon_mastery_unlocks}
+        for weapon_name in choices[wm_step_id].get("weapons", []):
+            if weapon_name not in existing_masteries:
+                db.add(WeaponMasteryUnlock(character_id=char.id, weapon_name=weapon_name))
+                existing_masteries.add(weapon_name)
+            db.add(CharacterChoice(character_id=char.id, feature_key="weapon_mastery",
+                                   choice_value={"weapon": weapon_name, "swappable_on_long_rest": True},
+                                   level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:weapon_mastery", choices[wm_step_id], next_level)
+
+    # ── Primal Knowledge (Barbarian L3) ──────────────────────────────────────
+    pk_step_id = f"primal_knowledge_l{next_level}"
+    if pk_step_id in choices:
+        skill = choices[pk_step_id].get("skill")
+        if skill:
+            existing_skills = {sp.skill_name for sp in char.skill_proficiencies}
+            if skill not in existing_skills:
+                db.add(SkillProficiency(character_id=char.id, skill_name=skill, source="class"))
+            db.add(CharacterChoice(character_id=char.id, feature_key="primal_knowledge",
+                                   choice_value={"skill": skill}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:primal_knowledge", choices[pk_step_id], next_level)
+
+    # ── Blessed Strikes (Cleric L7) ───────────────────────────────────────────
+    bs_step_id = f"blessed_strikes_l{next_level}"
+    if bs_step_id in choices:
+        choice_val = choices[bs_step_id].get("choice")
+        db.add(CharacterChoice(character_id=char.id, feature_key="blessed_strikes",
+                               choice_value={"choice": choice_val}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:blessed_strikes", choices[bs_step_id], next_level)
+
+    bsd_step_id = f"blessed_strikes_damage_l{next_level}"
+    if bsd_step_id in choices:
+        dmg_type = choices[bsd_step_id].get("choice")
+        db.add(CharacterChoice(character_id=char.id, feature_key="blessed_strikes_damage",
+                               choice_value={"damage_type": dmg_type}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:blessed_strikes_damage", choices[bsd_step_id], next_level)
+
+    # ── Battle Master Maneuvers ───────────────────────────────────────────────
+    _bm_by_key = {m["key"]: m for m in BATTLE_MASTER_MANEUVERS}
+    man_step_id = f"maneuvers_l{next_level}"
+    if man_step_id in choices:
+        for key in choices[man_step_id].get("keys", []):
+            m = _bm_by_key.get(key, {})
+            db.add(CharacterChoice(character_id=char.id, feature_key="maneuver",
+                                   choice_value={"key": key, "name": m.get("name", key)},
+                                   level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:maneuvers", choices[man_step_id], next_level)
+
+    # ── Student of War (Battle Master L3) ────────────────────────────────────
+    sow_step_id = f"student_of_war_l{next_level}"
+    if sow_step_id in choices:
+        tool  = choices[sow_step_id].get("tool")
+        skill = choices[sow_step_id].get("skill")
+        if tool:
+            existing_tools = {tp.tool_name for tp in char.tool_proficiencies}
+            if tool not in existing_tools:
+                db.add(ToolProficiency(character_id=char.id, tool_name=tool, source="class"))
+        if skill:
+            existing_skills = {sp.skill_name for sp in char.skill_proficiencies}
+            if skill not in existing_skills:
+                db.add(SkillProficiency(character_id=char.id, skill_name=skill, source="class"))
+        db.add(CharacterChoice(character_id=char.id, feature_key="student_of_war",
+                               choice_value={"tool": tool, "skill": skill}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:student_of_war", choices[sow_step_id], next_level)
+
+    # ── War Bond (Eldritch Knight L3) ─────────────────────────────────────────
+    wb_step_id = f"war_bond_l{next_level}"
+    if wb_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="war_bond",
+                               choice_value={"weapons": choices[wb_step_id].get("weapons", [])},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:war_bond", choices[wb_step_id], next_level)
+
+    # ── Third-caster cantrips (EK / AT) ──────────────────────────────────────
+    tcc_step_id = f"third_caster_cantrips_l{next_level}"
+    if tcc_step_id in choices:
+        for sid in choices[tcc_step_id].get("spell_ids", []):
+            if sid not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=sid,
+                                      source="subclass", prepared=True))
+                owned_ids.add(sid)
+        # Arcane Trickster L3: auto-grant Mage Hand as a bonus cantrip
+        if next_level == 3 and cc.subclass and cc.subclass.name == "Arcane Trickster":
+            mh = db.query(Spell).filter(Spell.name == "Mage Hand").first()
+            if mh and mh.id not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=mh.id,
+                                      source="subclass", prepared=True,
+                                      notes="AT bonus cantrip (Mage Hand Legerdemain)"))
+                owned_ids.add(mh.id)
+                auto_added_spells.append("Mage Hand")
+        # Record one choice row to mark this level's cantrips done (idempotency key)
+        db.add(CharacterChoice(character_id=char.id, feature_key="third_caster_cantrip",
+                               choice_value=choices[tcc_step_id], level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:third_caster_cantrips", choices[tcc_step_id], next_level)
+
+    # ── Third-caster spells (EK / AT) ─────────────────────────────────────────
+    tcs_step_id = f"third_caster_spells_l{next_level}"
+    if tcs_step_id in choices:
+        for sid in choices[tcs_step_id].get("spell_ids", []):
+            if sid not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=sid,
+                                      source="subclass", prepared=True))
+                owned_ids.add(sid)
+        db.add(CharacterChoice(character_id=char.id, feature_key="third_caster_spell",
+                               choice_value=choices[tcs_step_id], level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:third_caster_spells", choices[tcs_step_id], next_level)
+
+    # ── Hunter's Prey (Hunter Ranger L3) ─────────────────────────────────────
+    hp_step_id = f"hunters_prey_l{next_level}"
+    if hp_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="hunters_prey",
+                               choice_value={"choice": choices[hp_step_id].get("choice")},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:hunters_prey", choices[hp_step_id], next_level)
+
+    # ── Defensive Tactics (Hunter Ranger L7) ─────────────────────────────────
+    dt_step_id = f"defensive_tactics_l{next_level}"
+    if dt_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="defensive_tactics",
+                               choice_value={"choice": choices[dt_step_id].get("choice")},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:defensive_tactics", choices[dt_step_id], next_level)
+
+    # ── Otherworldly Glamour (Fey Wanderer L3) ────────────────────────────────
+    og_step_id = f"otherworldly_glamour_l{next_level}"
+    if og_step_id in choices:
+        skill = choices[og_step_id].get("skill")
+        if skill:
+            existing_skills = {sp.skill_name for sp in char.skill_proficiencies}
+            if skill not in existing_skills:
+                db.add(SkillProficiency(character_id=char.id, skill_name=skill, source="class"))
+        db.add(CharacterChoice(character_id=char.id, feature_key="otherworldly_glamour",
+                               choice_value={"skill": skill}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:otherworldly_glamour", choices[og_step_id], next_level)
+
+    # ── Beast Companion (Beast Master L3) ────────────────────────────────────
+    bc_step_id = f"beast_companion_l{next_level}"
+    if bc_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="beast_companion",
+                               choice_value={"choice": choices[bc_step_id].get("choice")},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:beast_companion", choices[bc_step_id], next_level)
+
+    # ── Iron Mind (Gloom Stalker L7) ─────────────────────────────────────────
+    im_step_id = f"iron_mind_l{next_level}"
+    if im_step_id in choices:
+        save = choices[im_step_id].get("save_proficiency", "Wisdom")
+        db.add(CharacterChoice(character_id=char.id, feature_key="iron_mind",
+                               choice_value={"save_proficiency": save}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:iron_mind", {"save_proficiency": save}, next_level)
+
+    # ── Rage of the Wilds (Wild Heart L3) ────────────────────────────────────
+    row_step_id = f"rage_of_wilds_l{next_level}"
+    if row_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="rage_of_wilds",
+                               choice_value=choices[row_step_id], level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:rage_of_wilds", choices[row_step_id], next_level)
+
+    # ── Aspect of the Wilds (Wild Heart L6) ──────────────────────────────────
+    aow_step_id = f"aspect_of_wilds_l{next_level}"
+    if aow_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="aspect_of_wilds",
+                               choice_value={"choice": choices[aow_step_id].get("choice")},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:aspect_of_wilds", choices[aow_step_id], next_level)
+
+    # ── Power of the Wilds (Wild Heart L14) ──────────────────────────────────
+    pow_step_id = f"power_of_wilds_l{next_level}"
+    if pow_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="power_of_wilds",
+                               choice_value={"choice": choices[pow_step_id].get("choice")},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:power_of_wilds", choices[pow_step_id], next_level)
+
+    # ── Divine Fury (Zealot L3) ───────────────────────────────────────────────
+    df_step_id = f"divine_fury_l{next_level}"
+    if df_step_id in choices:
+        db.add(CharacterChoice(character_id=char.id, feature_key="divine_fury",
+                               choice_value={"choice": choices[df_step_id].get("choice")},
+                               level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:divine_fury", choices[df_step_id], next_level)
+
+    # ── Assassin's Tools (Assassin L3) ───────────────────────────────────────
+    at_step_id = f"assassins_tools_l{next_level}"
+    if at_step_id in choices:
+        existing_tools = {tp.tool_name for tp in char.tool_proficiencies}
+        for tool in ["Disguise Kit", "Poisoner's Kit"]:
+            if tool not in existing_tools:
+                db.add(ToolProficiency(character_id=char.id, tool_name=tool, source="class"))
+        db.add(CharacterChoice(character_id=char.id, feature_key="assassins_tools",
+                               choice_value={"acknowledged": True}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:assassins_tools", choices[at_step_id], next_level)
+
+    # ── Druidic Warrior cantrips (Ranger L2) ─────────────────────────────────
+    dw_step_id = f"druidic_warrior_cantrips_l{next_level}"
+    if dw_step_id in choices:
+        for sid in choices[dw_step_id].get("spell_ids", []):
+            if sid not in owned_ids:
+                db.add(CharacterSpell(character_id=char.id, spell_id=sid,
+                                      source="class", prepared=True))
+                owned_ids.add(sid)
+        db.add(CharacterChoice(character_id=char.id, feature_key="druidic_warrior_cantrips",
+                               choice_value={"acknowledged": True}, level=next_level))
+        _audit(char, db, f"lvlup:{next_level}:druidic_warrior_cantrips", choices[dw_step_id], next_level)
+
+    # ── Feature choices (generic) — any feature_* step not handled above ─────
+    # Fixed: old filter `"choice" in step_id` never matched; now matches correctly.
     for step_id, payload in choices.items():
-        if step_id.startswith("feature_") and "choice" in step_id:
+        if step_id.startswith("feature_") and step_id.endswith(f"_l{next_level}"):
             _audit(char, db, f"lvlup:{next_level}:{step_id}", payload, next_level)
 
     # ── Species revelation choice (Aasimar L3) ────────────────────────────────
@@ -1177,6 +1440,11 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
             owned_ids.add(sid)
             if spell_obj:
                 auto_added_spells.append(spell_obj.name)
+
+    # ── Capstone stat boosts ──────────────────────────────────────────────────
+    capstone_changes = _apply_capstone(char, cc, next_level)
+    if capstone_changes:
+        _audit(char, db, "capstone:primal_champion", capstone_changes, next_level)
 
     # ── Increment level ───────────────────────────────────────────────────────
     cc.level = next_level

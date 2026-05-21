@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "id": 5,
+  "created_by_display_name": "Zach Pogue",
+  "character_name": "Gnome Test 2",
+  "species": {
+    "id": 5,
+    "name": "Gnome"
+  },
+  "background": {
+    "id": 12,
+    "name": "Sage"
+  },
+  "alignment": "Chaotic Good",
+  "bio": "",
+  "base_attributes": {
+    "str": 8,
+    "dex": 13,
+    "con": 15,
+    "int": 17,
+    "wis": 13,
+    "cha": 13
+  },
+  "background_asi": {
+    "int": 2,
+    "con": 1
+  },
+  "hp_max": 9,
+  "hp_current": 9,
+  "speed": 30,
+  "equipment_choice": {
+    "class": "B",
+    "background": "B"
+  },
+  "tool_proficiency_choice": null,
+  "classes": [
+    {
+      "class_id": 12,
+      "class_name": "Wizard",
+      "level": 1,
+      "subclass_id": null,
+      "subclass_name": null
+    }
+  ],
+  "feats": [],
+  "spells": [
+    {
+      "spell_id": 16,
+      "spell_name": "Minor Illusion",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": null
+    },
+    {
+      "spell_id": 91,
+      "spell_name": "Speak With Animals",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": null
+    },
+    {
+      "spell_id": 30,
+      "spell_name": "Thunderclap",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 31,
+      "spell_name": "Toll The Dead",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 35,
+      "spell_name": "Alarm",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 41,
+      "spell_name": "Burning Hands",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 42,
+      "spell_name": "Charm Person",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 43,
+      "spell_name": "Chromatic Orb",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 44,
+      "spell_name": "Color Spray",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 47,
+      "spell_name": "Comprehend Languages",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    }
+  ],
+  "equipment": [
+    {
+      "equipment_id": null,
+      "name": "Gold",
+      "quantity": 105,
+      "equipped": false
+    }
+  ],
+  "skill_proficiencies": [
+    {
+      "skill_name": "Arcana",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "History",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "Medicine",
+      "source": "class",
+      "expertise": false
+    },
+    {
+      "skill_name": "Nature",
+      "source": "class",
+      "expertise": false
+    }
+  ],
+  "tool_proficiencies": [
+    {
+      "tool_name": "Calligrapher's Supplies",
+      "source": "background"
+    }
+  ],
+  "language_proficiencies": [
+    {
+      "language_name": "Common",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Gnomish",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Halfling",
+      "source": "player_choice"
+    }
+  ],
+  "choices": [],
+  "weapon_mastery_unlocks": [],
+  "wizard_step": 10,
+  "is_complete": true
+}

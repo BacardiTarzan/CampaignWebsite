@@ -1,0 +1,142 @@
+{
+  "schema_version": "1.0",
+  "id": 2,
+  "created_by_display_name": "Zach Pogue",
+  "character_name": "CAntrip test",
+  "species": {
+    "id": 5,
+    "name": "Gnome"
+  },
+  "background": {
+    "id": 12,
+    "name": "Sage"
+  },
+  "alignment": null,
+  "bio": null,
+  "base_attributes": {
+    "str": 10,
+    "dex": 14,
+    "con": 15,
+    "int": 11,
+    "wis": 16,
+    "cha": 12
+  },
+  "background_asi": {
+    "wis": 2,
+    "con": 1
+  },
+  "hp_max": 11,
+  "hp_current": 11,
+  "speed": 30,
+  "equipment_choice": {
+    "class": "A",
+    "background": "B"
+  },
+  "tool_proficiency_choice": null,
+  "classes": [
+    {
+      "class_id": 3,
+      "class_name": "Cleric",
+      "level": 1,
+      "subclass_id": null,
+      "subclass_name": null
+    }
+  ],
+  "feats": [],
+  "spells": [],
+  "equipment": [
+    {
+      "equipment_id": 33,
+      "name": "Chain Shirt",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "equipment_id": 38,
+      "name": "Shield",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "equipment_id": 7,
+      "name": "Mace",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "equipment_id": null,
+      "name": "Holy Symbol",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "equipment_id": 59,
+      "name": "Priest's Pack",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "equipment_id": null,
+      "name": "Gold",
+      "quantity": 7,
+      "equipped": false
+    },
+    {
+      "equipment_id": null,
+      "name": "Gold",
+      "quantity": 50,
+      "equipped": false
+    }
+  ],
+  "skill_proficiencies": [
+    {
+      "skill_name": "Arcana",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "History",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "Medicine",
+      "source": "class",
+      "expertise": false
+    },
+    {
+      "skill_name": "Religion",
+      "source": "class",
+      "expertise": false
+    }
+  ],
+  "tool_proficiencies": [
+    {
+      "tool_name": "Calligrapher's Supplies",
+      "source": "background"
+    }
+  ],
+  "language_proficiencies": [
+    {
+      "language_name": "Common",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Gnomish",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Goblin",
+      "source": "player_choice"
+    }
+  ],
+  "choices": [
+    {
+      "feature_key": "divine_order",
+      "choice_value": "Thaumaturge"
+    }
+  ],
+  "weapon_mastery_unlocks": [],
+  "wizard_step": 9,
+  "is_complete": false
+}

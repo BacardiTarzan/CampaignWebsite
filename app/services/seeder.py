@@ -419,7 +419,7 @@ def _parse_subclasses(text: str, class_slug: str) -> list[dict]:
 
     sc_text = sc_section.group(1)
     # Split by #### subclass headers (may have blank lines before)
-    sc_blocks = re.split(r"\n+#### (.+)", sc_text)
+    sc_blocks = re.split(r"\n*#### (.+)", sc_text)
     for i in range(1, len(sc_blocks), 2):
         sc_name = sc_blocks[i].strip()
         sc_body = sc_blocks[i + 1] if i + 1 < len(sc_blocks) else ""
@@ -1344,6 +1344,50 @@ def _seed_glossary(db: Session) -> int:
     glossary_path = REF / "rules" / "glossary.md"
     if glossary_path.exists():
         terms.extend(_parse_glossary_terms(glossary_path))
+
+    # 6. Wild Heart ritual spell glossary entries (Beast Sense, Speak with Animals, Commune with Nature)
+    # These are referenced by name in the Wild Heart Barbarian feature description and need tooltip coverage.
+    terms.extend([
+        {
+            "slug": "beast-sense",
+            "term": "Beast Sense",
+            "category": "spell",
+            "short_description": "Ritual. Perceive through a willing Beast's senses (sight, hearing, special senses) for up to 1 hour (Concentration).",
+            "full_description": (
+                "Level 2 Divination · Casting Time: Action or Ritual · Range: Touch · Duration: Concentration, up to 1 hour\n\n"
+                "You touch a willing Beast. For the duration, you can perceive through the Beast's senses as well as your own. "
+                "When perceiving through the Beast's senses, you benefit from any special senses it has."
+            ),
+            "ability": None,
+        },
+        {
+            "slug": "speak-with-animals",
+            "term": "Speak with Animals",
+            "category": "spell",
+            "short_description": "Ritual. Comprehend and verbally communicate with Beasts for 10 minutes. Beasts can share info about nearby locations and creatures.",
+            "full_description": (
+                "Level 1 Divination · Casting Time: Action or Ritual · Range: Self · Duration: 10 minutes\n\n"
+                "For the duration, you can comprehend and verbally communicate with Beasts, and you can use any of the Influence action's skill options with them. "
+                "Most Beasts have little to say about topics that don't pertain to survival or companionship, but at minimum, a Beast can give you information "
+                "about nearby locations and monsters, including whatever it has perceived within the past day."
+            ),
+            "ability": None,
+        },
+        {
+            "slug": "commune-with-nature",
+            "term": "Commune with Nature",
+            "category": "spell",
+            "short_description": "Ritual. Learn 3 facts about the natural area within 3 miles (outdoors) or 300 ft (underground): settlements, portals, creatures, plants, or water.",
+            "full_description": (
+                "Level 5 Divination · Casting Time: 1 minute or Ritual · Range: Self · Duration: Instantaneous\n\n"
+                "You commune with nature spirits and gain knowledge of the surrounding area. In the outdoors, the spell gives you knowledge of the area within 3 miles. "
+                "In caves and other natural underground settings, the radius is limited to 300 feet. The spell doesn't function where nature has been replaced by construction.\n\n"
+                "Choose three of the following facts; you learn those facts as they pertain to the spell's area: locations of settlements; locations of portals to other planes; "
+                "location of one CR 10+ Celestial, Elemental, Fey, Fiend, or Undead; the most prevalent kind of plant, mineral, or Beast; locations of bodies of water."
+            ),
+            "ability": None,
+        },
+    ])
 
     # Upsert by slug
     added = 0

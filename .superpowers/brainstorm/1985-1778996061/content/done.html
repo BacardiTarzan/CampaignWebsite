@@ -1,0 +1,43 @@
+<h2>CSS Overhaul Complete</h2>
+<p class="subtitle">Token-first sweep across all 4 files — app running at <strong>http://localhost:8000</strong></p>
+
+<div class="section">
+  <div class="label">Readability</div>
+  <ul>
+    <li>Body line-height 1.65 → 1.7</li>
+    <li>Button base font 0.82 → 0.84rem</li>
+    <li>All sub-0.65rem labels raised: combat labels, section titles, ability labels, attack labels, spell badges, currency labels, slot labels, bio labels, weapon prof/mastery badges — minimum 0.7rem for tags, 0.72rem for labels</li>
+  </ul>
+</div>
+
+<div class="section">
+  <div class="label">Spacing</div>
+  <ul>
+    <li>New token: <code>--sp-1h: 6px</code> (half-step between sp-1 and sp-2)</li>
+    <li>Enforced 8-base rhythm across sheet.css, levelup.css, lore.css — replaced ~40 raw px values</li>
+    <li>Sheet: header, combat bar, tab panel, section panels, ability cards, attack cards, feature cards, save rows</li>
+    <li>Level-up: panel, header, feature/subclass cards, spell grid, step headings</li>
+    <li>Lore: sidebar, nav groups, content headings, prose paragraphs</li>
+  </ul>
+</div>
+
+<div class="section">
+  <div class="label">Buttons</div>
+  <ul>
+    <li><strong>Primary</strong> stays rubric-bright — confirm actions</li>
+    <li><strong>Danger</strong> now darker/desaturated — destructive actions clearly different</li>
+    <li><strong>Level-up</strong> now uses <code>--green-*</code> tokens (no more raw hex)</li>
+    <li><strong>Secondary/Ghost</strong> and <strong>Logout</strong> rebuilt as self-contained variants — no more override fights with the base style</li>
+  </ul>
+</div>
+
+<div class="section">
+  <div class="label">Tab Navigation</div>
+  <ul>
+    <li>Gap: 3px → 8px (var --sp-2)</li>
+    <li>Font: 0.72rem → 0.78rem</li>
+    <li>Padding: symmetric via <code>--tab-clip-offset</code> CSS variable</li>
+    <li>Inactive text: gold → gold-bright (better contrast vs active)</li>
+    <li>Active tab: leather-deep bottom border + z-index:2 for visual panel connection</li>
+  </ul>
+</div>

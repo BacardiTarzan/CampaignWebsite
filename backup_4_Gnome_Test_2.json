@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "id": 4,
+  "created_by_display_name": "Zach Pogue",
+  "character_name": "Gnome Test 2",
+  "species": {
+    "id": 5,
+    "name": "Gnome"
+  },
+  "background": {
+    "id": 12,
+    "name": "Sage"
+  },
+  "alignment": null,
+  "bio": null,
+  "base_attributes": {
+    "str": 8,
+    "dex": 15,
+    "con": 15,
+    "int": 17,
+    "wis": 9,
+    "cha": 14
+  },
+  "background_asi": {
+    "int": 2,
+    "con": 1
+  },
+  "hp_max": 9,
+  "hp_current": 9,
+  "speed": 30,
+  "equipment_choice": {
+    "class": "B",
+    "background": "B"
+  },
+  "tool_proficiency_choice": null,
+  "classes": [
+    {
+      "class_id": 12,
+      "class_name": "Wizard",
+      "level": 1,
+      "subclass_id": null,
+      "subclass_name": null
+    }
+  ],
+  "feats": [],
+  "spells": [
+    {
+      "spell_id": 16,
+      "spell_name": "Minor Illusion",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": null
+    },
+    {
+      "spell_id": 91,
+      "spell_name": "Speak With Animals",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": null
+    }
+  ],
+  "equipment": [
+    {
+      "equipment_id": null,
+      "name": "Gold",
+      "quantity": 105,
+      "equipped": false
+    }
+  ],
+  "skill_proficiencies": [
+    {
+      "skill_name": "Arcana",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "History",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "Medicine",
+      "source": "class",
+      "expertise": false
+    },
+    {
+      "skill_name": "Nature",
+      "source": "class",
+      "expertise": false
+    }
+  ],
+  "tool_proficiencies": [
+    {
+      "tool_name": "Calligrapher's Supplies",
+      "source": "background"
+    }
+  ],
+  "language_proficiencies": [
+    {
+      "language_name": "Common",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Gnomish",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Goblin",
+      "source": "player_choice"
+    }
+  ],
+  "choices": [],
+  "weapon_mastery_unlocks": [],
+  "wizard_step": 9,
+  "is_complete": false
+}

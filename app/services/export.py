@@ -4,7 +4,7 @@ import math
 from sqlalchemy.orm import Session
 from ..models.character import Character
 from ..models.content import DnDClass, Equipment as EquipmentModel
-from .levelup_rules import ELDRITCH_INVOCATIONS
+from .levelup_rules import ELDRITCH_INVOCATIONS, class_resources
 
 _INVOCATION_LOOKUP = {inv["key"]: inv for inv in ELDRITCH_INVOCATIONS}
 
@@ -531,4 +531,9 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "equipment": equipment,
         "attacks": _calc_attacks(char, attrs, prof),
         "is_complete": char.is_complete,
+        "class_resources": class_resources(
+            cls.name if cls else "",
+            level,
+            cc.subclass.name if cc and cc.subclass else None,
+        ),
     }

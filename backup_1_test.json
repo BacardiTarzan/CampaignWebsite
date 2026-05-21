@@ -1,0 +1,171 @@
+{
+  "schema_version": "1.0",
+  "id": 1,
+  "created_by_display_name": "Zach Pogue",
+  "character_name": "test",
+  "species": {
+    "id": 10,
+    "name": "Tiefling"
+  },
+  "background": {
+    "id": 14,
+    "name": "Scribe"
+  },
+  "alignment": "Chaotic Neutral",
+  "bio": "",
+  "base_attributes": {
+    "str": 10,
+    "dex": 14,
+    "con": 15,
+    "int": 18,
+    "wis": 10,
+    "cha": 11
+  },
+  "background_asi": {
+    "int": 2,
+    "dex": 1
+  },
+  "hp_max": 8,
+  "hp_current": 8,
+  "speed": 30,
+  "equipment_choice": {
+    "class": "B",
+    "background": "B"
+  },
+  "tool_proficiency_choice": null,
+  "classes": [
+    {
+      "class_id": 12,
+      "class_name": "Wizard",
+      "level": 1,
+      "subclass_id": null,
+      "subclass_name": null
+    }
+  ],
+  "feats": [
+    {
+      "feat_id": 8,
+      "feat_name": "Skilled",
+      "source": "background"
+    }
+  ],
+  "spells": [
+    {
+      "spell_id": 2,
+      "spell_name": "Blade Ward",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 4,
+      "spell_name": "Dancing Lights",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 7,
+      "spell_name": "Elementalism",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 35,
+      "spell_name": "Alarm",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 41,
+      "spell_name": "Burning Hands",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 42,
+      "spell_name": "Charm Person",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 43,
+      "spell_name": "Chromatic Orb",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 44,
+      "spell_name": "Color Spray",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 47,
+      "spell_name": "Comprehend Languages",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    }
+  ],
+  "equipment": [
+    {
+      "equipment_id": null,
+      "name": "Gold",
+      "quantity": 105,
+      "equipped": false
+    }
+  ],
+  "skill_proficiencies": [
+    {
+      "skill_name": "Investigation",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "Perception",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "Arcana",
+      "source": "class",
+      "expertise": false
+    },
+    {
+      "skill_name": "History",
+      "source": "class",
+      "expertise": false
+    }
+  ],
+  "tool_proficiencies": [
+    {
+      "tool_name": "Calligrapher's Supplies",
+      "source": "background"
+    }
+  ],
+  "language_proficiencies": [
+    {
+      "language_name": "Common",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Gnomish",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Elvish",
+      "source": "player_choice"
+    }
+  ],
+  "choices": [],
+  "weapon_mastery_unlocks": [],
+  "wizard_step": 10,
+  "is_complete": true
+}

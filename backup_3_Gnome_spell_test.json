@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.0",
+  "id": 3,
+  "created_by_display_name": "Zach Pogue",
+  "character_name": "Gnome spell test",
+  "species": {
+    "id": 5,
+    "name": "Gnome"
+  },
+  "background": {
+    "id": 12,
+    "name": "Sage"
+  },
+  "alignment": "Neutral Good",
+  "bio": "",
+  "base_attributes": {
+    "str": 9,
+    "dex": 14,
+    "con": 11,
+    "int": 16,
+    "wis": 10,
+    "cha": 10
+  },
+  "background_asi": {
+    "int": 2,
+    "con": 1
+  },
+  "hp_max": 7,
+  "hp_current": 7,
+  "speed": 30,
+  "equipment_choice": {
+    "class": "B",
+    "background": "B"
+  },
+  "tool_proficiency_choice": null,
+  "classes": [
+    {
+      "class_id": 12,
+      "class_name": "Wizard",
+      "level": 1,
+      "subclass_id": null,
+      "subclass_name": null
+    }
+  ],
+  "feats": [],
+  "spells": [
+    {
+      "spell_id": 16,
+      "spell_name": "Minor Illusion",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": null
+    },
+    {
+      "spell_id": 91,
+      "spell_name": "Speak With Animals",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": null
+    },
+    {
+      "spell_id": 2,
+      "spell_name": "Blade Ward",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 7,
+      "spell_name": "Elementalism",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 8,
+      "spell_name": "Fire Bolt",
+      "level": 0,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 42,
+      "spell_name": "Charm Person",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 51,
+      "spell_name": "Detect Magic",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 53,
+      "spell_name": "Disguise Self",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 59,
+      "spell_name": "Expeditious Retreat",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 61,
+      "spell_name": "False Life",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    },
+    {
+      "spell_id": 62,
+      "spell_name": "Feather Fall",
+      "level": 1,
+      "prepared": true,
+      "source_class_id": 12
+    }
+  ],
+  "equipment": [
+    {
+      "equipment_id": null,
+      "name": "Gold",
+      "quantity": 105,
+      "equipped": false
+    }
+  ],
+  "skill_proficiencies": [
+    {
+      "skill_name": "Arcana",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "History",
+      "source": "background",
+      "expertise": false
+    },
+    {
+      "skill_name": "Insight",
+      "source": "class",
+      "expertise": false
+    },
+    {
+      "skill_name": "Religion",
+      "source": "class",
+      "expertise": false
+    }
+  ],
+  "tool_proficiencies": [
+    {
+      "tool_name": "Calligrapher's Supplies",
+      "source": "background"
+    }
+  ],
+  "language_proficiencies": [
+    {
+      "language_name": "Common",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Gnomish",
+      "source": "player_choice"
+    },
+    {
+      "language_name": "Halfling",
+      "source": "player_choice"
+    }
+  ],
+  "choices": [],
+  "weapon_mastery_unlocks": [],
+  "wizard_step": 10,
+  "is_complete": true
+}

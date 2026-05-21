@@ -14,6 +14,13 @@ const choices = {};
 let hpMethod = "average";
 let hpDieValue = null;
 
+// Spell lists for third-caster steps (EK/AT need Wizard spells; Druidic Warrior needs Druid)
+let wizardSpells = [];
+let druidSpells = [];
+
+// Free-choice school toggle per third_caster_spells step id
+const freeChoiceToggles = {};
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -79,6 +86,16 @@ async function boot() {
   }
 
   steps = opts.steps || [];
+
+  // Load Wizard spells for EK / AT third-caster steps
+  if (steps.some(s => s.kind === "third_caster_cantrips" || s.kind === "third_caster_spells")) {
+    try { wizardSpells = await api("GET", "/api/content/spells?class_name=Wizard"); } catch(_) {}
+  }
+  // Load Druid spells for Druidic Warrior cantrip follow-up
+  if (steps.some(s => s.kind === "druidic_warrior_cantrips")) {
+    try { druidSpells = await api("GET", "/api/content/spells?class_name=Druid"); } catch(_) {}
+  }
+
   renderFeatures();
   hide("lu-loading");
   show("lu-root");
@@ -110,11 +127,20 @@ function renderFeatures() {
 // ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
-function luNext() {
+async function luNext() {
   // Validate current step
   if (stepIdx > 0) {
     const step = steps[stepIdx - 1];
     if (!validateStep(step)) return;
+
+    // Mid-wizard L3 subclass re-fetch: reload steps so subclass-specific steps appear
+    if (step.kind === "subclass") {
+      const p = choices[step.id];
+      if (p?.subclass_id) {
+        await luRefetchWithSubclass(p.subclass_id);
+        return;
+      }
+    }
   }
   stepIdx++;
   if (stepIdx > steps.length) {
@@ -125,6 +151,28 @@ function luNext() {
   renderPips();
   renderStep(step);
   showPanel("host");
+}
+
+async function luRefetchWithSubclass(subclassId) {
+  try {
+    const newOpts = await api("GET",
+      `/api/characters/${charId}/levelup-options?pending_subclass_id=${subclassId}`);
+    steps = newOpts.steps || [];
+
+    // Load Wizard spells if EK/AT third-caster steps just appeared
+    if (steps.some(s => s.kind === "third_caster_cantrips" || s.kind === "third_caster_spells")
+        && wizardSpells.length === 0) {
+      try { wizardSpells = await api("GET", "/api/content/spells?class_name=Wizard"); } catch(_) {}
+    }
+
+    stepIdx++;
+    if (stepIdx > steps.length) { renderConfirm(); return; }
+    renderPips();
+    renderStep(steps[stepIdx - 1]);
+    showPanel("host");
+  } catch(e) {
+    toast("⚠ Could not load subclass options: " + e.message);
+  }
 }
 
 function luBack() {
@@ -189,6 +237,22 @@ function renderStep(step) {
   else if (kind === "feature_choice")    host.innerHTML = buildFeatureChoiceStep(step);
   else if (kind === "species_revelation") host.innerHTML = buildSpeciesRevelationStep(step);
   else if (kind === "species_spell_info") host.innerHTML = buildSpeciesSpellInfoStep(step);
+  // ── New step kinds (Phase F) ───────────────────────────────────────────────
+  else if (kind === "weapon_mastery")    host.innerHTML = buildWeaponMasteryStep(step);
+  else if (kind === "maneuvers")         host.innerHTML = buildManeuversStep(step);
+  else if (kind === "primal_knowledge" || kind === "otherworldly_glamour")
+                                         host.innerHTML = buildSkillPickStep(step);
+  else if (kind === "iron_mind")         host.innerHTML = buildIronMindStep(step);
+  else if (kind === "rage_of_wilds" || kind === "assassins_tools")
+                                         host.innerHTML = buildAcknowledgeStep(step);
+  else if (kind === "war_bond")          host.innerHTML = buildWarBondStep(step);
+  else if (kind === "third_caster_cantrips")  host.innerHTML = buildThirdCasterCantripsStep(step);
+  else if (kind === "third_caster_spells")    host.innerHTML = buildThirdCasterSpellsStep(step);
+  else if (kind === "student_of_war")    host.innerHTML = buildStudentOfWarStep(step);
+  else if (kind === "druidic_warrior_cantrips") host.innerHTML = buildDruidicWarriorCantripsStep(step);
+  else if (["blessed_strikes","blessed_strikes_damage","hunters_prey","defensive_tactics",
+             "beast_companion","aspect_of_wilds","power_of_wilds","divine_fury"].includes(kind))
+                                         host.innerHTML = buildFeatureChoiceStep(step);
   else host.innerHTML = buildUnknownStep(step);
 
   attachStepListeners(step);
@@ -249,14 +313,53 @@ function validateStep(step) {
     if (!payload?.spell_id) { toast("Choose a spell for Mystic Arcanum."); return false; }
     return true;
   }
-  if (kind === "feature_choice") {
-    if (!payload?.choice) { toast("Make a choice."); return false; }
-    return true;
-  }
   if (kind === "species_revelation") {
     if (!payload?.key) { toast("Choose your Celestial Revelation."); return false; }
     return true;
   }
+  // ── New kinds (Phase F) ───────────────────────────────────────────────────
+  const _SINGLE_CHOICE_KINDS = ["blessed_strikes","blessed_strikes_damage","hunters_prey",
+    "defensive_tactics","beast_companion","aspect_of_wilds","power_of_wilds","divine_fury",
+    "feature_choice"];
+  if (_SINGLE_CHOICE_KINDS.includes(kind)) {
+    if (!payload?.choice) { toast("Make a choice."); return false; }
+    return true;
+  }
+  if (kind === "weapon_mastery") {
+    const pick = step.pick || 1;
+    if ((payload?.weapons || []).length < pick) { toast(`Choose ${pick} weapon(s).`); return false; }
+    return true;
+  }
+  if (kind === "maneuvers") {
+    const pick = step.pick || 2;
+    if ((payload?.keys || []).length < pick) { toast(`Choose ${pick} maneuver(s).`); return false; }
+    return true;
+  }
+  if (kind === "primal_knowledge" || kind === "otherworldly_glamour") {
+    if (!payload?.skill) { toast("Choose a skill."); return false; }
+    return true;
+  }
+  if (kind === "iron_mind") {
+    if (step.auto_grant) return true;
+    if (!payload?.save_proficiency) { toast("Choose a saving throw proficiency."); return false; }
+    return true;
+  }
+  if (kind === "student_of_war") {
+    if (!payload?.tool) { toast("Choose an Artisan's Tool."); return false; }
+    if (!payload?.skill) { toast("Choose a skill."); return false; }
+    return true;
+  }
+  if (kind === "third_caster_cantrips") {
+    const pick = step.pick || 2;
+    if ((payload?.spell_ids || []).length < pick) { toast(`Choose ${pick} cantrip(s).`); return false; }
+    return true;
+  }
+  if (kind === "third_caster_spells") {
+    const pick = step.pick || 3;
+    if ((payload?.spell_ids || []).length < pick) { toast(`Choose ${pick} spell(s).`); return false; }
+    return true;
+  }
+  // war_bond, rage_of_wilds, assassins_tools, druidic_warrior_cantrips — always valid
   return true;
 }
 
@@ -711,6 +814,246 @@ function buildSpeciesSpellInfoStep(step) {
     ${navRow()}`;
 }
 
+// ── Phase F builders ─────────────────────────────────────────────────────────
+
+// Weapon Mastery — category-grouped checklist
+function buildWeaponMasteryStep(step) {
+  const prev = choices[step.id] || { weapons: [] };
+  const eligible = step.eligible_weapons || [];
+  const current = step.current || [];
+  const pick = step.pick || 1;
+  const mode = step.mode || "initial";
+  const byCategory = {};
+  for (const w of eligible) {
+    const cat = w.category || "Other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(w);
+  }
+  return `
+    <h2 class="lu-step-heading">Weapon Mastery</h2>
+    <p class="lu-step-desc">${mode === "initial"
+      ? `Choose ${pick} weapon${pick > 1 ? "s" : ""} to gain Weapon Mastery with.`
+      : "Choose 1 additional weapon to gain Weapon Mastery with."}</p>
+    ${current.length ? `<div class="lu-owned-tags"><strong>Current masteries:</strong> ${current.map(w => `<span class="lu-choice-tag">${w}</span>`).join(" ")}</div>` : ""}
+    <div class="lu-wm-categories">
+      ${Object.entries(byCategory).map(([cat, weapons]) => `
+        <div class="lu-wm-category">
+          <div class="lu-wm-cat-label">${cat}</div>
+          <div class="lu-wm-weapon-grid">
+            ${weapons.map(w => `
+              <button class="lu-wm-btn ${prev.weapons.includes(w.name) ? 'chosen' : ''}"
+                      onclick="toggleWeaponMastery('${step.id}', '${escQ(w.name)}', ${pick}, this)">
+                <span class="lu-wm-name">${w.name}</span>
+                ${w.mastery ? `<span class="lu-wm-mastery">${w.mastery}</span>` : ""}
+              </button>`).join("")}
+          </div>
+        </div>`).join("")}
+    </div>
+    <p class="lu-step-desc" style="margin-top:8px">${(prev.weapons || []).length}/${pick} chosen.</p>
+    ${navRow()}`;
+}
+
+// Battle Master Maneuvers
+function buildManeuversStep(step) {
+  const prev = choices[step.id] || { keys: [] };
+  const pick = step.pick || 2;
+  const options = step.options || [];
+  const current = step.current || [];
+  return `
+    <h2 class="lu-step-heading">${step.label}</h2>
+    <p class="lu-step-desc">Choose ${pick} Battle Master Maneuver${pick > 1 ? "s" : ""}.</p>
+    ${current.length ? `<div class="lu-owned-tags"><strong>Known:</strong> ${current.map(m => `<span class="lu-choice-tag">${m.name}</span>`).join(" ")}</div>` : ""}
+    <div class="lu-feat-grid" id="card-pick-grid">
+      ${options.map(m => `
+        <div class="lu-feat-card ${prev.keys.includes(m.key) ? 'chosen' : ''}"
+             onclick="toggleCardPick('${step.id}', '${m.key}', ${pick}, this)" data-key="${m.key}">
+          <div class="lu-feat-name">${m.name}</div>
+          ${m.cost ? `<div class="lu-feat-cost">${m.cost}</div>` : ""}
+          <div class="lu-feat-desc">${m.desc || m.description || ""}</div>
+          ${m.save_ability ? `<div class="lu-feat-prereq">Save: ${m.save_ability}</div>` : ""}
+        </div>`).join("")}
+    </div>
+    <p class="lu-step-desc" style="margin-top:8px">${(prev.keys || []).length}/${pick} chosen.</p>
+    ${navRow()}`;
+}
+
+// Primal Knowledge / Otherworldly Glamour — pick 1 skill from a list
+function buildSkillPickStep(step) {
+  const prev = choices[step.id] || {};
+  const skills = step.eligible_skills || step.options || [];
+  return `
+    <h2 class="lu-step-heading">${step.label}</h2>
+    <p class="lu-step-desc">${step.description || "Choose 1 skill."}</p>
+    <div class="lu-skill-grid" id="skill-grid">
+      ${skills.map(name => `
+        <button class="lu-skill-btn ${prev.skill === name ? 'chosen' : ''}"
+                onclick="pickSingleSkill('${step.id}', '${escQ(name)}', this)">${name}</button>`).join("")}
+    </div>
+    ${navRow()}`;
+}
+
+// Acknowledge step — rage_of_wilds, assassins_tools (info only, no real choice)
+function buildAcknowledgeStep(step) {
+  const options = step.options || [];
+  return `
+    <h2 class="lu-step-heading">${step.label}</h2>
+    <p class="lu-step-desc">${step.description || ""}</p>
+    ${options.length ? `<div class="lu-info-notice">
+      ${options.map(o => `<div class="lu-info-option"><strong>${o.name}:</strong> ${o.description || ""}</div>`).join("")}
+    </div>` : ""}
+    <div class="lu-nav">
+      <button class="btn-secondary" onclick="luBack()">← Back</button>
+      <button class="btn-primary" onclick="acknowledgeStep('${step.id}')">Acknowledged ✓</button>
+    </div>`;
+}
+
+// Iron Mind (Gloom Stalker L7) — auto-grant or choice
+function buildIronMindStep(step) {
+  if (step.auto_grant) {
+    return `
+      <h2 class="lu-step-heading">${step.label}</h2>
+      <div class="lu-info-notice">
+        <p>You gain proficiency in <strong>Wisdom saving throws</strong> (Iron Mind).</p>
+      </div>
+      <div class="lu-nav">
+        <button class="btn-secondary" onclick="luBack()">← Back</button>
+        <button class="btn-primary" onclick="acknowledgeStep('${step.id}', {save_proficiency:'Wisdom'})">Continue →</button>
+      </div>`;
+  }
+  const prev = choices[step.id] || {};
+  return `
+    <h2 class="lu-step-heading">${step.label}</h2>
+    <p class="lu-step-desc">You already have Wisdom save proficiency. Choose a different saving throw to gain proficiency in instead.</p>
+    <div class="lu-feat-grid">
+      ${(step.options || []).map(o => `
+        <div class="lu-feat-card ${prev.save_proficiency === o.name ? 'chosen' : ''}"
+             onclick="pickIronMind('${step.id}', '${o.name}', this)">
+          <div class="lu-feat-name">${o.name}</div>
+          <div class="lu-feat-desc">${o.description || ""}</div>
+        </div>`).join("")}
+    </div>
+    ${navRow()}`;
+}
+
+// War Bond (EK L3) — pick up to 2 owned weapons
+function buildWarBondStep(step) {
+  const prev = choices[step.id] || { weapons: [] };
+  const ownedWeapons = step.owned_weapons || [];
+  return `
+    <h2 class="lu-step-heading">${step.label || "War Bond"}</h2>
+    <p class="lu-step-desc">${step.description || "Bond with up to 2 weapons. Bonded weapons can be summoned to your hand as a Bonus Action."}</p>
+    ${!ownedWeapons.length
+      ? `<p class="lu-step-desc" style="opacity:0.6;font-style:italic">No weapons in your inventory yet — you can pick these up after adding equipment.</p>`
+      : `<div class="lu-wm-weapon-grid">
+          ${ownedWeapons.map(w => `
+            <button class="lu-wm-btn ${prev.weapons.includes(w) ? 'chosen' : ''}"
+                    onclick="toggleWarBond('${step.id}', '${escQ(w)}', this)">
+              <span class="lu-wm-name">${w}</span>
+            </button>`).join("")}
+        </div>
+        <p class="lu-step-desc" style="margin-top:8px">${(prev.weapons || []).length}/2 chosen.</p>`}
+    ${navRow("← Back", "Continue →", "lu-step-next", false, "Skip (choose later)")}`;
+}
+
+// Third-caster cantrips (EK = 2 picks, AT = 2 picks + Mage Hand auto-grant)
+function buildThirdCasterCantripsStep(step) {
+  const prev = choices[step.id] || { spell_ids: [] };
+  const pick = step.pick || 2;
+  const mageHandAuto = step.mage_hand_auto_grant || false;
+  const owned = new Set(opts.owned_spell_ids || []);
+  const cantrips = wizardSpells.filter(s => s.level === 0 && !owned.has(s.id));
+  return `
+    <h2 class="lu-step-heading">${step.label || "Wizard Cantrips"}</h2>
+    <p class="lu-step-desc">Choose ${pick} cantrip${pick > 1 ? "s" : ""} from the Wizard spell list.
+      ${mageHandAuto ? `<br><em class="lu-mage-hand-note">Mage Hand is granted automatically as a bonus cantrip.</em>` : ""}</p>
+    <div class="lu-spell-grid" id="spell-grid">
+      ${cantrips.map(s => spellCard(s, step.id, prev.spell_ids.includes(s.id))).join("")}
+    </div>
+    <p class="lu-spell-count" id="spell-count">${(prev.spell_ids || []).length}/${pick} chosen</p>
+    ${navRow()}`;
+}
+
+// Third-caster spells (school restriction + free choice at L8/14/20)
+function buildThirdCasterSpellsStep(step) {
+  const prev = choices[step.id] || { spell_ids: [] };
+  const pick = step.pick || 3;
+  const maxSl = step.max_spell_level || 1;
+  const schoolRestriction = step.school_restriction || null;
+  const hasFreeChoice = step.free_choice || false;
+  const isFreeToggled = freeChoiceToggles[step.id] || false;
+  const owned = new Set(opts.owned_spell_ids || []);
+
+  let available = wizardSpells.filter(s => s.level >= 1 && s.level <= maxSl && !owned.has(s.id));
+  if (schoolRestriction && !isFreeToggled) {
+    available = available.filter(s => schoolRestriction.includes((s.school || "").toLowerCase()));
+  }
+
+  const schoolLabel = schoolRestriction
+    ? schoolRestriction.map(s => s[0].toUpperCase() + s.slice(1)).join(" or ")
+    : "";
+  const freeBtn = hasFreeChoice
+    ? `<button class="lu-filter-btn ${isFreeToggled ? 'active' : ''}"
+               onclick="toggleFreeSpellChoice('${step.id}')">
+        ${isFreeToggled ? "🔓 Any school (free choice active)" : `🔒 ${schoolLabel} only — click to unlock free choice`}
+       </button>`
+    : "";
+
+  return `
+    <h2 class="lu-step-heading">${step.label || "Choose Spells"}</h2>
+    <p class="lu-step-desc">Choose ${pick} spell${pick > 1 ? "s" : ""} (up to level ${maxSl}).
+      ${schoolRestriction && !isFreeToggled ? `<em>School: ${schoolLabel}</em>` : ""}</p>
+    ${freeBtn}
+    <div class="lu-spell-grid" id="spell-grid">
+      ${available.map(s => spellCard(s, step.id, prev.spell_ids.includes(s.id))).join("")}
+    </div>
+    <p class="lu-spell-count" id="spell-count">${(prev.spell_ids || []).length}/${pick} chosen</p>
+    ${navRow()}`;
+}
+
+// Student of War (Battle Master L3) — tool dropdown + skill pick
+function buildStudentOfWarStep(step) {
+  const prev = choices[step.id] || {};
+  const tools = step.tools || [];
+  const skills = step.eligible_skills || [];
+  return `
+    <h2 class="lu-step-heading">${step.label || "Student of War"}</h2>
+    <p class="lu-step-desc">Choose 1 Artisan's Tool proficiency and 1 additional skill.</p>
+    <div class="lu-sow-wrap">
+      <div class="lu-sow-group">
+        <div class="lu-sow-label">Artisan's Tool</div>
+        <select class="lu-sow-select" onchange="setStudentOfWarTool('${step.id}', this.value)">
+          <option value="">— Select a tool —</option>
+          ${tools.map(t => `<option value="${escQ(t)}" ${prev.tool === t ? 'selected' : ''}>${t}</option>`).join("")}
+        </select>
+      </div>
+      <div class="lu-sow-group">
+        <div class="lu-sow-label">Skill Proficiency</div>
+        <div class="lu-skill-grid">
+          ${skills.map(s => `
+            <button class="lu-skill-btn ${prev.skill === s ? 'chosen' : ''}"
+                    onclick="setStudentOfWarSkill('${step.id}', '${escQ(s)}', this)">${s}</button>`).join("")}
+        </div>
+      </div>
+    </div>
+    ${navRow()}`;
+}
+
+// Druidic Warrior cantrips — pick 2 from Druid list
+function buildDruidicWarriorCantripsStep(step) {
+  const prev = choices[step.id] || { spell_ids: [] };
+  const pick = step.pick || 2;
+  const owned = new Set(opts.owned_spell_ids || []);
+  const cantrips = druidSpells.filter(s => s.level === 0 && !owned.has(s.id));
+  return `
+    <h2 class="lu-step-heading">Druidic Warrior Cantrips</h2>
+    <p class="lu-step-desc">Choose ${pick} cantrip${pick > 1 ? "s" : ""} from the Druid spell list.</p>
+    <div class="lu-spell-grid" id="spell-grid">
+      ${cantrips.map(s => spellCard(s, step.id, prev.spell_ids.includes(s.id))).join("")}
+    </div>
+    <p class="lu-spell-count" id="spell-count">${(prev.spell_ids || []).length}/${pick} chosen</p>
+    ${navRow()}`;
+}
+
 // Shared spell card
 function spellCard(s, stepId, preChosen = false) {
   const lvlLabel = s.level === 0 ? "Cantrip" : `Level ${s.level}`;
@@ -963,6 +1306,85 @@ function pickRevelation(stepId, key, name, description, el) {
   el.classList.add("chosen");
 }
 
+// ── Phase F choice handlers ──────────────────────────────────────────────────
+
+function toggleWeaponMastery(stepId, weaponName, max, el) {
+  const cur = choices[stepId] || { weapons: [] };
+  const weapons = [...(cur.weapons || [])];
+  const idx = weapons.indexOf(weaponName);
+  if (idx >= 0) {
+    weapons.splice(idx, 1);
+    el.classList.remove("chosen");
+  } else {
+    if (weapons.length >= max) { toast(`Only ${max} weapon(s) allowed.`); return; }
+    weapons.push(weaponName);
+    el.classList.add("chosen");
+  }
+  choices[stepId] = { ...cur, weapons };
+  document.querySelectorAll(".lu-step-desc").forEach(d => {
+    if (d.textContent.includes("/")) d.textContent = `${weapons.length}/${max} chosen.`;
+  });
+}
+
+function toggleWarBond(stepId, weaponName, el) {
+  const cur = choices[stepId] || { weapons: [] };
+  const weapons = [...(cur.weapons || [])];
+  const idx = weapons.indexOf(weaponName);
+  if (idx >= 0) {
+    weapons.splice(idx, 1);
+    el.classList.remove("chosen");
+  } else {
+    if (weapons.length >= 2) { toast("Only 2 weapons can be bonded."); return; }
+    weapons.push(weaponName);
+    el.classList.add("chosen");
+  }
+  choices[stepId] = { ...cur, weapons };
+  document.querySelectorAll(".lu-step-desc").forEach(d => {
+    if (d.textContent.includes("/2")) d.textContent = `${weapons.length}/2 chosen.`;
+  });
+}
+
+function pickSingleSkill(stepId, skillName, el) {
+  choices[stepId] = { skill: skillName };
+  document.getElementById("skill-grid")?.querySelectorAll(".lu-skill-btn")
+    .forEach(b => b.classList.remove("chosen"));
+  el.classList.add("chosen");
+}
+
+function acknowledgeStep(stepId, payload) {
+  choices[stepId] = payload || { acknowledged: true };
+  luNext();
+}
+
+function pickIronMind(stepId, saveName, el) {
+  choices[stepId] = { save_proficiency: saveName };
+  el.closest(".lu-feat-grid")?.querySelectorAll(".lu-feat-card")
+    .forEach(c => c.classList.remove("chosen"));
+  el.classList.add("chosen");
+}
+
+function setStudentOfWarTool(stepId, toolName) {
+  choices[stepId] = { ...(choices[stepId] || {}), tool: toolName };
+}
+
+function setStudentOfWarSkill(stepId, skillName, el) {
+  choices[stepId] = { ...(choices[stepId] || {}), skill: skillName };
+  el.closest(".lu-skill-grid")?.querySelectorAll(".lu-skill-btn")
+    .forEach(b => b.classList.remove("chosen"));
+  el.classList.add("chosen");
+}
+
+function toggleFreeSpellChoice(stepId) {
+  freeChoiceToggles[stepId] = !freeChoiceToggles[stepId];
+  // Clear current spell picks when toggling school restriction
+  choices[stepId] = { spell_ids: [] };
+  const step = steps.find(s => s.id === stepId);
+  if (step) {
+    document.getElementById("lu-step-host").innerHTML = buildThirdCasterSpellsStep(step);
+    attachStepListeners(step);
+  }
+}
+
 function skipStep() {
   const step = steps[stepIdx - 1];
   if (step) delete choices[step.id];
@@ -1085,10 +1507,92 @@ function renderConfirm() {
     }
   }
 
-  // Feature choices
-  for (const step of steps.filter(s => s.kind === "feature_choice")) {
+  // Feature choices (original + all single-pick new kinds)
+  const _CONFIRM_CHOICE_KINDS = ["feature_choice","blessed_strikes","blessed_strikes_damage",
+    "hunters_prey","defensive_tactics","beast_companion","aspect_of_wilds","power_of_wilds","divine_fury"];
+  for (const step of steps.filter(s => _CONFIRM_CHOICE_KINDS.includes(s.kind))) {
     const p = choices[step.id];
-    if (p?.choice) lines.push(confirmRow(step.feature_name || step.label, p.choice));
+    if (p?.choice) lines.push(confirmRow(step.label || step.feature_name, p.choice));
+  }
+
+  // Weapon Mastery
+  for (const step of steps.filter(s => s.kind === "weapon_mastery")) {
+    const p = choices[step.id];
+    if (p?.weapons?.length) lines.push(confirmRow("Weapon Mastery", p.weapons.join(", ")));
+  }
+
+  // Battle Master Maneuvers
+  for (const step of steps.filter(s => s.kind === "maneuvers")) {
+    const p = choices[step.id];
+    if (p?.keys?.length) {
+      const names = p.keys.map(k => (step.options || []).find(m => m.key === k)?.name || k).join(", ");
+      lines.push(confirmRow("Maneuvers", names));
+    }
+  }
+
+  // Primal Knowledge
+  for (const step of steps.filter(s => s.kind === "primal_knowledge")) {
+    const p = choices[step.id];
+    if (p?.skill) lines.push(confirmRow("Primal Knowledge", p.skill));
+  }
+
+  // Otherworldly Glamour
+  for (const step of steps.filter(s => s.kind === "otherworldly_glamour")) {
+    const p = choices[step.id];
+    if (p?.skill) lines.push(confirmRow("Otherworldly Glamour", p.skill));
+  }
+
+  // Iron Mind
+  for (const step of steps.filter(s => s.kind === "iron_mind")) {
+    const p = choices[step.id];
+    if (p?.save_proficiency) lines.push(confirmRow("Iron Mind", `${p.save_proficiency} save proficiency`));
+  }
+
+  // Student of War
+  for (const step of steps.filter(s => s.kind === "student_of_war")) {
+    const p = choices[step.id];
+    if (p?.tool || p?.skill) lines.push(confirmRow("Student of War", [p.tool, p.skill].filter(Boolean).join(" + ")));
+  }
+
+  // War Bond
+  for (const step of steps.filter(s => s.kind === "war_bond")) {
+    const p = choices[step.id];
+    if (p?.weapons?.length) lines.push(confirmRow("War Bond", p.weapons.join(", ")));
+  }
+
+  // Third-caster cantrips
+  for (const step of steps.filter(s => s.kind === "third_caster_cantrips")) {
+    const p = choices[step.id];
+    if (p?.spell_ids?.length) {
+      const names = p.spell_ids.map(id => wizardSpells.find(s => s.id === id)?.name || id).join(", ");
+      lines.push(confirmRow("Wizard Cantrips", names));
+    }
+  }
+
+  // Third-caster spells
+  for (const step of steps.filter(s => s.kind === "third_caster_spells")) {
+    const p = choices[step.id];
+    if (p?.spell_ids?.length) {
+      const names = p.spell_ids.map(id => wizardSpells.find(s => s.id === id)?.name || id).join(", ");
+      lines.push(confirmRow("Wizard Spells", names));
+    }
+  }
+
+  // Druidic Warrior cantrips
+  for (const step of steps.filter(s => s.kind === "druidic_warrior_cantrips")) {
+    const p = choices[step.id];
+    if (p?.spell_ids?.length) {
+      const names = p.spell_ids.map(id => druidSpells.find(s => s.id === id)?.name || id).join(", ");
+      lines.push(confirmRow("Druidic Warrior Cantrips", names));
+    }
+  }
+
+  // Acknowledge steps
+  for (const step of steps.filter(s => s.kind === "rage_of_wilds")) {
+    lines.push(confirmRow("Rage of the Wilds", "Feature gained ✓"));
+  }
+  for (const step of steps.filter(s => s.kind === "assassins_tools")) {
+    lines.push(confirmRow("Assassin's Tools", "Disguise Kit + Poisoner's Kit ✓"));
   }
 
   lines.push(confirmRow("New Level", `<span style="font-size:1.4rem;color:var(--color-gold)">${opts.next_level}</span>`));
