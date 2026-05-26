@@ -47,6 +47,7 @@
         <button class="tab-btn" onclick="switchCodexTab('backgrounds')">Backgrounds</button>
         <button class="tab-btn" onclick="switchCodexTab('feats')">Feats</button>
         <button class="tab-btn" onclick="switchCodexTab('monsters')">Monsters</button>
+        <button class="tab-btn" onclick="switchCodexTab('items')">Items</button>
       </div>
       <div id="codex-species">
         <div class="flex-between mb-sm mt-md">
@@ -120,6 +121,83 @@
         </div>
         <div id="feat-list"></div>
       </div>
+      <div id="codex-items" class="hidden">
+        <div class="flex-between mb-sm mt-md">
+          <h3>Items</h3>
+          <button onclick="showItemForm()">+ New Item</button>
+        </div>
+        <div id="item-form" class="hidden mb-md tome-inset">
+          <div class="grid-2">
+            <div><label>Name</label><input type="text" id="item-name"></div>
+            <div>
+              <label>Item Type</label>
+              <select id="item-type" onchange="onItemTypeChange()">
+                <option value="weapon">Weapon</option>
+                <option value="armor">Armor</option>
+                <option value="shield">Shield</option>
+                <option value="gear">Gear</option>
+                <option value="tool">Tool</option>
+                <option value="focus">Focus</option>
+                <option value="pack">Pack</option>
+              </select>
+            </div>
+            <div><label>Category</label><input type="text" id="item-category" placeholder="e.g. Martial Melee"></div>
+            <div><label>Cost</label><input type="text" id="item-cost" placeholder="e.g. 15 GP"></div>
+            <div><label>Weight</label><input type="text" id="item-weight" placeholder="e.g. 3 lb."></div>
+            <div><label>Source</label><input type="text" id="item-source" value="Homebrew"></div>
+          </div>
+          <!-- Weapon fields -->
+          <div id="item-weapon-fields">
+            <div class="grid-2">
+              <div><label>Damage</label><input type="text" id="item-damage" placeholder="e.g. 1d8"></div>
+              <div>
+                <label>Damage Type</label>
+                <select id="item-damage-type">
+                  <option value="">— none —</option>
+                  <option>Slashing</option><option>Piercing</option><option>Bludgeoning</option>
+                  <option>Acid</option><option>Cold</option><option>Fire</option><option>Force</option>
+                  <option>Lightning</option><option>Necrotic</option><option>Poison</option>
+                  <option>Psychic</option><option>Radiant</option><option>Thunder</option>
+                </select>
+              </div>
+              <div>
+                <label>Mastery</label>
+                <select id="item-mastery">
+                  <option value="">— none —</option>
+                  <option>Cleave</option><option>Graze</option><option>Nick</option><option>Push</option>
+                  <option>Sap</option><option>Slow</option><option>Topple</option><option>Vex</option>
+                  <option value="__custom__">Custom…</option>
+                </select>
+                <input type="text" id="item-mastery-custom" class="hidden mt-xs" placeholder="Custom mastery name">
+              </div>
+            </div>
+            <label>Properties</label>
+            <div id="item-props-checkboxes" class="flex-row flex-wrap" style="gap:0.4rem 1.2rem;margin-bottom:0.4rem"></div>
+            <input type="text" id="item-props-custom" placeholder="Custom props (comma-sep, e.g. Range (80/320))">
+          </div>
+          <!-- Armor / Shield fields -->
+          <div id="item-armor-fields" class="hidden">
+            <div class="grid-2">
+              <div><label>AC Formula</label><input type="text" id="item-ac-formula" placeholder="e.g. 13 + Dex (max 2)"></div>
+              <div><label>Strength Requirement</label><input type="number" id="item-str-req" placeholder="e.g. 15 (heavy only)"></div>
+            </div>
+            <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+              <input type="checkbox" id="item-stealth-disadv"> Stealth Disadvantage
+            </label>
+          </div>
+          <label style="margin-top:0.6rem">Description</label>
+          <textarea id="item-desc" rows="3"></textarea>
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;margin-top:0.3rem">
+            <input type="checkbox" id="item-homebrew" checked> Homebrew
+          </label>
+          <div class="flex-row" style="margin-top:0.8rem">
+            <button class="btn-primary" onclick="saveItemForm()">Save</button>
+            <button onclick="cancelItemForm()">Cancel</button>
+          </div>
+        </div>
+        <div id="item-list"></div>
+      </div>
+
       <div id="codex-monsters" class="hidden">
         <div class="flex-between flex-wrap mb-sm mt-md">
           <h3>Monsters</h3>

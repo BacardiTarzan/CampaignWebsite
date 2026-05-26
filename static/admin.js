@@ -44,12 +44,13 @@ function switchTab(tab) {
 function switchCodexTab(sub) {
   document.querySelectorAll("#tab-codex .tab-bar .tab-btn").forEach(b => b.classList.remove("active"));
   event.target.classList.add("active");
-  ["species", "backgrounds", "feats", "monsters"].forEach(t =>
+  ["species", "backgrounds", "feats", "monsters", "items"].forEach(t =>
     document.getElementById(`codex-${t}`).classList.toggle("hidden", t !== sub));
   if (sub === "species") loadSpeciesList();
   if (sub === "backgrounds") loadBgList();
   if (sub === "feats") loadFeatList();
   if (sub === "monsters") loadMonsters();
+  if (sub === "items") loadItemList();
 }
 
 // ---------------------------------------------------------------------------
@@ -508,6 +509,193 @@ async function saveFeatForm() {
 async function deleteFeat(id) {
   if (!confirm("Delete this feat?")) return;
   try { await api("DELETE", `/api/admin/codex/feats/${id}`); loadFeatList(); }
+  catch(e) { err(e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Codex — Items
+// ---------------------------------------------------------------------------
+
+const WEAPON_PROPERTIES = ["Ammunition","Finesse","Heavy","Light","Loading","Range","Reach","Special","Thrown","Two-Handed","Versatile"];
+const WEAPON_MASTERIES   = ["Cleave","Graze","Nick","Push","Sap","Slow","Topple","Vex"];
+const DAMAGE_TYPES       = ["Slashing","Piercing","Bludgeoning","Acid","Cold","Fire","Force","Lightning","Necrotic","Poison","Psychic","Radiant","Thunder"];
+const CATEGORY_HINTS     = {
+  weapon: ["Simple Melee","Simple Ranged","Martial Melee","Martial Ranged"],
+  armor:  ["Light","Medium","Heavy"],
+  shield: ["Shield"],
+};
+
+let _editingItemId = null;
+let _itemListCache = [];
+
+function _buildPropCheckboxes() {
+  const container = document.getElementById("item-props-checkboxes");
+  if (!container) return;
+  container.innerHTML = WEAPON_PROPERTIES.map(p =>
+    `<label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem">
+       <input type="checkbox" class="item-prop-cb" value="${p}"> ${p}
+     </label>`
+  ).join("");
+}
+
+function onItemTypeChange() {
+  const t = document.getElementById("item-type").value;
+  document.getElementById("item-weapon-fields").classList.toggle("hidden", t !== "weapon");
+  document.getElementById("item-armor-fields").classList.toggle("hidden", t !== "armor" && t !== "shield");
+  const hints = CATEGORY_HINTS[t] || [];
+  const catEl = document.getElementById("item-category");
+  catEl.placeholder = hints.length ? hints.join(" / ") : "e.g. Adventuring Gear";
+  if (t === "shield") {
+    const ac = document.getElementById("item-ac-formula");
+    if (!ac.value) ac.value = "+2";
+  }
+}
+
+async function loadItemList() {
+  _itemListCache = await api("GET", "/api/admin/codex/equipment");
+  const typeLabel = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : "—";
+  document.getElementById("item-list").innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Type</th><th>Category</th><th>Damage / AC</th><th>Mastery</th><th>Homebrew</th><th>Actions</th></tr></thead>
+      <tbody>${_itemListCache.map(item => `
+        <tr>
+          <td><strong>${item.name}</strong></td>
+          <td>${typeLabel(item.item_type)}</td>
+          <td>${item.category || "—"}</td>
+          <td>${item.damage ? `${item.damage} ${item.damage_type||""}`.trim() : item.ac_formula || "—"}</td>
+          <td>${item.mastery_property || "—"}</td>
+          <td>${item.is_homebrew ? "✅" : "—"}</td>
+          <td><div class="actions">
+            <button onclick="editItem(${item.id})">✎</button>
+            <button class="btn-danger" onclick="deleteItem(${item.id})">✕</button>
+          </div></td>
+        </tr>`).join("") || '<tr><td colspan="7" class="text-muted">No items yet.</td></tr>'}
+      </tbody>
+    </table>`;
+}
+
+function showItemForm(item = null) {
+  _editingItemId = item ? item.id : null;
+  _buildPropCheckboxes();
+  // Reset
+  ["item-name","item-category","item-cost","item-weight","item-damage","item-props-custom",
+   "item-ac-formula","item-desc"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  document.getElementById("item-source").value = "Homebrew";
+  document.getElementById("item-homebrew").checked = true;
+  document.getElementById("item-stealth-disadv").checked = false;
+  document.getElementById("item-str-req").value = "";
+  document.getElementById("item-damage-type").value = "";
+  document.getElementById("item-mastery").value = "";
+  document.getElementById("item-mastery-custom").value = "";
+  document.getElementById("item-mastery-custom").classList.add("hidden");
+
+  if (item) {
+    document.getElementById("item-name").value = item.name || "";
+    document.getElementById("item-type").value = item.item_type || "weapon";
+    document.getElementById("item-category").value = item.category || "";
+    document.getElementById("item-cost").value = item.cost || "";
+    document.getElementById("item-weight").value = item.weight || "";
+    document.getElementById("item-source").value = item.source || "Homebrew";
+    document.getElementById("item-homebrew").checked = !!item.is_homebrew;
+    document.getElementById("item-desc").value = item.description || "";
+    // Weapon
+    document.getElementById("item-damage").value = item.damage || "";
+    document.getElementById("item-damage-type").value = item.damage_type || "";
+    const mastery = item.mastery_property || "";
+    if (mastery && !WEAPON_MASTERIES.includes(mastery)) {
+      document.getElementById("item-mastery").value = "__custom__";
+      document.getElementById("item-mastery-custom").value = mastery;
+      document.getElementById("item-mastery-custom").classList.remove("hidden");
+    } else {
+      document.getElementById("item-mastery").value = mastery;
+    }
+    const props = Array.isArray(item.properties) ? item.properties : [];
+    const standardProps = WEAPON_PROPERTIES;
+    const customProps = props.filter(p => !standardProps.includes(p));
+    document.querySelectorAll(".item-prop-cb").forEach(cb => {
+      cb.checked = props.includes(cb.value);
+    });
+    document.getElementById("item-props-custom").value = customProps.join(", ");
+    // Armor
+    document.getElementById("item-ac-formula").value = item.ac_formula || "";
+    document.getElementById("item-str-req").value = item.strength_req || "";
+    document.getElementById("item-stealth-disadv").checked = !!item.stealth_disadvantage;
+  }
+
+  onItemTypeChange();
+  document.getElementById("item-form").classList.remove("hidden");
+}
+
+function editItem(id) {
+  const item = _itemListCache.find(i => i.id === id);
+  if (item) showItemForm(item);
+}
+
+function cancelItemForm() {
+  document.getElementById("item-form").classList.add("hidden");
+  _editingItemId = null;
+}
+
+document.addEventListener("change", e => {
+  if (e.target.id === "item-mastery") {
+    document.getElementById("item-mastery-custom").classList.toggle("hidden", e.target.value !== "__custom__");
+  }
+});
+
+async function saveItemForm() {
+  const name = document.getElementById("item-name").value.trim();
+  if (!name) { err("Name required."); return; }
+  const itemType = document.getElementById("item-type").value;
+
+  const checkedProps = [...document.querySelectorAll(".item-prop-cb:checked")].map(cb => cb.value);
+  const customPropRaw = document.getElementById("item-props-custom").value.trim();
+  const customProps = customPropRaw ? customPropRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const properties = [...checkedProps, ...customProps];
+
+  const masteryEl = document.getElementById("item-mastery");
+  const mastery = masteryEl.value === "__custom__"
+    ? document.getElementById("item-mastery-custom").value.trim()
+    : masteryEl.value || null;
+
+  const strReq = document.getElementById("item-str-req").value;
+
+  const body = {
+    name,
+    item_type: itemType,
+    category: document.getElementById("item-category").value.trim() || null,
+    cost: document.getElementById("item-cost").value.trim() || null,
+    weight: document.getElementById("item-weight").value.trim() || null,
+    source: document.getElementById("item-source").value.trim() || "Homebrew",
+    is_homebrew: document.getElementById("item-homebrew").checked,
+    description: document.getElementById("item-desc").value.trim() || null,
+    damage: document.getElementById("item-damage").value.trim() || null,
+    damage_type: document.getElementById("item-damage-type").value || null,
+    properties: properties.length ? properties : null,
+    mastery_property: mastery || null,
+    ac_formula: document.getElementById("item-ac-formula").value.trim() || null,
+    strength_req: strReq ? parseInt(strReq) : null,
+    stealth_disadvantage: document.getElementById("item-stealth-disadv").checked,
+  };
+
+  try {
+    if (_editingItemId) {
+      await api("PUT", `/api/admin/codex/equipment/${_editingItemId}`, body);
+      toast("Item updated.");
+    } else {
+      await api("POST", "/api/admin/codex/equipment", body);
+      toast("Item created.");
+    }
+    cancelItemForm();
+    loadItemList();
+  } catch(e) { err(e.message); }
+}
+
+async function deleteItem(id) {
+  if (!confirm("Delete this item?")) return;
+  try { await api("DELETE", `/api/admin/codex/equipment/${id}`); loadItemList(); }
   catch(e) { err(e.message); }
 }
 

@@ -596,6 +596,63 @@ def admin_delete_feat(fid: int, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Codex — Equipment CRUD
+# ---------------------------------------------------------------------------
+
+class EquipmentIn(BaseModel):
+    name: str
+    item_type: str
+    category: str | None = None
+    cost: str | None = None
+    weight: str | None = None
+    damage: str | None = None
+    damage_type: str | None = None
+    properties: list[str] | None = None
+    mastery_property: str | None = None
+    ac_formula: str | None = None
+    strength_req: int | None = None
+    stealth_disadvantage: bool = False
+    description: str | None = None
+    source: str = "Homebrew"
+    is_homebrew: bool = True
+
+
+@router.get("/codex/equipment")
+def admin_list_equipment(db: Session = Depends(get_db)):
+    return db.query(Equipment).order_by(Equipment.item_type, Equipment.name).all()
+
+
+@router.post("/codex/equipment")
+def admin_create_equipment(data: EquipmentIn, db: Session = Depends(get_db)):
+    obj = Equipment(**data.model_dump())
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+@router.put("/codex/equipment/{eid}")
+def admin_update_equipment(eid: int, data: EquipmentIn, db: Session = Depends(get_db)):
+    obj = db.get(Equipment, eid)
+    if not obj:
+        raise HTTPException(404)
+    for k, v in data.model_dump().items():
+        setattr(obj, k, v)
+    db.commit()
+    return obj
+
+
+@router.delete("/codex/equipment/{eid}")
+def admin_delete_equipment(eid: int, db: Session = Depends(get_db)):
+    obj = db.get(Equipment, eid)
+    if not obj:
+        raise HTTPException(404)
+    db.delete(obj)
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Grimoire — Spell CRUD
 # ---------------------------------------------------------------------------
 
