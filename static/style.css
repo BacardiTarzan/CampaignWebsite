@@ -738,7 +738,8 @@ label, .field-label {
   resize: vertical;
   margin-bottom: 0;
 }
-.ep-footer { padding: var(--sp-4) var(--sp-5); display: flex; gap: var(--sp-2); }
+.ep-body   { overflow-y: auto; flex: 1; }
+.ep-footer { padding: var(--sp-4) var(--sp-5); display: flex; gap: var(--sp-2); flex-shrink: 0; border-top: 1px solid rgba(168,120,43,0.3); }
 .ep-skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 3px 12px; }
 .ep-skill-row  { display: flex; align-items: center; gap: var(--sp-1); font-size: 0.88rem; cursor: pointer; padding: 3px 0; color: var(--ink-soft); }
 .ep-cb-grid    { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 3px 12px; }

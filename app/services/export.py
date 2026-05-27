@@ -142,19 +142,21 @@ def compute_ac(char, attrs: dict, db) -> tuple[int, str]:
         elif item.item_type == "shield" and ce.equipped and shield is None:
             shield = item
     shield_bonus = 2 if shield else 0
+    shield_magic = (shield.magic_bonus or 0) if shield else 0
     if armor:
-        return _calc_ac(armor.ac_formula or "", attrs) + shield_bonus, "armor"
+        armor_magic = armor.magic_bonus or 0
+        return _calc_ac(armor.ac_formula or "", attrs) + shield_bonus + armor_magic + shield_magic, "armor"
     # Unarmored Defense
     for cc in char.character_classes:
         cls_name = cc.dnd_class.name if cc.dnd_class else ""
         if cls_name == "Barbarian" and cc.level > 0:
-            return 10 + dex + _mod(attrs.get("con", 10)) + shield_bonus, "unarmored_defense_barbarian"
+            return 10 + dex + _mod(attrs.get("con", 10)) + shield_bonus + shield_magic, "unarmored_defense_barbarian"
         if cls_name == "Monk" and cc.level > 0:
-            return 10 + dex + _mod(attrs.get("wis", 10)) + shield_bonus, "unarmored_defense_monk"
-    return 10 + dex + shield_bonus, "unarmored"
+            return 10 + dex + _mod(attrs.get("wis", 10)) + shield_bonus + shield_magic, "unarmored_defense_monk"
+    return 10 + dex + shield_bonus + shield_magic, "unarmored"
 
 
-def _calc_attacks(char, attrs: dict, prof: int) -> list:
+def _calc_attacks(char, attrs: dict, prof: int, weapon_prof_set: set) -> list:
     str_mod = _mod(attrs.get("str", 10))
     dex_mod = _mod(attrs.get("dex", 10))
     mastery_set = {w.weapon_name for w in char.weapon_mastery_unlocks}
@@ -168,16 +170,35 @@ def _calc_attacks(char, attrs: dict, prof: int) -> list:
         is_finesse = "finesse" in props
         is_ranged = "ranged" in cat
         stat_mod = max(str_mod, dex_mod) if is_finesse else (dex_mod if is_ranged else str_mod)
-        attack_bonus = prof + stat_mod
-        dmg = item.damage or "1"
-        dmg_type = item.damage_type or ""
-        dmg_str = (f"{dmg}+{stat_mod}" if stat_mod >= 0 else f"{dmg}{stat_mod}") + (f" {dmg_type}" if dmg_type else "")
+        check_name = item.proficiency_base or item.name
+        is_proficient = check_name in weapon_prof_set
+        magic = item.magic_bonus or 0
+        attack_bonus = (prof if is_proficient else 0) + stat_mod + magic
+        # Build damage string from damage_rolls; fall back to legacy damage/damage_type for seeded items
+        rolls = item.damage_rolls or (
+            [{"dice": item.damage, "type": item.damage_type or ""}] if item.damage else []
+        )
+        total_mod = stat_mod + magic
+        if rolls:
+            first = rolls[0]
+            mod_str = f"+{total_mod}" if total_mod >= 0 else str(total_mod)
+            dmg_str = first["dice"] + mod_str
+            if first.get("type"):
+                dmg_str += f" {first['type']}"
+            for r in rolls[1:]:
+                extra = r["dice"] + (f" {r['type']}" if r.get("type") else "")
+                dmg_str = f"{dmg_str} + {extra}"
+        else:
+            dmg_str = f"1+{total_mod}" if total_mod >= 0 else f"1{total_mod}"
+        display_props = list(item.properties or [])
+        if magic:
+            display_props = [f"Magic +{magic}"] + display_props
         attacks.append({
             "name": item.name,
             "attack_bonus": attack_bonus,
             "damage": dmg_str,
-            "properties": item.properties or [],
-            "mastery_property": item.mastery_property if item.name in mastery_set else None,
+            "properties": display_props,
+            "mastery_property": item.mastery_property if (item.name in mastery_set or (item.proficiency_base and item.proficiency_base in mastery_set)) else None,
             "category": item.category or "",
         })
     # Unarmed strike always available
@@ -470,9 +491,11 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
             "category": item.category if item else None,
             "damage": item.damage if item else None,
             "damage_type": item.damage_type if item else None,
+            "damage_rolls": item.damage_rolls if item else None,
             "properties": item.properties if item else [],
             "mastery_property": item.mastery_property if item else None,
             "ac_formula": item.ac_formula if item else None,
+            "magic_bonus": item.magic_bonus if item else None,
         }
         equipment.append(eq)
 
@@ -529,7 +552,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "prepared_max": prepared_max,
         "prepared_count": prepared_count,
         "equipment": equipment,
-        "attacks": _calc_attacks(char, attrs, prof),
+        "attacks": _calc_attacks(char, attrs, prof, weapon_prof_set),
         "is_complete": char.is_complete,
         "class_resources": class_resources(
             cls.name if cls else "",

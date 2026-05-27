@@ -165,14 +165,18 @@ class Equipment(Base):
     cost = Column(String, nullable=True)
     weight = Column(String, nullable=True)
     # Weapon fields
-    damage = Column(String, nullable=True)
-    damage_type = Column(String, nullable=True)
+    damage = Column(String, nullable=True)        # legacy; kept for seeder compat — prefer damage_rolls
+    damage_type = Column(String, nullable=True)   # legacy; kept for seeder compat — prefer damage_rolls
+    damage_rolls = Column(JSON, nullable=True)    # [{"dice":"1d8","type":"Slashing"},{"dice":"1d6","type":"Fire"},…]
     properties = Column(JSON, nullable=True)
     mastery_property = Column(String, nullable=True)
+    proficiency_base = Column(String, nullable=True)    # base weapon name for prof/mastery lookup, e.g. "Longsword"
     # Armor fields
     ac_formula = Column(String, nullable=True)  # "11 + Dex","13 + Dex (max 2)","16"
     strength_req = Column(Integer, nullable=True)
     stealth_disadvantage = Column(Boolean, default=False)
+    # Magic bonus (weapons: attack+damage; armor/shield: AC)
+    magic_bonus = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
     source = Column(String, default="PHB 2024")
     is_homebrew = Column(Boolean, default=False)

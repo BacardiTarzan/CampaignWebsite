@@ -1006,7 +1006,7 @@ function renderEquipmentTab(c) {
   const renderRow = (e) => {
     const propSpans = (e.properties || []).map(p => gloss(p)).join(", ");
     const detail = [
-      e.damage ? `${e.damage}${e.damage_type ? " " + e.damage_type : ""}` : null,
+      (() => { const rolls = e.damage_rolls?.length ? e.damage_rolls : (e.damage ? [{ dice: e.damage, type: e.damage_type || "" }] : []); return rolls.length ? rolls.map(r => r.dice + (r.type ? " " + r.type : "")).join(" + ") : null; })(),
       e.ac_formula ? `AC ${e.ac_formula}` : null,
       propSpans || null,
     ].filter(Boolean).join(" · ");
@@ -1022,6 +1022,7 @@ function renderEquipmentTab(c) {
     const detail = [
       e.ac_formula ? `AC ${e.ac_formula}` : null,
       e.item_type === "shield" ? "+2 AC" : null,
+      e.magic_bonus ? `+${e.magic_bonus} magic` : null,
     ].filter(Boolean).join(" · ");
     const equipToggle = `<button class="equip-toggle-btn${e.equipped ? " is-equipped" : ""}"
       onclick="toggleEquipped(${e.entry_id},${!e.equipped},event)">

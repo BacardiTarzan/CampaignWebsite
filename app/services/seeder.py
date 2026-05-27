@@ -633,6 +633,7 @@ def _parse_equip_item_md(path: Path) -> dict | None:
         mastery_m = re.search(r"## Mastery\s*\n-\s*(.+)", text)
         mastery = mastery_m.group(1).strip() if mastery_m else None
 
+        damage_rolls = [{"dice": damage, "type": damage_type or ""}] if damage else None
         return {
             "name": name,
             "item_type": "weapon",
@@ -641,6 +642,7 @@ def _parse_equip_item_md(path: Path) -> dict | None:
             "weight": weight,
             "damage": damage,
             "damage_type": damage_type,
+            "damage_rolls": damage_rolls,
             "properties": properties,
             "mastery_property": mastery,
             "description": description,

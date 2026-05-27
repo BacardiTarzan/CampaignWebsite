@@ -148,18 +148,10 @@
           </div>
           <!-- Weapon fields -->
           <div id="item-weapon-fields">
-            <div class="grid-2">
-              <div><label>Damage</label><input type="text" id="item-damage" placeholder="e.g. 1d8"></div>
-              <div>
-                <label>Damage Type</label>
-                <select id="item-damage-type">
-                  <option value="">— none —</option>
-                  <option>Slashing</option><option>Piercing</option><option>Bludgeoning</option>
-                  <option>Acid</option><option>Cold</option><option>Fire</option><option>Force</option>
-                  <option>Lightning</option><option>Necrotic</option><option>Poison</option>
-                  <option>Psychic</option><option>Radiant</option><option>Thunder</option>
-                </select>
-              </div>
+            <label>Damage</label>
+            <div id="damage-rolls-container" style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:0.4rem"></div>
+            <button type="button" onclick="addDmgRoll()" style="font-size:0.8rem;padding:0.2rem 0.6rem">+ Add Damage Line</button>
+            <div class="grid-2" style="margin-top:0.8rem">
               <div>
                 <label>Mastery</label>
                 <select id="item-mastery">
@@ -170,7 +162,11 @@
                 </select>
                 <input type="text" id="item-mastery-custom" class="hidden mt-xs" placeholder="Custom mastery name">
               </div>
+              <div><label>Magic Bonus</label><input type="number" id="item-weapon-magic-bonus" placeholder="e.g. 1" min="0" max="10"></div>
             </div>
+            <label>Base Weapon (for proficiency &amp; mastery)</label>
+            <input type="text" id="item-proficiency-base" list="weapon-names-datalist" placeholder="e.g. Longsword — leave blank if this is the base item">
+            <datalist id="weapon-names-datalist"></datalist>
             <label>Properties</label>
             <div id="item-props-checkboxes" class="flex-row flex-wrap" style="gap:0.4rem 1.2rem;margin-bottom:0.4rem"></div>
             <input type="text" id="item-props-custom" placeholder="Custom props (comma-sep, e.g. Range (80/320))">
@@ -180,6 +176,7 @@
             <div class="grid-2">
               <div><label>AC Formula</label><input type="text" id="item-ac-formula" placeholder="e.g. 13 + Dex (max 2)"></div>
               <div><label>Strength Requirement</label><input type="number" id="item-str-req" placeholder="e.g. 15 (heavy only)"></div>
+              <div><label>Magic Bonus</label><input type="number" id="item-armor-magic-bonus" placeholder="e.g. 1" min="0" max="10"></div>
             </div>
             <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
               <input type="checkbox" id="item-stealth-disadv"> Stealth Disadvantage

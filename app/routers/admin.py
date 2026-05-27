@@ -605,13 +605,14 @@ class EquipmentIn(BaseModel):
     category: str | None = None
     cost: str | None = None
     weight: str | None = None
-    damage: str | None = None
-    damage_type: str | None = None
+    damage_rolls: list[dict] | None = None   # [{"dice":"1d8","type":"Slashing"}, …]
     properties: list[str] | None = None
     mastery_property: str | None = None
+    proficiency_base: str | None = None
     ac_formula: str | None = None
     strength_req: int | None = None
     stealth_disadvantage: bool = False
+    magic_bonus: int | None = None
     description: str | None = None
     source: str = "Homebrew"
     is_homebrew: bool = True
@@ -622,9 +623,17 @@ def admin_list_equipment(db: Session = Depends(get_db)):
     return db.query(Equipment).order_by(Equipment.item_type, Equipment.name).all()
 
 
+def _sync_damage_legacy(obj: Equipment, damage_rolls):
+    """Keep legacy damage/damage_type columns in sync with damage_rolls[0] for backward compat."""
+    first = (damage_rolls or [None])[0]
+    obj.damage = first.get("dice") if first else None
+    obj.damage_type = first.get("type") if first else None
+
+
 @router.post("/codex/equipment")
 def admin_create_equipment(data: EquipmentIn, db: Session = Depends(get_db)):
     obj = Equipment(**data.model_dump())
+    _sync_damage_legacy(obj, data.damage_rolls)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -638,6 +647,7 @@ def admin_update_equipment(eid: int, data: EquipmentIn, db: Session = Depends(ge
         raise HTTPException(404)
     for k, v in data.model_dump().items():
         setattr(obj, k, v)
+    _sync_damage_legacy(obj, data.damage_rolls)
     db.commit()
     return obj
 
@@ -996,6 +1006,9 @@ def repair_schema(db: Session = Depends(get_db)):
     add_col("character_choices", "level", "INTEGER")
     add_col("characters", "hp_roll_log", "JSON")
     add_col("classes", "tool_proficiencies", "JSON")
+    add_col("equipment", "magic_bonus", "INTEGER")
+    add_col("equipment", "proficiency_base", "VARCHAR")
+    add_col("equipment", "damage_rolls", "JSON")
 
     # CREATE TABLE: SERIAL is PostgreSQL; INTEGER PRIMARY KEY is the SQLite equivalent.
     pk = "SERIAL" if is_pg else "INTEGER"

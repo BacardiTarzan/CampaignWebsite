@@ -528,6 +528,51 @@ const CATEGORY_HINTS     = {
 let _editingItemId = null;
 let _itemListCache = [];
 
+const _DMG_TYPE_OPTIONS = ["","Slashing","Piercing","Bludgeoning","Acid","Cold","Fire","Force","Lightning","Necrotic","Poison","Psychic","Radiant","Thunder"]
+  .map(t => `<option value="${t}">${t || "— none —"}</option>`).join("");
+
+function _renderDmgRolls(rolls) {
+  const c = document.getElementById("damage-rolls-container");
+  if (!c) return;
+  c.innerHTML = "";
+  const addedRolls = rolls.length ? rolls : [{ dice: "", type: "" }];
+  addedRolls.forEach((r, i) => {
+    const row = document.createElement("div");
+    row.className = "flex-row";
+    row.style.cssText = "gap:0.4rem;align-items:center";
+    row.innerHTML = `
+      <input type="text" class="dmg-dice" value="${r.dice || ""}" placeholder="e.g. 1d8" style="width:6rem">
+      <select class="dmg-type">${_DMG_TYPE_OPTIONS}</select>
+      ${i > 0 ? `<button type="button" onclick="this.parentElement.remove()" style="padding:0.1rem 0.4rem;font-size:0.85rem">−</button>` : ""}`;
+    row.querySelector(".dmg-type").value = r.type || "";
+    c.appendChild(row);
+  });
+}
+
+function addDmgRoll() {
+  const c = document.getElementById("damage-rolls-container");
+  if (!c) return;
+  const row = document.createElement("div");
+  row.className = "flex-row";
+  row.style.cssText = "gap:0.4rem;align-items:center";
+  row.innerHTML = `
+    <input type="text" class="dmg-dice" value="" placeholder="e.g. 1d6" style="width:6rem">
+    <select class="dmg-type">${_DMG_TYPE_OPTIONS}</select>
+    <button type="button" onclick="this.parentElement.remove()" style="padding:0.1rem 0.4rem;font-size:0.85rem">−</button>`;
+  c.appendChild(row);
+}
+
+function _collectDmgRolls() {
+  const rows = document.querySelectorAll("#damage-rolls-container .flex-row");
+  const result = [];
+  rows.forEach(row => {
+    const dice = row.querySelector(".dmg-dice")?.value.trim();
+    const type = row.querySelector(".dmg-type")?.value || "";
+    if (dice) result.push({ dice, type });
+  });
+  return result.length ? result : null;
+}
+
 function _buildPropCheckboxes() {
   const container = document.getElementById("item-props-checkboxes");
   if (!container) return;
@@ -553,6 +598,12 @@ function onItemTypeChange() {
 
 async function loadItemList() {
   _itemListCache = await api("GET", "/api/admin/codex/equipment");
+  // Populate datalist for base-weapon autocomplete from all weapon-type items
+  const dl = document.getElementById("weapon-names-datalist");
+  if (dl) {
+    const weaponNames = _itemListCache.filter(i => i.item_type === "weapon").map(i => i.name);
+    dl.innerHTML = weaponNames.map(n => `<option value="${n}">`).join("");
+  }
   const typeLabel = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : "—";
   document.getElementById("item-list").innerHTML = `
     <table class="data-table">
@@ -578,8 +629,9 @@ function showItemForm(item = null) {
   _editingItemId = item ? item.id : null;
   _buildPropCheckboxes();
   // Reset
-  ["item-name","item-category","item-cost","item-weight","item-damage","item-props-custom",
-   "item-ac-formula","item-desc"].forEach(id => {
+  ["item-name","item-category","item-cost","item-weight","item-props-custom",
+   "item-ac-formula","item-desc","item-weapon-magic-bonus","item-armor-magic-bonus",
+   "item-proficiency-base"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
@@ -587,10 +639,10 @@ function showItemForm(item = null) {
   document.getElementById("item-homebrew").checked = true;
   document.getElementById("item-stealth-disadv").checked = false;
   document.getElementById("item-str-req").value = "";
-  document.getElementById("item-damage-type").value = "";
   document.getElementById("item-mastery").value = "";
   document.getElementById("item-mastery-custom").value = "";
   document.getElementById("item-mastery-custom").classList.add("hidden");
+  _renderDmgRolls([]);
 
   if (item) {
     document.getElementById("item-name").value = item.name || "";
@@ -619,10 +671,19 @@ function showItemForm(item = null) {
       cb.checked = props.includes(cb.value);
     });
     document.getElementById("item-props-custom").value = customProps.join(", ");
+    // Weapon proficiency base
+    document.getElementById("item-proficiency-base").value = item.proficiency_base || "";
+    // Weapon magic
+    document.getElementById("item-weapon-magic-bonus").value = item.magic_bonus ?? "";
+    // Damage rolls
+    const rolls = item.damage_rolls?.length ? item.damage_rolls
+      : (item.damage ? [{ dice: item.damage, type: item.damage_type || "" }] : []);
+    _renderDmgRolls(rolls);
     // Armor
     document.getElementById("item-ac-formula").value = item.ac_formula || "";
     document.getElementById("item-str-req").value = item.strength_req || "";
     document.getElementById("item-stealth-disadv").checked = !!item.stealth_disadvantage;
+    document.getElementById("item-armor-magic-bonus").value = item.magic_bonus ?? "";
   }
 
   onItemTypeChange();
@@ -661,6 +722,10 @@ async function saveItemForm() {
     : masteryEl.value || null;
 
   const strReq = document.getElementById("item-str-req").value;
+  const isWeapon = itemType === "weapon";
+  const magicRaw = isWeapon
+    ? document.getElementById("item-weapon-magic-bonus").value
+    : document.getElementById("item-armor-magic-bonus").value;
 
   const body = {
     name,
@@ -671,13 +736,14 @@ async function saveItemForm() {
     source: document.getElementById("item-source").value.trim() || "Homebrew",
     is_homebrew: document.getElementById("item-homebrew").checked,
     description: document.getElementById("item-desc").value.trim() || null,
-    damage: document.getElementById("item-damage").value.trim() || null,
-    damage_type: document.getElementById("item-damage-type").value || null,
     properties: properties.length ? properties : null,
     mastery_property: mastery || null,
     ac_formula: document.getElementById("item-ac-formula").value.trim() || null,
     strength_req: strReq ? parseInt(strReq) : null,
     stealth_disadvantage: document.getElementById("item-stealth-disadv").checked,
+    magic_bonus: magicRaw !== "" ? parseInt(magicRaw) : null,
+    damage_rolls: isWeapon ? _collectDmgRolls() : null,
+    proficiency_base: isWeapon ? (document.getElementById("item-proficiency-base").value.trim() || null) : null,
   };
 
   try {
@@ -1067,6 +1133,7 @@ async function openEditPanel(charId) {
         <button class="modal-close-btn" onclick="closeEditPanel()">✕</button>
       </div>
 
+      <div class="ep-body">
       <div class="ep-section">
         <h4>Background</h4>
         <select id="ep-bg-select" class="ep-select">
@@ -1116,6 +1183,8 @@ async function openEditPanel(charId) {
           <label class="field-label" style="margin:0">CP <input type="number" id="ep-cp" class="ep-input" value="${detail.currency.cp}" min="0" style="width:72px;margin-left:6px"></label>
         </div>
       </div>
+
+      </div><!-- /ep-body -->
 
       <div class="ep-footer">
         <button class="btn-primary" onclick="saveEditPanel()">Save Changes</button>
