@@ -990,6 +990,8 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
         raise HTTPException(400, "No level-up available")
 
     cls = cc.dnd_class
+    sp_type = cls.spellcasting_type or ""
+    max_sl = max_spell_level(sp_type, next_level) if sp_type else 0
     choices = data.choices
     auto_added_spells: list[str] = []   # names of auto-granted always-prepared spells
 
@@ -1441,11 +1443,11 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
             if spell_obj:
                 auto_added_spells.append(spell_obj.name)
 
-    # ── Prepared-caster spell list population (Cleric / Ranger) ─────────────
+    # ── Prepared-caster spell list population (Cleric / Druid / Paladin / Ranger) ─
     # These classes don't pick spells at level-up; instead they always have
     # access to their full class list up to their max slot level. Populate any
     # newly available spells as prepared=False so the sheet can display them.
-    PREPARED_CASTERS = {"Cleric", "Ranger"}
+    PREPARED_CASTERS = {"Cleric", "Druid", "Paladin", "Ranger"}
     if cls.name in PREPARED_CASTERS and max_sl > 0:
         owned_ids_now = {cs.spell_id for cs in char.spells}
         candidate_spells = (
