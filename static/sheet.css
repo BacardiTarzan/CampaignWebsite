@@ -1096,3 +1096,46 @@
   .sh-tabs        { padding: 0 12px; }
   .sh-tab-btn     { padding: 8px 14px 9px 18px; font-size: 0.68rem; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   CONDITION STRIP — between combat bar and tabs
+   ───────────────────────────────────────────────────────────────── */
+.sh-condition-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 8px 20px;
+  background: rgba(0,0,0,0.12);
+  border-bottom: 1px solid rgba(168,120,43,0.18);
+}
+
+.sh-condition-label {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--light-dim);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.sh-cond-chip {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  cursor: help;
+}
+.sh-cond-chip--red    { color: var(--rubric); background: rgba(139,26,26,0.12); }
+.sh-cond-chip--amber  { color: #8b4a00; background: rgba(139,74,0,0.1); }
+.sh-cond-chip--gold   { color: var(--gold); background: rgba(168,120,43,0.1); }
+
+/* Speed cell override when condition zeroes it */
+.sh-combat-big.sh-speed-zero   { color: var(--rubric); }
+.sh-combat-big.sh-speed-halved { color: #8b4a00; }

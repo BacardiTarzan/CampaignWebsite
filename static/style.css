@@ -1884,3 +1884,93 @@ label, .field-label {
 
   .page-title { font-size: 1.65rem; letter-spacing: 0.06em; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   CONDITION CHIPS — admin status tracker cards
+   ───────────────────────────────────────────────────────────────── */
+.cond-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0 2px;
+  min-height: 0;
+}
+
+.cond-chip {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid rgba(139,26,26,0.4);
+  background: rgba(139,26,26,0.15);
+  color: #e08080;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cond-chip-x {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+.cond-chip-x:hover { opacity: 1; }
+
+/* Condition picker popover */
+.cond-picker {
+  position: absolute;
+  z-index: 500;
+  background: linear-gradient(170deg, var(--parchment-bright) 0%, var(--parchment) 100%);
+  border: 1px solid rgba(168,120,43,0.4);
+  border-radius: var(--radius-md);
+  padding: 8px 0;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+.cond-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid rgba(168,120,43,0.1);
+}
+.cond-picker-item:last-child { border-bottom: none; }
+.cond-picker-item:hover { background: rgba(168,120,43,0.08); }
+.cond-picker-item.active { font-weight: 700; color: var(--rubric); }
+.cond-picker-check { font-size: 0.8rem; width: 14px; text-align: center; color: var(--rubric); }
+
+.cond-exhaustion-picker {
+  display: flex;
+  gap: 4px;
+  padding: 6px 14px 8px;
+  flex-wrap: wrap;
+}
+
+.cond-exhaustion-btn {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border: 1px solid rgba(139,74,0,0.4);
+  background: rgba(139,74,0,0.08);
+  color: #8b4a00;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.1s;
+  min-height: unset;
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.cond-exhaustion-btn:hover { background: rgba(139,74,0,0.18); }
+.cond-exhaustion-btn.active { background: rgba(139,74,0,0.3); font-weight: 700; }
