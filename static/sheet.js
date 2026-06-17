@@ -39,6 +39,57 @@ const SKILL_ABILITY = {
 const ORDINAL = ["","1st","2nd","3rd","4th","5th","6th","7th","8th","9th"];
 const SPELL_AB_KEY = { "Intelligence":"int","Wisdom":"wis","Charisma":"cha" };
 
+const CONDITION_COLORS = {
+  Incapacitated: "red", Paralyzed: "red", Petrified: "red",
+  Stunned: "red", Unconscious: "red",
+  Frightened: "amber", Poisoned: "amber",
+  Blinded: "gold", Charmed: "gold", Deafened: "gold",
+  Grappled: "gold", Invisible: "gold", Prone: "gold", Restrained: "gold",
+};
+
+function conditionColor(name) {
+  if (name.startsWith("Exhaustion")) return "amber";
+  return CONDITION_COLORS[name] || "gold";
+}
+
+function conditionLabel(name) {
+  if (name.startsWith("Exhaustion:")) return `Exhaustion ${name.split(":")[1]}`;
+  return name;
+}
+
+function renderConditionStrip(conditions) {
+  if (!conditions || !conditions.length) return "";
+  const chips = conditions.map(c => {
+    const cls = `sh-cond-chip sh-cond-chip--${conditionColor(c)}`;
+    const label = conditionLabel(c);
+    const condName = c.replace(/:\d+$/, "");
+    const slug = _glossarySlugByName ? _glossarySlugByName.get(condName.toLowerCase()) : null;
+    const glossEntry = slug && _glossaryMap ? _glossaryMap.get(slug) : null;
+    const tip = glossEntry ? ` title="${glossEntry.short_description.replace(/"/g, '&quot;')}"` : "";
+    return `<span class="${cls}"${tip}>${label}</span>`;
+  }).join("");
+  return `<div class="sh-condition-strip">
+    <span class="sh-condition-label">Conditions</span>${chips}
+  </div>`;
+}
+
+function computeSpeedDisplay(baseSpeed, conditions) {
+  if (!conditions || !conditions.length) return { text: `${baseSpeed ?? "—"} ft`, cls: "" };
+  const conds = new Set(conditions);
+  const speedZeroConditions = ["Grappled","Restrained","Paralyzed","Petrified","Stunned","Unconscious"];
+  const speedZero = speedZeroConditions.some(c => conds.has(c));
+  let exhaustLevel = 0;
+  for (const c of conds) {
+    if (c.startsWith("Exhaustion:")) { exhaustLevel = parseInt(c.split(":")[1], 10); break; }
+  }
+  if (speedZero || exhaustLevel >= 5) return { text: "0 ft", cls: "sh-speed-zero" };
+  if (exhaustLevel >= 3) {
+    const half = Math.floor((baseSpeed ?? 30) / 2);
+    return { text: `${half} ft`, cls: "sh-speed-halved" };
+  }
+  return { text: `${baseSpeed ?? "—"} ft`, cls: "" };
+}
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -304,9 +355,9 @@ function render() {
         ${c.ac_source && c.ac_source !== "armor" && c.ac_source !== "unarmored"
           ? `<div class="sh-stat-badge">${c.ac_source === "unarmored_defense_barbarian" ? "Unarmored Defense" : "Unarmored Defense (Wis)"}</div>` : ""}
       </div>
-      <div class="sh-combat-cell">
+      <div class="sh-combat-cell" id="sh-speed-cell">
         <div class="sh-combat-label">Speed</div>
-        <div class="sh-combat-big">${c.speed ?? "—"} ft</div>
+        ${(() => { const sd = computeSpeedDisplay(c.speed, c.conditions); const cls = sd.cls ? ` ${sd.cls}` : ""; return `<div class="sh-combat-big${cls}">${sd.text}</div>`; })()}
       </div>
       <div class="sh-combat-cell">
         <div class="sh-combat-label">Initiative</div>
@@ -322,6 +373,8 @@ function render() {
         <div class="sh-combat-big">${passivePerc}</div>
       </div>
     </div>
+
+    ${renderConditionStrip(c.conditions || [])}
 
     <div class="sh-tabs">
       <button class="sh-tab-btn active" onclick="switchSheetTab('stats',this)">Stats &amp; Attacks</button>
