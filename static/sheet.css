@@ -120,7 +120,7 @@
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold-deep);
+  color: var(--gold);
 }
 
 .sh-combat-big {
@@ -874,7 +874,7 @@
 .spell-badge--prepared    { color: #2a8040; background: rgba(42,128,64,0.1); }
 .spell-badge--spellbook   { color: #1a5aab; background: rgba(26,90,171,0.1); }
 .spell-badge--species     { color: var(--gold-deep); background: rgba(168,120,43,0.1); }
-.spell-badge--always-prep { color: #8a8040; background: rgba(138,128,64,0.1); }
+.spell-badge--always-prep { color: #4a4510; background: rgba(138,128,64,0.1); }
 .spell-badge--arcanum     { color: var(--rubric-bright); background: rgba(165,40,40,0.1); }
 
 .spell-chevron {
@@ -949,7 +949,7 @@
 .modal-spell-name             { font-family: var(--font-body); font-size: 0.95rem; color: var(--ink); flex: 1; }
 .modal-spell-level            { font-family: var(--font-display); font-size: 0.72rem; color: var(--gold-deep); letter-spacing: 0.06em; }
 .modal-spell-check-locked     { color: var(--gold); font-size: 0.8rem; }
-.modal-spell-always           { font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: #8a8040; }
+.modal-spell-always           { font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: #4a4510; }
 
 .prep-modal-save {
   font-family: var(--font-display);

@@ -870,7 +870,7 @@ label, .field-label {
   white-space: nowrap;
 }
 .wizard-step-pip.active .pip-label { color: var(--light); }
-.wizard-step-pip.done   .pip-label { color: var(--gold-deep); }
+.wizard-step-pip.done   .pip-label { color: var(--gold); }
 
 /* Wizard nav */
 .wizard-nav {
