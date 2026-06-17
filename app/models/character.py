@@ -33,6 +33,7 @@ class Character(Base):
     stat_roll_locked = Column(Boolean, default=False)
     physical_locked = Column(Boolean, default=False)
     hp_roll_log = Column(JSON, nullable=True)   # [{level, method, die_value, con_mod, total}]
+    conditions = Column(JSON, nullable=True)    # e.g. ["Grappled", "Exhaustion:3"]
     wizard_step = Column(Integer, default=1)
     is_complete = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
@@ -188,6 +189,7 @@ class Combatant(Base):
     hp_current = Column(Integer, nullable=True)       # only used for monster instances
     hp_max_override = Column(Integer, nullable=True)  # set from monster.hp_max at spawn
     added_at = Column(DateTime, default=datetime.utcnow)
+    conditions = Column(JSON, nullable=True)    # monster-only; cleared when combatant is removed
 
     character = relationship("Character")
     # monster relationship resolved at query time to avoid circular import
