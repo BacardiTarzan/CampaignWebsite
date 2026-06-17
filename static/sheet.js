@@ -64,9 +64,9 @@ function renderConditionStrip(conditions) {
     const label = conditionLabel(c);
     const condName = c.replace(/:\d+$/, "");
     const slug = _glossarySlugByName ? _glossarySlugByName.get(condName.toLowerCase()) : null;
-    const glossEntry = slug && _glossaryMap ? _glossaryMap.get(slug) : null;
-    const tip = glossEntry ? ` title="${glossEntry.short_description.replace(/"/g, '&quot;')}"` : "";
-    return `<span class="${cls}"${tip}>${label}</span>`;
+    return slug
+      ? `<span class="${cls} gloss-term" data-slug="${slug}">${label}</span>`
+      : `<span class="${cls}">${label}</span>`;
   }).join("");
   return `<div class="sh-condition-strip">
     <span class="sh-condition-label">Conditions</span>${chips}

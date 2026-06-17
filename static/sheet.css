@@ -1135,6 +1135,8 @@
 .sh-cond-chip--red    { color: var(--rubric); background: rgba(139,26,26,0.12); }
 .sh-cond-chip--amber  { color: #8b4a00; background: rgba(139,74,0,0.1); }
 .sh-cond-chip--gold   { color: var(--gold); background: rgba(168,120,43,0.1); }
+/* Pill border already signals interactivity — no underline needed */
+.sh-cond-chip.gloss-term { text-decoration: none; cursor: pointer; }
 
 /* Speed cell override when condition zeroes it */
 .sh-combat-big.sh-speed-zero   { color: var(--rubric); }
