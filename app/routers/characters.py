@@ -810,6 +810,60 @@ def update_prepared_spells(char_id: int, data: PreparedSpellsIn, db: Session = D
 
 
 # ---------------------------------------------------------------------------
+# Mastery swap
+# ---------------------------------------------------------------------------
+
+class MasterySwapIn(BaseModel):
+    remove: str
+    add: str
+
+@router.patch("/{char_id}/masteries/swap")
+def swap_mastery(char_id: int, data: MasterySwapIn, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+    char = _get_char(char_id, db)
+    _check_owner_or_admin(char, user)
+
+    remove_name = (data.remove or "").strip()
+    add_name = (data.add or "").strip()
+    if not remove_name or not add_name:
+        raise HTTPException(400, "Both 'remove' and 'add' weapon names are required")
+    if remove_name == add_name:
+        raise HTTPException(400, "remove and add must be different weapons")
+
+    current = {wu.weapon_name: wu for wu in char.weapon_mastery_unlocks}
+    if remove_name not in current:
+        raise HTTPException(400, f"'{remove_name}' is not a current mastery")
+
+    already_mastered = {wu.weapon_name for wu in char.weapon_mastery_unlocks}
+    if add_name in already_mastered:
+        raise HTTPException(400, f"'{add_name}' is already mastered")
+
+    from ..models.content import Equipment as EquipmentModel
+    from ..services.export import _CATEGORY_MAP
+    prof_raw = [wp.proficiency_type for wp in char.weapon_proficiencies]
+    prof_set: set[str] = set()
+    for pt in prof_raw:
+        if pt in _CATEGORY_MAP:
+            prof_set |= _CATEGORY_MAP[pt]
+        else:
+            prof_set.add(pt)
+
+    weapon_exists = db.query(EquipmentModel).filter(
+        EquipmentModel.name == add_name,
+        EquipmentModel.item_type == "weapon"
+    ).first()
+    if not weapon_exists:
+        raise HTTPException(400, f"'{add_name}' is not a known weapon")
+    if add_name not in prof_set:
+        raise HTTPException(400, f"Not proficient with '{add_name}'")
+
+    db.delete(current[remove_name])
+    new_mastery = WeaponMasteryUnlock(character_id=char.id, weapon_name=add_name)
+    db.add(new_mastery)
+    db.commit()
+    return {"ok": True, "removed": remove_name, "added": add_name}
+
+
+# ---------------------------------------------------------------------------
 # Level-up
 # ---------------------------------------------------------------------------
 

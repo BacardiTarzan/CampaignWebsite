@@ -8,6 +8,32 @@ from .levelup_rules import ELDRITCH_INVOCATIONS, class_resources, BARD_PREPARED_
 
 _INVOCATION_LOOKUP = {inv["key"]: inv for inv in ELDRITCH_INVOCATIONS}
 
+# Weapon category → set of weapon names (used by sheet dict and mastery swap endpoint)
+_SIMPLE_MELEE = {
+    "Club","Dagger","Greatclub","Handaxe","Javelin","Light Hammer",
+    "Mace","Quarterstaff","Sickle","Spear",
+}
+_SIMPLE_RANGED = {"Dart","Light Crossbow","Shortbow","Sling"}
+_SIMPLE = _SIMPLE_MELEE | _SIMPLE_RANGED
+_MARTIAL_MELEE = {
+    "Battleaxe","Flail","Glaive","Greataxe","Greatsword","Halberd","Lance",
+    "Longsword","Maul","Morningstar","Pike","Rapier","Scimitar","Shortsword",
+    "Trident","Warhammer","War Pick","Whip",
+}
+_MARTIAL_RANGED = {"Hand Crossbow","Heavy Crossbow","Longbow"}
+_MARTIAL = _MARTIAL_MELEE | _MARTIAL_RANGED
+_ALL = _SIMPLE | _MARTIAL
+_CATEGORY_MAP = {
+    "Simple Weapons": _SIMPLE,   "Simple": _SIMPLE,
+    "Simple Melee Weapons": _SIMPLE_MELEE,
+    "Simple Ranged Weapons": _SIMPLE_RANGED,
+    "Martial Weapons": _MARTIAL, "Martial": _MARTIAL,
+    "Martial Melee Weapons": _MARTIAL_MELEE,
+    "Martial Ranged Weapons": _MARTIAL_RANGED,
+    "Simple or Martial Melee Weapons": _SIMPLE_MELEE | _MARTIAL_MELEE,
+    "All Weapons": _ALL,
+}
+
 
 def character_to_dict(char: Character, db: Session) -> dict:
     species = None
@@ -427,32 +453,6 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         )
 
     # Weapon proficiency + mastery display
-    # Categories → sets of weapon names they cover
-    _SIMPLE_MELEE = {
-        "Club","Dagger","Greatclub","Handaxe","Javelin","Light Hammer",
-        "Mace","Quarterstaff","Sickle","Spear",
-    }
-    _SIMPLE_RANGED = {"Dart","Light Crossbow","Shortbow","Sling"}
-    _SIMPLE = _SIMPLE_MELEE | _SIMPLE_RANGED
-    _MARTIAL_MELEE = {
-        "Battleaxe","Flail","Glaive","Greataxe","Greatsword","Halberd","Lance",
-        "Longsword","Maul","Morningstar","Pike","Rapier","Scimitar","Shortsword",
-        "Trident","Warhammer","War Pick","Whip",
-    }
-    _MARTIAL_RANGED = {"Hand Crossbow","Heavy Crossbow","Longbow"}
-    _MARTIAL = _MARTIAL_MELEE | _MARTIAL_RANGED
-    _ALL = _SIMPLE | _MARTIAL
-    _CATEGORY_MAP = {
-        "Simple Weapons": _SIMPLE,   "Simple": _SIMPLE,
-        "Simple Melee Weapons": _SIMPLE_MELEE,
-        "Simple Ranged Weapons": _SIMPLE_RANGED,
-        "Martial Weapons": _MARTIAL, "Martial": _MARTIAL,
-        "Martial Melee Weapons": _MARTIAL_MELEE,
-        "Martial Ranged Weapons": _MARTIAL_RANGED,
-        "Simple or Martial Melee Weapons": _SIMPLE_MELEE | _MARTIAL_MELEE,
-        "All Weapons": _ALL,
-    }
-
     weapon_prof_raw = [wp.proficiency_type for wp in char.weapon_proficiencies]
     weapon_prof_set: set[str] = set()
     weapon_prof_categories: list[str] = []
