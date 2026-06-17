@@ -837,7 +837,7 @@ def swap_mastery(char_id: int, data: MasterySwapIn, db: Session = Depends(get_db
     if remove_name not in current:
         raise HTTPException(400, f"'{remove_name}' is not a current mastery")
 
-    already_mastered = {wu.weapon_name for wu in char.weapon_mastery_unlocks}
+    already_mastered = set(current.keys())
     if add_name in already_mastered:
         raise HTTPException(400, f"'{add_name}' is already mastered")
 

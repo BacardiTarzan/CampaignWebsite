@@ -1314,10 +1314,12 @@ function _renderMonsters() {
 
 function filterMonsters() { _renderMonsters(); }
 
-async function openMonsterModal(monsterId) {
+async function openMonsterModal(monsterId, combatantId) {
   const m = await api("GET", `/api/admin/monsters/${monsterId}`);
   document.getElementById("monster-modal-name").textContent = m.name;
-  const combatant = _combatants.find(c => c.monster_id === monsterId);
+  const combatant = combatantId != null
+    ? _combatants.find(c => c.combatant_id === combatantId)
+    : _combatants.find(c => c.monster_id === monsterId);
   const activeConditions = combatant ? (combatant.conditions || []) : [];
   const mod = n => { const v = Math.floor((n - 10) / 2); return (v >= 0 ? "+" : "") + v; };
   const fmtSection = (items) => (items || []).map(i =>
@@ -1327,7 +1329,7 @@ async function openMonsterModal(monsterId) {
   document.getElementById("monster-modal-body").innerHTML = `
     <div class="monster-stat-block">
       ${activeConditions.length ? `<div class="cond-chips-row" style="margin-bottom:10px">${activeConditions.map(c => {
-        const label = c.startsWith("Exhaustion:") ? `Exhausted ${c.split(":")[1]}` : c;
+        const label = c.startsWith("Exhaustion:") ? `Exhaustion ${c.split(":")[1]}` : c;
         return `<span class="cond-chip">${label}</span>`;
       }).join("")}</div>` : ""}
       <div class="msb-meta">${[m.size, m.creature_type].filter(Boolean).join(" ")}${m.alignment ? ` · ${m.alignment}` : ""}</div>
@@ -1381,7 +1383,7 @@ const ALL_CONDITIONS = [
 function renderCondChips(combatantId, conditions) {
   if (!conditions || !conditions.length) return "";
   const chips = conditions.map(c => {
-    const label = c.startsWith("Exhaustion:") ? `Exhausted ${c.split(":")[1]}` : c;
+    const label = c.startsWith("Exhaustion:") ? `Exhaustion ${c.split(":")[1]}` : c;
     return `<span class="cond-chip">${label}<span class="cond-chip-x" onclick="removeCondition(${combatantId},'${c}',event)">×</span></span>`;
   }).join("");
   return `<div class="cond-chips-row">${chips}</div>`;
@@ -1403,7 +1405,7 @@ async function loadCombat() {
       : [[c.species_lineage, c.species_name].filter(Boolean).join(" "),
          [c.class_name, c.level ? `Lv ${c.level}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
     const clickHandler = isMonster
-      ? `openMonsterModal(${c.monster_id})`
+      ? `openMonsterModal(${c.monster_id}, ${c.combatant_id})`
       : `combatOpenSheet(${c.character_id}, event)`;
     const speed = isMonster ? (c.speed || "—") : `${c.speed || 30} ft`;
     const acBadge = isMonster && c.ac != null ? `<span class="combat-stat"><span class="combat-stat-label">AC</span> ${c.ac}</span>` : "";
@@ -1564,6 +1566,7 @@ async function setExhaustionLevel(combatantId, level, event) {
 
 async function removeCondition(combatantId, condName, event) {
   event.stopPropagation();
+  closeConditionPicker();
   const combatant = _combatants.find(c => c.combatant_id === combatantId);
   if (!combatant) return;
   const current = (combatant.conditions || []).filter(c => c !== condName);

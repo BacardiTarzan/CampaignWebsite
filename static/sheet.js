@@ -1684,6 +1684,23 @@ async function executeSwapMastery() {
       if (statsPanel) {
         statsPanel.innerHTML = renderStatsTab(charData, charData.proficiency_bonus || 2, charData.attributes || {});
       }
+      // Refresh condition strip and speed cell in case they changed
+      const existingStrip = document.querySelector(".sh-condition-strip");
+      const tabs = document.querySelector(".sh-tabs");
+      if (tabs) {
+        const newStrip = renderConditionStrip(charData.conditions || []);
+        if (existingStrip) existingStrip.remove();
+        if (newStrip) tabs.insertAdjacentHTML("beforebegin", newStrip);
+      }
+      const speedCell = document.getElementById("sh-speed-cell");
+      if (speedCell) {
+        const sd = computeSpeedDisplay(charData.speed, charData.conditions);
+        const bigEl = speedCell.querySelector(".sh-combat-big");
+        if (bigEl) {
+          bigEl.className = `sh-combat-big${sd.cls ? " " + sd.cls : ""}`;
+          bigEl.textContent = sd.text;
+        }
+      }
     }
   } catch(e) { toast(e.message || "Swap failed"); }
 }
