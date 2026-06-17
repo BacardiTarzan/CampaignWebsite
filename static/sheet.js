@@ -304,13 +304,41 @@ async function pollHp() {
   try {
     const r = await api("GET", `/api/characters/${charId}/hp`);
     if (!r) return;
-    if (r.hp_current === charData.hp_current && r.hp_max === charData.hp_max) return;
-    charData.hp_current = r.hp_current;
-    charData.hp_max = r.hp_max;
-    const cell = document.getElementById("hp-cell");
-    if (!cell) return;
-    const label = cell.querySelector(".sh-combat-label").outerHTML;
-    cell.innerHTML = label + renderHpWidget(charData);
+    const hpChanged = r.hp_current !== charData.hp_current || r.hp_max !== charData.hp_max;
+    const condChanged = JSON.stringify(r.conditions || []) !== JSON.stringify(charData.conditions || []);
+    if (!hpChanged && !condChanged) return;
+
+    if (hpChanged) {
+      charData.hp_current = r.hp_current;
+      charData.hp_max = r.hp_max;
+      const cell = document.getElementById("hp-cell");
+      if (cell) {
+        const label = cell.querySelector(".sh-combat-label").outerHTML;
+        cell.innerHTML = label + renderHpWidget(charData);
+      }
+    }
+
+    if (condChanged) {
+      charData.conditions = r.conditions || [];
+      // Refresh condition strip
+      const existing = document.querySelector(".sh-condition-strip");
+      const tabs = document.querySelector(".sh-tabs");
+      if (tabs) {
+        const newStrip = renderConditionStrip(charData.conditions);
+        if (existing) existing.remove();
+        if (newStrip) tabs.insertAdjacentHTML("beforebegin", newStrip);
+      }
+      // Refresh speed cell
+      const speedCell = document.getElementById("sh-speed-cell");
+      if (speedCell) {
+        const sd = computeSpeedDisplay(charData.speed, charData.conditions);
+        const bigEl = speedCell.querySelector(".sh-combat-big");
+        if (bigEl) {
+          bigEl.className = `sh-combat-big${sd.cls ? " " + sd.cls : ""}`;
+          bigEl.textContent = sd.text;
+        }
+      }
+    }
   } catch (_) { /* ignore */ }
 }
 
