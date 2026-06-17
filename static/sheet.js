@@ -669,10 +669,16 @@ function renderWeaponsSection(c) {
     </div>`;
   }).join("");
 
+  const masteries = weapons.filter(w => w.mastery);
+  const swapBtn = masteries.length
+    ? `<button class="prep-edit-btn" style="margin-top:10px" onclick="openSwapMasteryModal()">⇄ Swap Mastery</button>`
+    : "";
+
   return `<div class="sh-section">
     <h4 class="sh-section-title">Weapon Proficiencies &amp; Masteries</h4>
     ${catLine}
     <div class="sh-weapon-grid">${rows}</div>
+    ${swapBtn}
   </div>`;
 }
 
@@ -1573,6 +1579,113 @@ function prepModalChange(cb) {
 function closePrepModal() {
   const overlay = document.getElementById("prep-modal-overlay");
   if (overlay) overlay.remove();
+}
+
+// ---------------------------------------------------------------------------
+// Swap Mastery modal
+// ---------------------------------------------------------------------------
+function openSwapMasteryModal() {
+  const c = charData;
+  const weapons = c.weapons_display || [];
+  const masteries = weapons.filter(w => w.mastery);
+  const swappable = weapons.filter(w => w.proficient && !w.mastery);
+
+  window._swapMasteryRemove = null;
+  window._swapMasteryAdd = null;
+
+  function safeId(name) { return name.replace(/[^a-zA-Z0-9]/g, '-'); }
+
+  const removeRows = masteries.map(w => `
+    <div class="modal-spell-row" id="swap-rem-${safeId(w.name)}"
+         onclick="selectSwapRemove(this,'${w.name.replace(/'/g,"\\'")}')">
+      <span class="modal-spell-check-locked" id="swap-rem-chk-${safeId(w.name)}" style="visibility:hidden">✓</span>
+      <span class="modal-spell-name">${w.name}</span>
+      <span class="modal-spell-level">${w.mastery}</span>
+    </div>`).join("") || `<p class="hint">No current masteries.</p>`;
+
+  const addRows = swappable.length ? swappable.map(w => `
+    <div class="modal-spell-row" id="swap-add-${safeId(w.name)}"
+         onclick="selectSwapAdd(this,'${w.name.replace(/'/g,"\\'")}')">
+      <span class="modal-spell-check-locked" id="swap-add-chk-${safeId(w.name)}" style="visibility:hidden">✓</span>
+      <span class="modal-spell-name">${w.name}</span>
+    </div>`).join("") : `<p class="hint">No other proficient weapons available.</p>`;
+
+  const overlay = document.createElement("div");
+  overlay.id = "swap-mastery-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Swap Mastery</h3>
+        <button class="modal-close-btn" onclick="closeSwapMasteryModal()">✕</button>
+      </div>
+      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div class="modal-section-title">Remove (pick one)</div>
+          ${removeRows}
+        </div>
+        <div>
+          <div class="modal-section-title">Add (pick one)</div>
+          ${addRows}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="prep-modal-cancel" onclick="closeSwapMasteryModal()">Cancel</button>
+        <button class="prep-modal-save" id="swap-mastery-confirm" onclick="executeSwapMastery()" disabled>Swap</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function selectSwapRemove(el, name) {
+  document.querySelectorAll("[id^='swap-rem-']").forEach(r => {
+    r.style.background = "";
+    const chk = r.querySelector("[id^='swap-rem-chk-']");
+    if (chk) chk.style.visibility = "hidden";
+  });
+  el.style.background = "rgba(168,120,43,0.08)";
+  const chk = el.querySelector("[id^='swap-rem-chk-']");
+  if (chk) chk.style.visibility = "visible";
+  window._swapMasteryRemove = name;
+  const btn = document.getElementById("swap-mastery-confirm");
+  if (btn) btn.disabled = !(window._swapMasteryRemove && window._swapMasteryAdd);
+}
+
+function selectSwapAdd(el, name) {
+  document.querySelectorAll("[id^='swap-add-']").forEach(r => {
+    r.style.background = "";
+    const chk = r.querySelector("[id^='swap-add-chk-']");
+    if (chk) chk.style.visibility = "hidden";
+  });
+  el.style.background = "rgba(168,120,43,0.08)";
+  const chk = el.querySelector("[id^='swap-add-chk-']");
+  if (chk) chk.style.visibility = "visible";
+  window._swapMasteryAdd = name;
+  const btn = document.getElementById("swap-mastery-confirm");
+  if (btn) btn.disabled = !(window._swapMasteryRemove && window._swapMasteryAdd);
+}
+
+function closeSwapMasteryModal() {
+  const el = document.getElementById("swap-mastery-overlay");
+  if (el) el.remove();
+}
+
+async function executeSwapMastery() {
+  const remove = window._swapMasteryRemove;
+  const add = window._swapMasteryAdd;
+  if (!remove || !add) return;
+  try {
+    await api("PATCH", `/api/characters/${charId}/masteries/swap`, { remove, add });
+    closeSwapMasteryModal();
+    const fresh = await api("GET", `/api/characters/${charId}/sheet-data`);
+    if (fresh) {
+      Object.assign(charData, fresh);
+      const statsPanel = document.getElementById("sh-tab-stats");
+      if (statsPanel) {
+        statsPanel.innerHTML = renderStatsTab(charData, charData.proficiency_bonus || 2, charData.attributes || {});
+      }
+    }
+  } catch(e) { toast(e.message || "Swap failed"); }
 }
 
 async function savePreparedSpells() {
