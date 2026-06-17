@@ -1317,6 +1317,8 @@ function filterMonsters() { _renderMonsters(); }
 async function openMonsterModal(monsterId) {
   const m = await api("GET", `/api/admin/monsters/${monsterId}`);
   document.getElementById("monster-modal-name").textContent = m.name;
+  const combatant = _combatants.find(c => c.monster_id === monsterId);
+  const activeConditions = combatant ? (combatant.conditions || []) : [];
   const mod = n => { const v = Math.floor((n - 10) / 2); return (v >= 0 ? "+" : "") + v; };
   const fmtSection = (items) => (items || []).map(i =>
     `<p class="mb-sm"><strong>${i.name}.</strong> ${i.description}</p>`
@@ -1324,6 +1326,10 @@ async function openMonsterModal(monsterId) {
 
   document.getElementById("monster-modal-body").innerHTML = `
     <div class="monster-stat-block">
+      ${activeConditions.length ? `<div class="cond-chips-row" style="margin-bottom:10px">${activeConditions.map(c => {
+        const label = c.startsWith("Exhaustion:") ? `Exhausted ${c.split(":")[1]}` : c;
+        return `<span class="cond-chip">${label}</span>`;
+      }).join("")}</div>` : ""}
       <div class="msb-meta">${[m.size, m.creature_type].filter(Boolean).join(" ")}${m.alignment ? ` · ${m.alignment}` : ""}</div>
       <div class="msb-row"><span>AC</span><span>${m.ac ?? "—"}</span></div>
       <div class="msb-row"><span>HP</span><span>${m.hp_max ?? "—"}${m.hp_formula ? ` (${m.hp_formula})` : ""}</span></div>
