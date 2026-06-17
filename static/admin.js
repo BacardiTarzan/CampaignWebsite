@@ -1366,6 +1366,21 @@ function closeMonsterModal(e) {
 // ---------------------------------------------------------------------------
 let _combatants = [];
 
+const ALL_CONDITIONS = [
+  "Blinded","Charmed","Deafened","Frightened","Grappled",
+  "Incapacitated","Invisible","Paralyzed","Petrified","Poisoned",
+  "Prone","Restrained","Stunned","Unconscious","Exhaustion",
+];
+
+function renderCondChips(combatantId, conditions) {
+  if (!conditions || !conditions.length) return "";
+  const chips = conditions.map(c => {
+    const label = c.startsWith("Exhaustion:") ? `Exhausted ${c.split(":")[1]}` : c;
+    return `<span class="cond-chip">${label}<span class="cond-chip-x" onclick="removeCondition(${combatantId},'${c}',event)">×</span></span>`;
+  }).join("");
+  return `<div class="cond-chips-row">${chips}</div>`;
+}
+
 async function loadCombat() {
   _combatants = await api("GET", "/api/admin/combatants");
   const el = document.getElementById("combat-list");
@@ -1400,11 +1415,13 @@ async function loadCombat() {
         ${acBadge}
         <span class="combat-stat"><span class="combat-stat-label">Speed</span> ${speed}</span>
       </div>
+      ${renderCondChips(c.combatant_id, c.conditions)}
       <div class="combat-card-actions" onclick="event.stopPropagation()">
         <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, -1)">−1</button>
         <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, +1)">+1</button>
         <input type="number" id="combat-adj-${c.combatant_id}" class="combat-hp-input" placeholder="±HP">
         <button class="combat-hp-btn" onclick="combatApplyAdj(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id})">Apply</button>
+        <button class="combat-hp-btn" onclick="openConditionPicker(${c.combatant_id},event)" title="Set conditions">＋ Cond</button>
       </div>
     </div>`;
   }).join("")}</div>`;
@@ -1458,6 +1475,102 @@ async function clearCombat() {
     await api("POST", "/api/admin/combatants/clear");
     loadCombat();
   } catch(e) { err(e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Condition picker
+// ---------------------------------------------------------------------------
+let _condPickerCombatantId = null;
+
+function openConditionPicker(combatantId, event) {
+  event.stopPropagation();
+  closeConditionPicker();
+  _condPickerCombatantId = combatantId;
+
+  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  const active = new Set(combatant ? (combatant.conditions || []) : []);
+  let exhaustLevel = 0;
+  for (const c of active) {
+    if (c.startsWith("Exhaustion:")) { exhaustLevel = parseInt(c.split(":")[1], 10); break; }
+  }
+
+  const picker = document.createElement("div");
+  picker.className = "cond-picker";
+  picker.id = "cond-picker";
+  picker.onclick = e => e.stopPropagation();
+
+  const items = ALL_CONDITIONS.map(cond => {
+    const isExh = cond === "Exhaustion";
+    const isActive = isExh ? exhaustLevel > 0 : active.has(cond);
+    return `<div class="cond-picker-item${isActive ? " active" : ""}" onclick="toggleCondition(${combatantId},'${cond}',event)">
+      <span class="cond-picker-check">${isActive ? "✓" : ""}</span>
+      ${cond}${isExh && exhaustLevel > 0 ? ` (${exhaustLevel})` : ""}
+    </div>`;
+  }).join("");
+
+  const exhaustPicker = `<div class="cond-exhaustion-picker" id="exh-picker">
+    ${[1,2,3,4,5,6].map(n => `<button class="cond-exhaustion-btn${n === exhaustLevel ? " active" : ""}"
+      onclick="setExhaustionLevel(${combatantId},${n},event)">${n}</button>`).join("")}
+    ${exhaustLevel > 0 ? `<button class="cond-exhaustion-btn" onclick="setExhaustionLevel(${combatantId},0,event)" style="color:var(--rubric)">✕</button>` : ""}
+  </div>`;
+
+  picker.innerHTML = items + exhaustPicker;
+
+  const btn = event.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  picker.style.position = "fixed";
+  picker.style.top = (rect.bottom + 4) + "px";
+  picker.style.left = rect.left + "px";
+  document.body.appendChild(picker);
+  setTimeout(() => document.addEventListener("click", closeConditionPicker, { once: true }), 0);
+}
+
+function closeConditionPicker() {
+  const el = document.getElementById("cond-picker");
+  if (el) el.remove();
+  _condPickerCombatantId = null;
+}
+
+async function toggleCondition(combatantId, condName, event) {
+  event.stopPropagation();
+  if (condName === "Exhaustion") return;
+  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  if (!combatant) return;
+  const current = [...(combatant.conditions || [])];
+  const idx = current.indexOf(condName);
+  if (idx >= 0) current.splice(idx, 1);
+  else current.push(condName);
+  await _applyConditions(combatantId, current);
+  closeConditionPicker();
+  loadCombat();
+}
+
+async function setExhaustionLevel(combatantId, level, event) {
+  event.stopPropagation();
+  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  if (!combatant) return;
+  const current = (combatant.conditions || []).filter(c => !c.startsWith("Exhaustion"));
+  if (level > 0) current.push(`Exhaustion:${level}`);
+  await _applyConditions(combatantId, current);
+  closeConditionPicker();
+  loadCombat();
+}
+
+async function removeCondition(combatantId, condName, event) {
+  event.stopPropagation();
+  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  if (!combatant) return;
+  const current = (combatant.conditions || []).filter(c => c !== condName);
+  await _applyConditions(combatantId, current);
+  loadCombat();
+}
+
+async function _applyConditions(combatantId, conditions) {
+  try {
+    const r = await api("PATCH", `/api/admin/combatants/${combatantId}/conditions`, { conditions });
+    const combatant = _combatants.find(c => c.combatant_id === combatantId);
+    if (combatant) combatant.conditions = r.conditions;
+  } catch(e) { err(e.message || "Failed to set conditions"); }
 }
 
 function openCombatAddModal() {
