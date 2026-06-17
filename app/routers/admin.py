@@ -812,6 +812,15 @@ class CombatantMonsterIn(BaseModel):
 class CombatantHpIn(BaseModel):
     hp_current: int
 
+VALID_CONDITIONS = {
+    "Blinded", "Charmed", "Deafened", "Frightened", "Grappled",
+    "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned",
+    "Prone", "Restrained", "Stunned", "Unconscious",
+}
+
+class ConditionsIn(BaseModel):
+    conditions: list[str]
+
 
 def _cr_sort_key(cr: str | None) -> float:
     if not cr:
@@ -889,6 +898,7 @@ def list_combatants(db: Session = Depends(get_db)):
                 "level": cc.level if cc else None,
                 "species_name": char.species.name if char.species else None,
                 "species_lineage": char.species_lineage,
+                "conditions": char.conditions or [],
             })
         else:
             m = db.get(Monster, row.monster_id)
@@ -905,6 +915,7 @@ def list_combatants(db: Session = Depends(get_db)):
                 "speed": m.speed,
                 "cr": m.cr,
                 "creature_type": m.creature_type,
+                "conditions": row.conditions or [],
             })
     return result
 
@@ -953,6 +964,37 @@ def set_combatant_hp(combatant_id: int, data: CombatantHpIn, db: Session = Depen
         db.commit()
         return {"ok": True, "hp_current": c.hp_current, "hp_max": c.hp_max_override}
     raise HTTPException(400, "Use the character HP endpoint for PC combatants")
+
+
+@router.patch("/combatants/{combatant_id}/conditions")
+def set_combatant_conditions(combatant_id: int, data: ConditionsIn, db: Session = Depends(get_db)):
+    c = db.get(Combatant, combatant_id)
+    if not c:
+        raise HTTPException(404)
+
+    validated: list[str] = []
+    for cond in data.conditions:
+        if cond in VALID_CONDITIONS:
+            validated.append(cond)
+        elif cond.startswith("Exhaustion:"):
+            level_str = cond.split(":", 1)[1]
+            if level_str.isdigit() and 1 <= int(level_str) <= 6:
+                validated.append(cond)
+            else:
+                raise HTTPException(400, f"Invalid Exhaustion level in '{cond}'; must be Exhaustion:1 through Exhaustion:6")
+        else:
+            raise HTTPException(400, f"Unknown condition: '{cond}'")
+
+    if c.character_id:
+        char = db.get(Character, c.character_id)
+        if not char:
+            raise HTTPException(404, "Character not found")
+        char.conditions = validated or None
+    else:
+        c.conditions = validated or None
+
+    db.commit()
+    return {"ok": True, "conditions": validated}
 
 
 @router.delete("/combatants/{combatant_id}")
@@ -1009,6 +1051,8 @@ def repair_schema(db: Session = Depends(get_db)):
     add_col("equipment", "magic_bonus", "INTEGER")
     add_col("equipment", "proficiency_base", "VARCHAR")
     add_col("equipment", "damage_rolls", "JSON")
+    add_col("characters", "conditions", "JSON")
+    add_col("combatants",  "conditions", "JSON")
 
     # CREATE TABLE: SERIAL is PostgreSQL; INTEGER PRIMARY KEY is the SQLite equivalent.
     pk = "SERIAL" if is_pg else "INTEGER"

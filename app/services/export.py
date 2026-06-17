@@ -556,6 +556,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         "equipment": equipment,
         "attacks": _calc_attacks(char, attrs, prof, weapon_prof_set),
         "is_complete": char.is_complete,
+        "conditions": char.conditions or [],
         "class_resources": class_resources(
             cls.name if cls else "",
             level,

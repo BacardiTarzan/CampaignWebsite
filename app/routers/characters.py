@@ -581,7 +581,11 @@ def save_bio(char_id: int, data: StepBioIn, db: Session = Depends(get_db), user:
 def get_hp(char_id: int, db: Session = Depends(get_db), user: dict = Depends(require_user)):
     char = _get_char(char_id, db)
     _check_owner_or_admin(char, user)
-    return {"hp_current": char.hp_current, "hp_max": char.hp_max}
+    return {
+        "hp_current": char.hp_current,
+        "hp_max": char.hp_max,
+        "conditions": char.conditions or [],
+    }
 
 
 @router.post("/{char_id}/hp")
