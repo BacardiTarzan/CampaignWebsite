@@ -4,7 +4,7 @@ import math
 from sqlalchemy.orm import Session
 from ..models.character import Character
 from ..models.content import DnDClass, Equipment as EquipmentModel
-from .levelup_rules import ELDRITCH_INVOCATIONS, class_resources
+from .levelup_rules import ELDRITCH_INVOCATIONS, class_resources, BARD_PREPARED_BY_LEVEL
 
 _INVOCATION_LOOKUP = {inv["key"]: inv for inv in ELDRITCH_INVOCATIONS}
 
@@ -404,7 +404,7 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
     spells.sort(key=lambda s: (s["level"], s["name"]))
 
     # Prepared spell tracking for prep casters
-    PREP_CASTERS = {"cleric", "druid", "paladin", "ranger", "wizard"}
+    PREP_CASTERS = {"bard", "cleric", "druid", "paladin", "ranger", "wizard"}
     class_lower = (cls.name if cls else "").lower()
     is_prep_caster = class_lower in PREP_CASTERS
     prepared_max = None
@@ -413,7 +413,9 @@ def character_to_sheet_dict(char: Character, db: Session) -> dict:
         ab_map = {"intelligence": "int", "wisdom": "wis", "charisma": "cha"}
         sp_ab_key = ab_map.get((cls.spellcasting_ability or "").lower(), "int")
         sp_mod = (attrs.get(sp_ab_key, 10) - 10) // 2
-        if class_lower in ("cleric", "druid", "wizard"):
+        if class_lower == "bard":
+            prepared_max = BARD_PREPARED_BY_LEVEL.get(level, 4)
+        elif class_lower in ("cleric", "druid", "wizard"):
             prepared_max = max(1, sp_mod + level)
         else:  # paladin, ranger
             prepared_max = max(1, sp_mod + (level // 2))

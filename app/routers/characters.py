@@ -15,7 +15,7 @@ from ..services.export import character_to_dict, character_to_sheet_dict, comput
 from ..services.levelup_rules import (
     required_steps, auto_grants, subclass_auto_grants, max_spell_level,
     METAMAGIC_OPTIONS, ELDRITCH_INVOCATIONS, AASIMAR_REVELATIONS, _species_lineage_spells,
-    CLASS_ALWAYS_PREPARED, BATTLE_MASTER_MANEUVERS,
+    CLASS_ALWAYS_PREPARED, BATTLE_MASTER_MANEUVERS, BARD_PREPARED_BY_LEVEL,
 )
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
@@ -767,7 +767,7 @@ def update_prepared_spells(char_id: int, data: PreparedSpellsIn, db: Session = D
     class_lower = cls.name.lower()
     level = cc.level
 
-    PREP_CASTERS = {"cleric", "druid", "paladin", "ranger", "wizard"}
+    PREP_CASTERS = {"bard", "cleric", "druid", "paladin", "ranger", "wizard"}
     if class_lower not in PREP_CASTERS:
         raise HTTPException(400, "Class does not prepare spells")
 
@@ -778,9 +778,11 @@ def update_prepared_spells(char_id: int, data: PreparedSpellsIn, db: Session = D
     sp_ab_key = ab_map.get((cls.spellcasting_ability or "").lower(), "int")
     sp_mod = (a.get(sp_ab_key, 10) - 10) // 2
 
-    if class_lower in ("cleric", "druid", "wizard"):
+    if class_lower == "bard":
+        prepared_max = BARD_PREPARED_BY_LEVEL.get(level, 4)
+    elif class_lower in ("cleric", "druid", "wizard"):
         prepared_max = max(1, sp_mod + level)
-    else:
+    else:  # paladin, ranger
         prepared_max = max(1, sp_mod + (level // 2))
 
     requested_ids = set(data.spell_ids)
@@ -1443,11 +1445,11 @@ def apply_levelup(char_id: int, data: LevelUpIn, db: Session = Depends(get_db), 
             if spell_obj:
                 auto_added_spells.append(spell_obj.name)
 
-    # ── Prepared-caster spell list population (Cleric / Druid / Paladin / Ranger) ─
+    # ── Prepared-caster spell list population (Bard / Cleric / Druid / Paladin / Ranger) ─
     # These classes don't pick spells at level-up; instead they always have
     # access to their full class list up to their max slot level. Populate any
     # newly available spells as prepared=False so the sheet can display them.
-    PREPARED_CASTERS = {"Cleric", "Druid", "Paladin", "Ranger"}
+    PREPARED_CASTERS = {"Bard", "Cleric", "Druid", "Paladin", "Ranger"}
     if cls.name in PREPARED_CASTERS and max_sl > 0:
         owned_ids_now = {cs.spell_id for cs in char.spells}
         candidate_spells = (

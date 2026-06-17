@@ -21,6 +21,13 @@ ASI_LEVELS: dict[str, list[int]] = {
     "_default": [4, 8, 12, 16, 19],
 }
 
+# Fixed prepared-spell count per Bard level (2024 PHB table — not formula-based)
+BARD_PREPARED_BY_LEVEL: dict[int, int] = {
+    1:4,  2:5,  3:6,  4:7,  5:9,  6:10, 7:11, 8:12,
+    9:14, 10:15, 11:16, 12:16, 13:17, 14:17, 15:18,
+    16:18, 17:19, 18:20, 19:21, 20:22,
+}
+
 # Cantrip gains on level-up (for classes that gain cantrips after L1)
 CANTRIP_GAINS: dict[str, dict[int, int]] = {
     "Bard":     {4: 1, 10: 1},
@@ -345,6 +352,16 @@ SUBCLASS_ALWAYS_PREPARED: dict[str, dict[int, list[str]]] = {
         9: ["Legend Lore", "Summon Dragon"],
     },
     "Wild Magic Sorcery": {},  # No fixed always-prepared spells
+    # Bard Colleges
+    # College of Glamour grants fixed always-prepared spells. College of Lore's
+    # "Magical Discoveries" (L6) is a player pick from Cleric/Druid/Wizard lists —
+    # not representable as a static table; needs a dedicated step (not yet built —
+    # see Phase 3.6 audit notes).
+    # College of Dance and College of Valor grant no spells.
+    "College of Glamour": {
+        3: ["Charm Person", "Mirror Image"],   # Beguiling Magic
+        6: ["Command"],                         # Mantle of Majesty
+    },
 }
 
 # ---------------------------------------------------------------------------
