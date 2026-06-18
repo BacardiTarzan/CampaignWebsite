@@ -51,6 +51,22 @@ async def logout(request: Request):
     return RedirectResponse("/auth/login")
 
 
+@router.get("/test-login")
+async def test_login(request: Request, email: str = ""):
+    """Dev-only bypass: sets a session without Google OAuth.
+    Only active when TEST_AUTH_ENABLED=true in the environment.
+    """
+    if not settings.test_auth_enabled:
+        return JSONResponse({"error": "Test auth not enabled"}, status_code=403)
+    login_email = (email or settings.admin_email or "test@example.com").lower()
+    request.session["user"] = {
+        "email": login_email,
+        "name": "Test User",
+        "picture": "",
+    }
+    return RedirectResponse("/portal")
+
+
 @router.get("/me")
 async def me(request: Request):
     user = request.session.get("user")

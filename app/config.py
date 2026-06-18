@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     session_secret: str = "dev-secret"
     allowed_emails: str = ""   # comma-separated
     admin_email: str = ""
+    # Set to "true" in .env.test to enable /auth/test-login bypass for Playwright
+    test_auth_enabled: bool = False
 
     model_config = {"env_file": str(BASE_DIR / ".env"), "extra": "ignore"}
 

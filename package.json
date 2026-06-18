@@ -1,0 +1,28 @@
+{
+  "name": "campaignwebsite",
+  "version": "1.0.0",
+  "description": "Session Zero character creator for a home campaign. Supports the 2024 Player's Handbook ruleset.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH playwright test",
+    "test:ui": "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH playwright test --ui"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BacardiTarzan/CampaignWebsite.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/BacardiTarzan/CampaignWebsite/issues"
+  },
+  "homepage": "https://github.com/BacardiTarzan/CampaignWebsite#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0"
+  }
+}

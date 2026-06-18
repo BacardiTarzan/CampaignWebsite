@@ -35,3 +35,10 @@ Thumbs.db
 --- Project ---
 
 First Prompt.md
+
+--- Playwright ---
+
+node_modules/
+test-results/
+playwright-report/
+.playwright/
