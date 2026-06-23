@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
@@ -10,7 +12,7 @@ from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spel
 from ..models.character import (
     Character, CharacterSpell, SkillProficiency, ToolProficiency,
     LanguageProficiency, WeaponMasteryUnlock, CharacterWeaponProficiency,
-    CharacterFeat, CharacterClass, Combatant,
+    CharacterFeat, CharacterClass, Combatant, EncounterState,
 )
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
@@ -822,6 +824,18 @@ class ConditionsIn(BaseModel):
     conditions: list[str]
 
 
+class InitiativeIn(BaseModel):
+    initiative: int
+
+
+class ActionEconomyIn(BaseModel):
+    action_used: bool | None = None
+    bonus_action_used: bool | None = None
+    reaction_used: bool | None = None
+    movement_remaining: int | None = None
+    legendary_actions_remaining: int | None = None
+
+
 def _cr_sort_key(cr: str | None) -> float:
     if not cr:
         return -1
@@ -1012,6 +1026,195 @@ def clear_combatants(db: Session = Depends(get_db)):
     removed = db.query(Combatant).delete()
     db.commit()
     return {"ok": True, "removed": removed}
+
+
+# ---------------------------------------------------------------------------
+# Encounter state management
+# ---------------------------------------------------------------------------
+
+def _get_or_create_enc(db: Session) -> EncounterState:
+    state = db.get(EncounterState, 1)
+    if not state:
+        from sqlalchemy.exc import IntegrityError
+        try:
+            state = EncounterState(id=1)
+            db.add(state)
+            db.commit()
+            db.refresh(state)
+        except IntegrityError:
+            db.rollback()
+            state = db.get(EncounterState, 1)
+    return state
+
+
+def _recompute_turn_order(db: Session):
+    """Rank combatants by initiative descending (ties keep insertion order). Caller commits."""
+    rows = db.query(Combatant).order_by(
+        Combatant.initiative.desc().nullslast(), Combatant.added_at
+    ).all()
+    rank = 1
+    for row in rows:
+        if row.initiative is not None:
+            row.turn_order = rank
+            rank += 1
+        else:
+            row.turn_order = None
+    # No db.commit() here — caller is responsible
+
+
+def _reset_combatant_turn(row: Combatant, db: Session):
+    """Reset action economy at start of this combatant's turn. Caller is responsible for db.commit()."""
+    row.action_used = False
+    row.bonus_action_used = False
+    row.reaction_used = False
+    # Restore movement to full speed
+    if row.character_id and row.character:
+        row.movement_remaining = row.character.speed if row.character.speed is not None else 30
+    # For monsters: movement was set at initiative entry; leave as-is (already set to their speed)
+
+
+@router.post("/encounter/start")
+def start_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Begin initiative phase: encounter is active, DM enters initiatives."""
+    state = _get_or_create_enc(db)
+    state.encounter_active = True
+    state.initiative_phase = True
+    state.current_round = 1
+    state.current_turn_combatant_id = None
+    # Reset all combatant action economy and initiative
+    for row in db.query(Combatant).all():
+        row.action_used = False
+        row.bonus_action_used = False
+        row.reaction_used = False
+        row.initiative = None
+        row.turn_order = None
+        row.movement_remaining = None
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/encounter/begin-round-1")
+def begin_round_one(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """After all initiatives entered: close initiative phase and start turn 1."""
+    state = _get_or_create_enc(db)
+    if not state.encounter_active:
+        raise HTTPException(400, "No active encounter")
+    _recompute_turn_order(db)
+    first = db.query(Combatant).filter(Combatant.turn_order.isnot(None)).order_by(Combatant.turn_order).first()
+    if not first:
+        raise HTTPException(400, "No initiatives entered yet — enter at least one initiative before beginning")
+    state.initiative_phase = False
+    state.current_turn_combatant_id = first.id
+    _reset_combatant_turn(first, db)
+    db.commit()
+    return {"ok": True, "current_turn_combatant_id": state.current_turn_combatant_id}
+
+
+@router.post("/encounter/advance-turn")
+def advance_turn(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Move to next combatant in initiative order; increment round if wrapping."""
+    state = _get_or_create_enc(db)
+    if not state.encounter_active or state.initiative_phase:
+        raise HTTPException(400, "Encounter not in progress")
+
+    ordered = db.query(Combatant).filter(
+        Combatant.turn_order.isnot(None)
+    ).order_by(Combatant.turn_order).all()
+    if not ordered:
+        raise HTTPException(400, "No combatants in initiative order")
+
+    current_ids = [c.id for c in ordered]
+    try:
+        idx = current_ids.index(state.current_turn_combatant_id)
+    except ValueError:
+        idx = -1  # current combatant not in order — go to first
+
+    next_idx = idx + 1
+    if next_idx >= len(ordered):
+        next_idx = 0
+        state.current_round += 1
+
+    next_combatant = ordered[next_idx]
+    state.current_turn_combatant_id = next_combatant.id
+    _reset_combatant_turn(next_combatant, db)
+    db.commit()
+    return {
+        "ok": True,
+        "current_round": state.current_round,
+        "current_turn_combatant_id": state.current_turn_combatant_id,
+    }
+
+
+@router.post("/encounter/end")
+def end_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Reset encounter state. Does NOT clear combatants (use /combatants/clear for that)."""
+    state = _get_or_create_enc(db)
+    state.encounter_active = False
+    state.initiative_phase = False
+    state.current_round = 1
+    state.current_turn_combatant_id = None
+    for row in db.query(Combatant).all():
+        row.initiative = None
+        row.turn_order = None
+        row.action_used = False
+        row.bonus_action_used = False
+        row.reaction_used = False
+        row.movement_remaining = None
+        row.legendary_actions_remaining = None
+    db.commit()
+    return {"ok": True}
+
+
+@router.patch("/combatants/{combatant_id}/initiative")
+def set_initiative(
+    combatant_id: int,
+    body: InitiativeIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    row = db.get(Combatant, combatant_id)
+    if not row:
+        raise HTTPException(404)
+    row.initiative = body.initiative
+    # Set movement_remaining from speed if not yet set for this encounter
+    if row.movement_remaining is None:
+        if row.character_id and row.character:
+            row.movement_remaining = row.character.speed if row.character.speed is not None else 30
+        elif row.monster_id:
+            m = db.get(Monster, row.monster_id)
+            if m and m.speed:
+                # Monster speed is a string like "30 ft., climb 20 ft."
+                # Extract the first numeric value
+                match = re.search(r"\d+", m.speed.strip())
+                row.movement_remaining = int(match.group()) if match else 30
+    db.flush()               # write initiative to session before recomputing ranks
+    _recompute_turn_order(db)
+    db.commit()              # single commit
+    return {"ok": True, "initiative": row.initiative, "turn_order": row.turn_order}
+
+
+@router.patch("/combatants/{combatant_id}/actions")
+def update_action_economy(
+    combatant_id: int,
+    body: ActionEconomyIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    row = db.get(Combatant, combatant_id)
+    if not row:
+        raise HTTPException(404)
+    if body.action_used is not None:
+        row.action_used = body.action_used
+    if body.bonus_action_used is not None:
+        row.bonus_action_used = body.bonus_action_used
+    if body.reaction_used is not None:
+        row.reaction_used = body.reaction_used
+    if body.movement_remaining is not None:
+        row.movement_remaining = body.movement_remaining
+    if body.legendary_actions_remaining is not None:
+        row.legendary_actions_remaining = body.legendary_actions_remaining
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/repair-schema")
