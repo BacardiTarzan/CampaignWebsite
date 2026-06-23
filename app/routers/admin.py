@@ -936,11 +936,12 @@ async def add_character_combatant(data: CombatantCharIn, db: Session = Depends(g
     db.refresh(c)
     # Auto-seed class abilities as CharacterResource rows (skips existing rows)
     seed_class_abilities(char, db)
+    await _broadcast_state(db)
     return {"ok": True, "combatant_id": c.id}
 
 
 @router.post("/combatants/monster")
-def add_monster_combatant(data: CombatantMonsterIn, db: Session = Depends(get_db)):
+async def add_monster_combatant(data: CombatantMonsterIn, db: Session = Depends(get_db)):
     m = db.get(Monster, data.monster_id)
     if not m:
         raise HTTPException(404, "Monster not found")
@@ -955,6 +956,7 @@ def add_monster_combatant(data: CombatantMonsterIn, db: Session = Depends(get_db
     db.add(c)
     db.commit()
     db.refresh(c)
+    await _broadcast_state(db)
     return {"ok": True, "combatant_id": c.id, "name": custom_name}
 
 
@@ -1004,19 +1006,21 @@ async def set_combatant_conditions(combatant_id: int, data: ConditionsIn, db: Se
 
 
 @router.delete("/combatants/{combatant_id}")
-def remove_combatant(combatant_id: int, db: Session = Depends(get_db)):
+async def remove_combatant(combatant_id: int, db: Session = Depends(get_db)):
     c = db.get(Combatant, combatant_id)
     if not c:
         raise HTTPException(404)
     db.delete(c)
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True}
 
 
 @router.post("/combatants/clear")
-def clear_combatants(db: Session = Depends(get_db)):
+async def clear_combatants(db: Session = Depends(get_db)):
     removed = db.query(Combatant).delete()
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True, "removed": removed}
 
 

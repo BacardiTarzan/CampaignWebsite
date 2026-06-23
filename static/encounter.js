@@ -227,6 +227,10 @@ async function loadEncResources(charId) {
     myEncResources = await res.json();
     resourcesLoaded = true;
     renderEncResources(charId);
+    // If actions were already loaded, inject resource abilities now (they race in render())
+    if (actionsLoaded) {
+      _injectResourceAbilities();
+    }
   } catch (e) { /* ignore */ }
 }
 
