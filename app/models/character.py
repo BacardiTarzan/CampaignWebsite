@@ -52,6 +52,7 @@ class Character(Base):
     language_proficiencies = relationship("LanguageProficiency", back_populates="character", cascade="all, delete-orphan")
     weapon_mastery_unlocks = relationship("WeaponMasteryUnlock", back_populates="character", cascade="all, delete-orphan")
     weapon_proficiencies = relationship("CharacterWeaponProficiency", back_populates="character", cascade="all, delete-orphan")
+    resources = relationship("CharacterResource", back_populates="character", cascade="all, delete-orphan")
 
 
 class CharacterClass(Base):
@@ -190,6 +191,39 @@ class Combatant(Base):
     hp_max_override = Column(Integer, nullable=True)  # set from monster.hp_max at spawn
     added_at = Column(DateTime, default=datetime.utcnow)
     conditions = Column(JSON, nullable=True)    # monster-only; cleared when combatant is removed
+    # Phase 5 fields:
+    initiative = Column(Integer, nullable=True)                   # rolled total (INTEGER); distinct from Monster.initiative which is a VARCHAR like "+5 (15)"
+    turn_order = Column(Integer, nullable=True)                   # position in initiative order (1-based)
+    action_used = Column(Boolean, default=False)
+    bonus_action_used = Column(Boolean, default=False)
+    reaction_used = Column(Boolean, default=False)
+    movement_remaining = Column(Integer, nullable=True)           # NULL = not yet set for this encounter
+    legendary_actions_remaining = Column(Integer, nullable=True)  # NULL = not yet set for this encounter
 
     character = relationship("Character")
     # monster relationship resolved at query time to avoid circular import
+
+
+class EncounterState(Base):
+    """Singleton row (id=1) tracking global encounter state. Always read/write via db.get(EncounterState, 1)."""
+    __tablename__ = "encounter_state"
+    id = Column(Integer, primary_key=True, default=1)
+    encounter_active = Column(Boolean, default=False, nullable=False)
+    initiative_phase = Column(Boolean, default=False, nullable=False)
+    current_round = Column(Integer, default=1, nullable=False)
+    current_turn_combatant_id = Column(
+        Integer, ForeignKey("combatants.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class CharacterResource(Base):
+    __tablename__ = "character_resources"
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    resource_key = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    max_uses = Column(Integer, nullable=False, default=1)
+    used = Column(Integer, nullable=False, default=0)
+    rest_type = Column(String, nullable=False, default="long")  # "long" | "short"
+
+    character = relationship("Character", back_populates="resources")
