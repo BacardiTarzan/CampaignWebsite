@@ -19,6 +19,7 @@ from ..services.export import character_to_dict
 from ..services.pdf import render_character_html, render_character_pdf
 from ..services.levelup_rules import CLASS_ALWAYS_PREPARED, max_spell_level
 from .characters import _parse_species_spell_grants
+from .encounter import _broadcast_state
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -955,19 +956,20 @@ def add_monster_combatant(data: CombatantMonsterIn, db: Session = Depends(get_db
 
 
 @router.patch("/combatants/{combatant_id}/hp")
-def set_combatant_hp(combatant_id: int, data: CombatantHpIn, db: Session = Depends(get_db)):
+async def set_combatant_hp(combatant_id: int, data: CombatantHpIn, db: Session = Depends(get_db)):
     c = db.get(Combatant, combatant_id)
     if not c:
         raise HTTPException(404)
     if c.monster_id:
         c.hp_current = max(0, data.hp_current)
         db.commit()
+        await _broadcast_state(db)
         return {"ok": True, "hp_current": c.hp_current, "hp_max": c.hp_max_override}
     raise HTTPException(400, "Use the character HP endpoint for PC combatants")
 
 
 @router.patch("/combatants/{combatant_id}/conditions")
-def set_combatant_conditions(combatant_id: int, data: ConditionsIn, db: Session = Depends(get_db)):
+async def set_combatant_conditions(combatant_id: int, data: ConditionsIn, db: Session = Depends(get_db)):
     c = db.get(Combatant, combatant_id)
     if not c:
         raise HTTPException(404)
@@ -994,6 +996,7 @@ def set_combatant_conditions(combatant_id: int, data: ConditionsIn, db: Session 
         c.conditions = validated or None
 
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True, "conditions": validated}
 
 
@@ -1060,7 +1063,7 @@ def _reset_combatant_turn(row: Combatant, db: Session):
 
 
 @router.post("/encounter/start")
-def start_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+async def start_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Begin initiative phase: encounter is active, DM enters initiatives."""
     state = _get_or_create_enc(db)
     state.encounter_active = True
@@ -1076,11 +1079,12 @@ def start_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)
         row.turn_order = None
         row.movement_remaining = None
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True}
 
 
 @router.post("/encounter/begin-round-1")
-def begin_round_one(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+async def begin_round_one(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """After all initiatives entered: close initiative phase and start turn 1."""
     state = _get_or_create_enc(db)
     if not state.encounter_active:
@@ -1093,11 +1097,12 @@ def begin_round_one(db: Session = Depends(get_db), _admin=Depends(require_admin)
     state.current_turn_combatant_id = first.id
     _reset_combatant_turn(first, db)
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True, "current_turn_combatant_id": state.current_turn_combatant_id}
 
 
 @router.post("/encounter/advance-turn")
-def advance_turn(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+async def advance_turn(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Move to next combatant in initiative order; increment round if wrapping."""
     state = _get_or_create_enc(db)
     if not state.encounter_active or state.initiative_phase:
@@ -1124,6 +1129,7 @@ def advance_turn(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     state.current_turn_combatant_id = next_combatant.id
     _reset_combatant_turn(next_combatant, db)
     db.commit()
+    await _broadcast_state(db)
     return {
         "ok": True,
         "current_round": state.current_round,
@@ -1132,7 +1138,7 @@ def advance_turn(db: Session = Depends(get_db), _admin=Depends(require_admin)):
 
 
 @router.post("/encounter/end")
-def end_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+async def end_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Reset encounter state. Does NOT clear combatants (use /combatants/clear for that)."""
     state = _get_or_create_enc(db)
     state.encounter_active = False
@@ -1148,11 +1154,12 @@ def end_encounter(db: Session = Depends(get_db), _admin=Depends(require_admin)):
         row.movement_remaining = None
         row.legendary_actions_remaining = None
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True}
 
 
 @router.patch("/combatants/{combatant_id}/initiative")
-def set_initiative(
+async def set_initiative(
     combatant_id: int,
     body: InitiativeIn,
     db: Session = Depends(get_db),
@@ -1176,11 +1183,12 @@ def set_initiative(
     db.flush()               # write initiative to session before recomputing ranks
     _recompute_turn_order(db)
     db.commit()              # single commit
+    await _broadcast_state(db)
     return {"ok": True, "initiative": row.initiative, "turn_order": row.turn_order}
 
 
 @router.patch("/combatants/{combatant_id}/actions")
-def update_action_economy(
+async def update_action_economy(
     combatant_id: int,
     body: ActionEconomyIn,
     db: Session = Depends(get_db),
@@ -1200,6 +1208,7 @@ def update_action_economy(
     if body.legendary_actions_remaining is not None:
         row.legendary_actions_remaining = body.legendary_actions_remaining
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True}
 
 
