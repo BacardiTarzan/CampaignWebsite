@@ -118,8 +118,8 @@ async function adminAdjHp(id) {
 
 async function adminRest(id) {
   try {
-    const r = await api("POST", `/api/admin/characters/${id}/rest`);
-    toast(`Long rest — HP and hit dice fully restored (${r.hp_current} HP).`);
+    await api("POST", `/api/admin/characters/${id}/rest`, { rest_type: "long" });
+    toast(`Long rest — resources and HP fully restored!`);
     loadRoster();
   } catch(e) { err(e.message); }
 }

@@ -1691,6 +1691,10 @@ def take_rest(
     if body.rest_type == "long" and char.spell_slots_used:
         char.spell_slots_used = {}
 
+    # Long rest: restore HP
+    if body.rest_type == "long":
+        char.hp_current = char.hp_max
+
     # Long rest: restore all hit dice
     if body.rest_type == "long":
         for cc in char.character_classes:

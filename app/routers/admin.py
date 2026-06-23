@@ -1304,12 +1304,80 @@ def repair_schema(db: Session = Depends(get_db)):
             added_at TIMESTAMP
         )
     """))
+    # Phase 5 — encounter and resource columns
+    phase5_combatant_cols = [
+        ("combatants", "initiative",                 "INTEGER"),
+        ("combatants", "turn_order",                 "INTEGER"),
+        ("combatants", "action_used",                "BOOLEAN DEFAULT FALSE"),
+        ("combatants", "bonus_action_used",          "BOOLEAN DEFAULT FALSE"),
+        ("combatants", "reaction_used",              "BOOLEAN DEFAULT FALSE"),
+        ("combatants", "movement_remaining",         "INTEGER"),
+        ("combatants", "legendary_actions_remaining","INTEGER"),
+    ]
+    for table, col, ddl in phase5_combatant_cols:
+        add_col(table, col, ddl)
+
+    # encounter_state table
+    if is_pg:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS encounter_state (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                encounter_active BOOLEAN NOT NULL DEFAULT FALSE,
+                initiative_phase BOOLEAN NOT NULL DEFAULT FALSE,
+                current_round INTEGER NOT NULL DEFAULT 1,
+                current_turn_combatant_id INTEGER REFERENCES combatants(id) ON DELETE SET NULL
+            )
+        """))
+        db.execute(text("INSERT INTO encounter_state (id) VALUES (1) ON CONFLICT DO NOTHING"))
+    else:
+        existing_tables = sa_inspect(engine).get_table_names()
+        if "encounter_state" not in existing_tables:
+            db.execute(text("""
+                CREATE TABLE encounter_state (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    encounter_active BOOLEAN NOT NULL DEFAULT 0,
+                    initiative_phase BOOLEAN NOT NULL DEFAULT 0,
+                    current_round INTEGER NOT NULL DEFAULT 1,
+                    current_turn_combatant_id INTEGER REFERENCES combatants(id) ON DELETE SET NULL
+                )
+            """))
+        db.execute(text("INSERT OR IGNORE INTO encounter_state (id) VALUES (1)"))
+
+    # character_resources table
+    if is_pg:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS character_resources (
+                id SERIAL PRIMARY KEY,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                resource_key VARCHAR NOT NULL,
+                label VARCHAR NOT NULL,
+                max_uses INTEGER NOT NULL DEFAULT 1,
+                used INTEGER NOT NULL DEFAULT 0,
+                rest_type VARCHAR NOT NULL DEFAULT 'long'
+            )
+        """))
+    else:
+        existing_tables = sa_inspect(engine).get_table_names()
+        if "character_resources" not in existing_tables:
+            db.execute(text("""
+                CREATE TABLE character_resources (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    resource_key VARCHAR NOT NULL,
+                    label VARCHAR NOT NULL,
+                    max_uses INTEGER NOT NULL DEFAULT 1,
+                    used INTEGER NOT NULL DEFAULT 0,
+                    rest_type VARCHAR NOT NULL DEFAULT 'long'
+                )
+            """))
+
     db.commit()
     applied = [
         "character_spells.source", "character_spells.notes", "character_spells.always_prepared",
         "characters.height/weight/deity/journal/currency/physical_locked/age/hp_roll_log",
         "character_classes.level_granted", "character_choices.level", "classes.tool_proficiencies",
         "tables: character_weapon_proficiencies, glossary_terms, monsters, combatants",
+        "phase5: combatants action economy columns, encounter_state table, character_resources table",
     ]
     return {"ok": True, "applied": applied}
 
