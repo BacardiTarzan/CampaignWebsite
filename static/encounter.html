@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encounter</title>
+  <link rel="icon" type="image/png" href="/static/d20.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="sheet-page">
+  <div class="sheet-topbar">
+    <a href="/portal" class="sheet-back">← My Characters</a>
+    <div class="sheet-topbar-right">
+      <a href="/auth/logout" class="btn-logout">Sign out</a>
+    </div>
+  </div>
+
+  <div id="enc-main" style="padding: 1rem; max-width: 720px; margin: 0 auto">
+    <div id="enc-status">Loading...</div>
+    <div id="enc-turn-banner" style="margin: 1rem 0"></div>
+    <div id="enc-economy" style="margin-bottom: 1rem"></div>
+    <div id="enc-order"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/static/encounter.js"></script>
+</body>
+</html>
