@@ -39,7 +39,7 @@ function switchTab(tab) {
   if (tab === "grimoire") loadGrimoireSpells();
   if (tab === "lore") loadLore();
   if (tab === "combat") loadCombat();
-  if (tab !== "combat") _stopEncounterPolling();
+  if (tab !== "combat") _stopEncounterWS();
 }
 
 function switchCodexTab(sub) {
@@ -1383,27 +1383,54 @@ let _encounterState = {
   current_turn_combatant_id: null,
   combatants: []
 };
-let _encPollInterval = null;
+// ---- WebSocket client (replaces polling) ----
+let _encWs = null;
+let _encWsReconnectDelay = 1000;
+let _encWsActive = false;
 
-async function _pollEncounterState() {
-  try {
-    const res = await fetch('/api/encounter/state');
-    if (!res.ok) return;
-    _encounterState = await res.json();
-    _renderEncounterBar();
-    _renderCombatCards();
-  } catch (e) { /* ignore network errors */ }
+function _startEncounterWS() {
+  if (_encWsActive) return;
+  _encWsActive = true;
+  _connectEncounterWS();
 }
 
-function _startEncounterPolling() {
-  if (_encPollInterval) return;
-  _encPollInterval = setInterval(_pollEncounterState, 2000);
-  _pollEncounterState();  // immediate first poll
+function _stopEncounterWS() {
+  _encWsActive = false;
+  if (_encWs) {
+    _encWs.onclose = null;  // prevent reconnect loop
+    _encWs.close();
+    _encWs = null;
+  }
 }
 
-function _stopEncounterPolling() {
-  clearInterval(_encPollInterval);
-  _encPollInterval = null;
+function _connectEncounterWS() {
+  if (!_encWsActive) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _encWs = new WebSocket(`${proto}//${location.host}/ws/encounter`);
+
+  _encWs.onopen = () => {
+    _encWsReconnectDelay = 1000;
+  };
+
+  _encWs.onmessage = (event) => {
+    try {
+      _encounterState = JSON.parse(event.data);
+      _renderEncounterBar();
+      _renderCombatCards();
+    } catch (e) { /* ignore parse errors */ }
+  };
+
+  _encWs.onclose = () => {
+    if (!_encWsActive) return;
+    setTimeout(() => {
+      _encWsReconnectDelay = Math.min(_encWsReconnectDelay * 2, 30000);
+      _connectEncounterWS();
+    }, _encWsReconnectDelay);
+  };
+
+  _encWs.onerror = () => {
+    _encWs.close();  // triggers onclose → reconnect
+  };
 }
 
 // Helper: find a combatant by id from either the encounter list or the base list
@@ -1429,7 +1456,7 @@ function renderCondChips(combatantId, conditions) {
 
 async function loadCombat() {
   _combatants = await api("GET", "/api/admin/combatants");
-  _startEncounterPolling();  // starts polling (noop if already running)
+  _startEncounterWS();   // was: _startEncounterPolling()
   _renderCombatCards();
 }
 
@@ -1464,13 +1491,11 @@ function _renderEncounterBar() {
 
 async function _startEncounter() {
   await api("POST", "/api/admin/encounter/start");
-  await _pollEncounterState();
 }
 
 async function _beginRound1() {
   try {
     await api("POST", "/api/admin/encounter/begin-round-1");
-    await _pollEncounterState();
   } catch (e) {
     toast(e.message || "Enter at least one initiative first");
   }
@@ -1478,13 +1503,11 @@ async function _beginRound1() {
 
 async function _advanceTurn() {
   await api("POST", "/api/admin/encounter/advance-turn");
-  await _pollEncounterState();
 }
 
 async function _endEncounter() {
   if (!confirm("End encounter and reset initiative order?")) return;
   await api("POST", "/api/admin/encounter/end");
-  await _pollEncounterState();
 }
 
 function _renderCombatCards() {
@@ -1609,7 +1632,6 @@ async function _toggleAction(combatantId, field, value) {
     if (c) c[field] = value;
   } catch (e) {
     toast('Failed to update action economy');
-    await _pollEncounterState(); // revert optimistic update
   }
 }
 
@@ -1618,7 +1640,6 @@ async function _submitInitiative(combatantId) {
   const val = parseInt(input?.value);
   if (isNaN(val)) { toast("Enter a valid initiative number"); return; }
   await api("PATCH", `/api/admin/combatants/${combatantId}/initiative`, { initiative: val });
-  await _pollEncounterState();
 }
 
 function combatOpenSheet(charId, e) {
