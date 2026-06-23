@@ -18,6 +18,7 @@ from ..services.seeder import seed_all
 from ..services.export import character_to_dict
 from ..services.pdf import render_character_html, render_character_pdf
 from ..services.levelup_rules import CLASS_ALWAYS_PREPARED, max_spell_level
+from ..services.class_action_seeder import seed_class_abilities
 from .characters import _parse_species_spell_grants
 from .encounter import _broadcast_state
 
@@ -922,7 +923,7 @@ def list_combatants(db: Session = Depends(get_db)):
 
 
 @router.post("/combatants/character")
-def add_character_combatant(data: CombatantCharIn, db: Session = Depends(get_db)):
+async def add_character_combatant(data: CombatantCharIn, db: Session = Depends(get_db)):
     char = db.get(Character, data.character_id)
     if not char:
         raise HTTPException(404, "Character not found")
@@ -933,6 +934,8 @@ def add_character_combatant(data: CombatantCharIn, db: Session = Depends(get_db)
     db.add(c)
     db.commit()
     db.refresh(c)
+    # Auto-seed class abilities as CharacterResource rows (skips existing rows)
+    seed_class_abilities(char, db)
     return {"ok": True, "combatant_id": c.id}
 
 
