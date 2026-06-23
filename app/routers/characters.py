@@ -1736,3 +1736,88 @@ def player_mark_action(
         row.reaction_used = body.reaction_used
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Encounter action info panel
+# ---------------------------------------------------------------------------
+
+@router.get("/{char_id}/encounter-actions")
+def get_encounter_actions(
+    char_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_user),
+):
+    """Return available combat actions for the encounter panel (attacks + action/bonus-action spells)."""
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if char.owner_email != user["email"] and not user.get("is_admin"):
+        raise HTTPException(403)
+
+    data = character_to_sheet_dict(char, db)
+
+    # Compute spellcasting stats
+    sp_ability = (data.get("class_spellcasting_ability") or "").lower()
+    ab_map = {"intelligence": "int", "wisdom": "wis", "charisma": "cha"}
+    sp_ab_key = ab_map.get(sp_ability, "int")
+    attrs = data.get("attributes") or {}
+    sp_mod = (attrs.get(sp_ab_key, 10) - 10) // 2
+    prof = data.get("proficiency_bonus", 2)
+    save_dc = 8 + prof + sp_mod if data.get("class_spellcasting_type") else None
+    spell_atk = prof + sp_mod if data.get("class_spellcasting_type") else None
+    spell_atk_display = (f"+{spell_atk}" if spell_atk >= 0 else str(spell_atk)) if spell_atk is not None else None
+
+    actions = []
+
+    # Weapon attacks — all computed attacks (from equipped weapons + unarmed)
+    for atk in data.get("attacks", []):
+        atk_bonus = atk.get("attack_bonus", 0)
+        atk_bonus_display = f"+{atk_bonus}" if atk_bonus >= 0 else str(atk_bonus)
+        actions.append({
+            "type": "attack",
+            "name": atk["name"],
+            "cost": {"action": True, "bonus_action": False, "spell_slot": None},
+            "attack_bonus": atk_bonus,
+            "attack_bonus_display": atk_bonus_display,
+            "damage": atk.get("damage", ""),
+            "range": "5 ft." if (atk.get("category") or "").lower() == "melee" else "Ranged",
+            "properties": atk.get("properties", []),
+            "mastery_property": atk.get("mastery_property"),
+            "save_dc": None,
+            "save_ability": None,
+            "description": "",
+            "level": None,
+            "school": None,
+        })
+
+    # Prepared spells with 1 action or bonus action casting time
+    for sp in data.get("spells", []):
+        if not sp.get("prepared") and not sp.get("always_prepared"):
+            continue
+        ct = (sp.get("casting_time") or "").lower()
+        is_action = "1 action" in ct
+        is_bonus = "bonus action" in ct
+        if not is_action and not is_bonus:
+            continue  # skip rituals, reactions, 1 minute, etc.
+        slot_level = sp.get("level", 0) if sp.get("level", 0) > 0 else None
+        actions.append({
+            "type": "spell",
+            "name": sp["name"],
+            "cost": {"action": is_action, "bonus_action": is_bonus, "spell_slot": slot_level},
+            "attack_bonus": spell_atk,
+            "attack_bonus_display": spell_atk_display,
+            "damage": "",  # not parsed from description (proof of concept)
+            "range": sp.get("range", ""),
+            "properties": [],
+            "mastery_property": None,
+            "save_dc": save_dc,
+            "save_ability": (data.get("class_spellcasting_ability") or "").title() or None,
+            "description": sp.get("description", ""),
+            "duration": sp.get("duration", ""),
+            "concentration": sp.get("concentration", False),
+            "level": sp.get("level", 0),
+            "school": sp.get("school", ""),
+        })
+
+    return actions

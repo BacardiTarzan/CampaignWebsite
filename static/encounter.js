@@ -2,6 +2,9 @@
 let myCharIds = [];
 let encounterState = { encounter_active: false, initiative_phase: false, current_round: 1, combatants: [] };
 let pollTimer = null;
+let myCharId = null;       // first own character in current encounter (set on render)
+let myActions = [];        // cached from API
+let actionsLoaded = false; // avoid re-fetching on every render
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -81,10 +84,22 @@ function render() {
     </div>`;
     // Economy buttons
     economyEl.innerHTML = renderEconomy(myActiveCombatant);
+    // Load actions once per turn
+    if (!actionsLoaded && myActiveCombatant.character_id) {
+      loadActions(myActiveCombatant.character_id);
+    }
+    renderActionSelector();
   } else {
     const whose = currentCombatant ? currentCombatant.name : '—';
     bannerEl.innerHTML = `<div style="font-size:1rem;color:var(--ink-soft)">Round ${current_round} — <em>${_esc(whose)}'s</em> turn</div>`;
     economyEl.innerHTML = '';
+    // Clear actions panel when it's not my turn
+    const actEl = document.getElementById('enc-actions');
+    if (actEl) actEl.innerHTML = '';
+    const ap = document.getElementById('enc-action-panel');
+    if (ap) ap.style.display = 'none';
+    actionsLoaded = false;
+    myActions = [];
   }
 
   // Initiative order list
@@ -142,6 +157,81 @@ async function toggleEcon(combatantId, field, value) {
   } catch (e) {
     toast('Connection error');
   }
+}
+
+async function loadActions(charId) {
+  try {
+    const res = await fetch(`/api/characters/${charId}/encounter-actions`);
+    if (!res.ok) return;
+    myActions = await res.json();
+    actionsLoaded = true;
+    renderActionSelector();
+  } catch (e) { /* ignore */ }
+}
+
+function renderActionSelector() {
+  const el = document.getElementById('enc-actions');
+  if (!el) return;
+  if (!myActions.length) { el.innerHTML = ''; return; }
+
+  const attacks = myActions.reduce((acc, a, i) => a.type === 'attack' ? [...acc, i] : acc, []);
+  const spells = myActions.reduce((acc, a, i) => a.type === 'spell' && a.cost.action ? [...acc, i] : acc, []);
+  const bonusSpells = myActions.reduce((acc, a, i) => a.type === 'spell' && a.cost.bonus_action ? [...acc, i] : acc, []);
+
+  const actionBtns = (indices) => indices.map(i => {
+    const a = myActions[i];
+    return `<button onclick="showAction(${i})"
+      style="padding:0.3rem 0.6rem;margin:0.15rem;border:1px solid var(--gold);border-radius:4px;cursor:pointer;background:var(--parchment-bright,#f4e8c8);font-size:0.85rem">
+      ${_esc(a.name)}${a.level > 0 ? ` <small>(L${a.level})</small>` : ''}
+    </button>`;
+  }).join('');
+
+  let html = '';
+  if (attacks.length) html += `<div style="margin-bottom:0.4rem"><strong>Attacks</strong><br>${actionBtns(attacks)}</div>`;
+  if (spells.length) html += `<div style="margin-bottom:0.4rem"><strong>Spells (Action)</strong><br>${actionBtns(spells)}</div>`;
+  if (bonusSpells.length) html += `<div style="margin-bottom:0.4rem"><strong>Spells (Bonus)</strong><br>${actionBtns(bonusSpells)}</div>`;
+  el.innerHTML = html;
+}
+
+function showAction(idx) {
+  const action = myActions[idx];
+  if (!action) return;
+  const panel = document.getElementById('enc-action-panel');
+  if (!panel) return;
+  panel.style.display = 'block';
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:start">
+    <strong style="font-size:1rem">${_esc(action.name)}</strong>
+    <button onclick="document.getElementById('enc-action-panel').style.display='none'" style="cursor:pointer;font-size:0.8rem">✕</button>
+  </div>`;
+
+  if (action.type === 'attack') {
+    html += `<p style="margin:0.25rem 0"><strong>Attack Bonus:</strong> ${_esc(action.attack_bonus_display || '—')}</p>`;
+    html += `<p style="margin:0.25rem 0"><strong>Damage:</strong> ${_esc(action.damage) || '—'}</p>`;
+    html += `<p style="margin:0.25rem 0"><strong>Range:</strong> ${_esc(action.range || '5 ft.')}</p>`;
+    if (action.properties?.length) {
+      html += `<p style="margin:0.25rem 0"><strong>Properties:</strong> ${action.properties.map(_esc).join(', ')}</p>`;
+    }
+    if (action.mastery_property) {
+      html += `<p style="margin:0.25rem 0"><strong>Mastery:</strong> ${_esc(action.mastery_property)}</p>`;
+    }
+  } else {
+    // spell
+    const lvlStr = action.level === 0 ? 'Cantrip' : `Level ${action.level}`;
+    html += `<p style="margin:0.25rem 0"><em>${lvlStr} ${_esc(action.school || '')}</em></p>`;
+    html += `<p style="margin:0.25rem 0"><strong>Range:</strong> ${_esc(action.range || '—')}</p>`;
+    if (action.duration) html += `<p style="margin:0.25rem 0"><strong>Duration:</strong> ${_esc(action.duration)}${action.concentration ? ' (Concentration)' : ''}</p>`;
+    if (action.save_dc) html += `<p style="margin:0.25rem 0"><strong>Save DC:</strong> ${action.save_dc} ${_esc(action.save_ability || '')}</p>`;
+    if (action.attack_bonus_display) html += `<p style="margin:0.25rem 0"><strong>Spell Attack:</strong> ${_esc(action.attack_bonus_display)}</p>`;
+    if (action.description) {
+      const desc = action.description.length > 300
+        ? action.description.slice(0, 297) + '...'
+        : action.description;
+      html += `<details style="margin-top:0.4rem"><summary>Description</summary><p style="font-size:0.85rem;white-space:pre-wrap">${_esc(desc)}</p></details>`;
+    }
+  }
+
+  panel.innerHTML = html;
 }
 
 // Escape HTML to prevent XSS from server-returned names
