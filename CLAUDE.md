@@ -12,7 +12,7 @@ On first start the server auto-seeds from `reference_claude/`. If you need to re
 
 ## Current status (as of 2026-06-23)
 
-**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Rules Glossary complete. Phase 4 prepared-spell tracking complete. Conditions + Mastery Swap complete. Playwright test infrastructure in place. Next: CSS/HTML UX overhaul.**
+**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Rules Glossary complete. Phase 4 prepared-spell tracking complete. Conditions + Mastery Swap complete. Phase 5 combat encounter tracker complete. Phase 5.5 WebSocket real-time + token-first action UI complete. Next: CSS/HTML UX overhaul + class action markdown files.**
 
 ### Phase 1 — Character Creation Wizard (complete)
 The full 10-step wizard runs end-to-end:
@@ -63,6 +63,39 @@ Standalone `/glossary` page + inline click-to-popover tooltips on the character 
 - Sheet Spells tab has "✎ Prepare Spells" modal for prep casters; Stats tab has "⇄ Swap Mastery" modal
 - `_CATEGORY_MAP` (weapon category → set of weapon names) lives at **module scope** in `export.py` and is imported by `characters.py` for proficiency validation
 
+### Phase 5 — Combat Encounter Tracker (complete as of 2026-06-23)
+Initiative-based turn management, action economy tracking, per-rest resource tracking, player encounter page.
+
+**Data model additions:**
+- `Combatant` — added `initiative`, `turn_order`, `action_used`, `bonus_action_used`, `reaction_used`, `movement_remaining`, `legendary_actions_remaining`
+- `EncounterState` — singleton table (id=1): `encounter_active`, `initiative_phase`, `current_round`, `current_turn_combatant_id`
+- `CharacterResource` — per-character per-rest ability tracking: `resource_key`, `label`, `max_uses`, `used`, `rest_type`
+- Migration `m0n1o2p3q4r5` (latest)
+
+**Admin encounter flow:** Start Encounter → enter initiatives → Begin Round 1 → Next Turn (or player End Turn). DM can override initiative order at any time.
+
+**Player `/encounter` page:** Real-time WebSocket, token-first action UI (tap ACTION/BONUS/REACTION/MOVE → inline list → confirm → Use It). Move stepper in 5 ft increments. End Turn button advances initiative.
+
+**WebSocket:** `GET /ws/encounter` — full state pushed to all clients on any mutation. `ConnectionManager` singleton in `app/services/ws_manager.py`. `_broadcast_state(db)` called from all encounter-mutating endpoints.
+
+**Class ability seeding:** `app/services/class_action_seeder.py` reads `reference_claude/class_actions/{class}.md` on server start (LRU-cached). When a character is added to combat, their class abilities are auto-seeded as `CharacterResource` rows. Template: `reference_claude/class_actions/template.md`.
+
+**Key endpoints:**
+- `POST /api/admin/encounter/start|begin-round-1|advance-turn|end`
+- `PATCH /api/admin/combatants/{id}/initiative`
+- `PATCH /api/admin/combatants/{id}/actions`
+- `POST /api/characters/encounter/end-turn` (player)
+- `POST /api/characters/encounter/spend-movement` (player)
+- `POST /api/characters/encounter/action-economy` (player)
+- `GET /api/characters/{id}/encounter-actions` — returns attacks + prepared spells + class abilities for the action list
+- `GET /api/characters/{id}/resources` / `POST .../resources/spend` / `POST .../rest`
+- `POST /api/admin/characters/{id}/resources` — DM adds resources manually
+- `POST /api/admin/characters/{id}/rest` — DM triggers short/long rest (rest removed from player sheet)
+
+**Rest controls:** Short/Long Rest is DM-only (admin roster). Removed from player character sheet.
+
+**Cantrip fix:** `get_encounter_actions` always includes level-0 spells regardless of `prepared` flag.
+
 ### Phase 4.5 — Conditions System (complete as of 2026-06-17)
 DM-assigned conditions visible on character sheets and monster stat blocks.
 
@@ -88,7 +121,7 @@ DM-assigned conditions visible on character sheets and monster stat blocks.
 
 **Admin tracker:** Inline condition picker per combatant card (popover, `position: fixed`). Exhaustion handled via level buttons 1–6. Monster stat block modal shows read-only condition chips at top. DM-only; players see but cannot change conditions.
 
-**Repair Schema** covers `conditions` columns for both tables.
+**Repair Schema** covers `conditions` columns for both tables. **Note:** Repair Schema does NOT yet cover Phase 5 tables (`encounter_state`, `character_resources`) or the 7 new `combatants` columns — update it before the next Railway deploy that might skip migrations.
 
 ## Playwright test environment (as of 2026-06-23)
 
@@ -109,7 +142,7 @@ npx playwright test tests/foo.spec.js  # single file
 
 **Config:** `playwright.config.js` — baseURL `localhost:8000`, auto-starts uvicorn via `~/.local/bin/uvicorn`, `reuseExistingServer: true` in dev.
 
-**Test files:** `tests/smoke.spec.js` — 3 passing smoke tests (server reachable, test-login → portal, portal renders).
+**Test files:** `tests/smoke.spec.js` — 4 passing smoke tests (server reachable, test-login → portal, portal renders, encounter page loads without reconnect banner).
 
 **Shared login helper pattern:**
 ```js
@@ -124,8 +157,22 @@ async function login(page, email = 'zachpoguephil@gmail.com') {
 - **End-to-end testing not done for all 12 classes at all levels** — spot-tested; full matrix still needed
 - **College of Lore "Magical Discoveries" (L6)** — player picks 2 spells from Cleric/Druid/Wizard lists; not yet a level-up wizard step (noted in `levelup_rules.py` comments as a Phase 3.6 gap)
 - **PDF export** — `app/templates/character_sheet.html` exists but visual QA not done. PDF button removed from player side; admin still has export.
+- **Class action markdowns not yet written** — `reference_claude/class_actions/template.md` has the schema. Drop `{classname}.md` files there; server picks them up on restart. Auto-seeding runs when a character is added to combat.
+- **Repair Schema not updated for Phase 5** — doesn't cover `encounter_state`, `character_resources`, or the 7 new `combatants` columns. Must be updated before Railway deploy.
+- **Spell slot spending race** — `doUseAction` in `encounter.js` does GET sheet-data → increment → POST spell-slots. Concurrent double-tap can under-count. Low risk at single-table scale.
+- **Monster movement not reset per turn** — monsters start at movement set during initiative entry; DM must manually reset via the action-economy PATCH if needed.
+- **_buildSlotOptions shows levels 1–9 regardless of available slots** — no server-side slot-count validation on spend. Works correctly but players could see inaccessible slot levels in the picker.
 
 ## Architecture notes
+
+- **WebSocket broadcast** — `app/services/ws_manager.py` holds `ConnectionManager` singleton with module-level `manager`. Every encounter-mutating endpoint imports and calls `await _broadcast_state(db)` (defined in `encounter.py`) after `db.commit()`. Clients receive full encounter state JSON. Admin tracker and player `/encounter` page both connect to `GET /ws/encounter`; polling completely removed.
+- **`_build_state_dict(db)`** in `encounter.py` — single source of truth for encounter state shape. Used by both the HTTP `GET /api/encounter/state` endpoint and `_broadcast_state`. All fields: `encounter_active`, `initiative_phase`, `current_round`, `current_turn_combatant_id`, `combatants[]`.
+- **Class action seeder** — `app/services/class_action_seeder.py`. `_load_class_actions(class_name)` is `@lru_cache(maxsize=20)`. `seed_class_abilities(char, db)` called from `add_character_combatant`. Never overwrites existing `CharacterResource` rows.
+- **`EncounterState`** — singleton DB table (always id=1). Use `db.get(EncounterState, 1)` everywhere. `CheckConstraint("id = 1")` enforces singleton at DB level.
+- **`CharacterResource`** — `UniqueConstraint("character_id", "resource_key")` enforces one row per ability per character. `rest_type` values: `"short"` | `"long"` | `"encounter"`. Long rest restores all; short rest restores `"short"` and `"encounter"` types.
+- **Encounter page action flow** — token-first: tap ACTION/BONUS/REACTION → `renderActionList()` expands inline → `selectAction(idx)` shows confirm → `doUseAction(idx)` marks economy + spends resource + broadcasts. Move token → `renderMovePanel()` with 5 ft stepper → `doSpendMovement()`.
+- **`encounter.js` key globals** — `myCharIds` (own characters), `encounterState` (WS-pushed), `myActiveCombatantId` (set when it's your turn), `activeToken` ('action'|'bonus'|'reaction'|'move'|null), `myActions` (from encounter-actions endpoint + injected resource abilities).
+- **Rest controls** — admin-only. `POST /api/admin/characters/{id}/rest` (DM). Removed from player character sheet (`takeRest` function + `.sh-rest-btns` deleted from `sheet.js`).
 
 - **All theming** via CSS variables in `static/style.css` `:root {}`. Dark surfaces use leather variants; text on dark must use `--light`, `--light-dim`, `--gold`, or `--gold-bright`. `--gold-deep` (#6b4a18) is too dark for leather backgrounds — use only on parchment panels.
 - **Parchment panels** (`.sh-section`, `.tome`, `.card`, `.modal-box`) use light parchment gradients. Dark ink (`--ink`, `--ink-soft`, `--ink-faded`) is correct here.
@@ -146,37 +193,46 @@ async function login(page, email = 'zachpoguephil@gmail.com') {
 
 ```
 app/
-  main.py          — FastAPI app + lifespan seeder
+  main.py          — FastAPI app + lifespan seeder; registers encounter + ws_router
   config.py        — pydantic-settings (.env); test_auth_enabled flag
   database.py      — SQLAlchemy engine + session
   models/
     content.py     — Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, Monster, GlossaryTerm
-    character.py   — Character + all join tables (CharacterSpell, WeaponMasteryUnlock, Combatant, …)
+    character.py   — Character + all join tables (CharacterSpell, WeaponMasteryUnlock, Combatant,
+                     EncounterState, CharacterResource, …)
   dependencies.py  — require_user / require_admin FastAPI deps
   routers/
     content.py     — GET endpoints for content (public)
-    characters.py  — Wizard steps, sheet-data, HP, prepared-spells, masteries/swap, levelup (require_user)
-    admin.py       — DM roster, codex CRUD, combatants, conditions, seed trigger (require_admin)
+    characters.py  — Wizard steps, sheet-data, HP, prepared-spells, masteries/swap, levelup,
+                     encounter action-economy/end-turn/spend-movement/resources (require_user)
+    admin.py       — DM roster, codex CRUD, combatants, conditions, encounter management,
+                     resource admin, seed trigger (require_admin)
+    encounter.py   — GET /api/encounter/state + WebSocket /ws/encounter +
+                     _build_state_dict() + _broadcast_state()
     auth.py        — Google OAuth login/callback/logout/me + /test-login bypass
   services/
     seeder.py      — Markdown → DB (regex parser)
     export.py      — Character → JSON dict; _CATEGORY_MAP at module scope
     levelup_rules.py — Pure rules engine; exports BARD_PREPARED_BY_LEVEL, VALID_CONDITIONS, etc.
+    ws_manager.py  — ConnectionManager singleton + module-level `manager`
+    class_action_seeder.py — Parse class_actions/*.md, seed CharacterResource on add-to-combat
     pdf.py         — WeasyPrint renderer
   templates/
     character_sheet.html
 static/
   index.html / script.js        — Player wizard (10 steps)
-  portal.html / portal.js       — Player character roster
-  sheet.html / sheet.js / sheet.css — Live character sheet (4-tab)
+  portal.html / portal.js       — Player character roster (has ⚔ Combat link)
+  sheet.html / sheet.js / sheet.css — Live character sheet (4-tab; no rest buttons — admin only)
   levelup.html / levelup.js / levelup.css — Level-up wizard
   glossary.html / glossary.js / glossary.css — Rules Glossary page
+  encounter.html / encounter.js — Player encounter page (WebSocket, token-first action UI)
   admin.html / admin.js         — DM admin panel (roster, codex, combat/status tracker, import)
   style.css                     — Design system (CSS variables, shared components)
   lore.html / lore.js / lore.css — Lore Library page
 reference_claude/               — 2024 PHB markdown (authoritative source)
-alembic/versions/               — Migrations (latest: l8m9o0p1q2r3_add_conditions)
-tests/                          — Playwright test specs
+  class_actions/                — Per-class ability definitions (template.md; drop {class}.md here)
+alembic/versions/               — Migrations (latest: m0n1o2p3q4r5_encounter_initiative_resources)
+tests/                          — Playwright test specs (4 smoke tests)
 playwright.config.js            — Playwright config (Chromium, auto-start uvicorn)
 package.json                    — npm dev deps (@playwright/test)
 docs/superpowers/
@@ -207,3 +263,10 @@ docs/superpowers/
 - `openMonsterModal` looked up combatant by `monster_id`, always returning first instance when two of same monster are in combat — fixed to use `combatant_id` when called from tracker card.
 - `removeCondition` left condition picker open (stopPropagation swallowed the once-listener) — added `closeConditionPicker()` call.
 - Exhaustion label inconsistency ("Exhausted N" in admin vs "Exhaustion N" in sheet) — standardised to "Exhaustion N".
+- Wizard cantrips marked `prepared=False` in level-up wizard — fixed: `encounter-actions` always includes level-0 spells regardless of prepared flag.
+- `adminRest()` in admin.js sent no body after endpoint signature changed — fixed to pass `{rest_type: "long"}`.
+- Player long rest did not restore HP — fixed in `take_rest()` endpoint.
+- Admin encounter polling left stale state for players — replaced with WebSocket broadcast.
+- `character_to_dict` used instead of `character_to_sheet_dict` in encounter-actions — fixed (sheet dict has attacks, attributes, spellcasting).
+- `add_character_combatant`/monster/remove/clear did not broadcast — fixed (all four now async + broadcast).
+- Resource abilities (`_injectResourceAbilities`) weren't shown if resources loaded after actions — fixed: `loadEncResources` calls `_injectResourceAbilities` if `actionsLoaded`.
