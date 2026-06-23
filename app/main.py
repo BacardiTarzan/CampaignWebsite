@@ -15,7 +15,7 @@ from .database import SessionLocal, engine
 from .models import *  # noqa: F401, F403 — ensures all models are registered
 from .routers import content, characters, admin
 from .routers.auth import router as auth_router
-from .routers.encounter import router as encounter_router
+from .routers.encounter import router as encounter_router, ws_router as encounter_ws_router
 from .services.seeder import seed_all
 
 logging.basicConfig(level=logging.INFO)
@@ -100,6 +100,7 @@ app.include_router(content.router)
 app.include_router(characters.router)
 app.include_router(admin.router)
 app.include_router(encounter_router)
+app.include_router(encounter_ws_router)
 
 static_path = Path(settings.static_dir)
 if static_path.exists():

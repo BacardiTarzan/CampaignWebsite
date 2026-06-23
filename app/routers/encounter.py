@@ -1,20 +1,20 @@
 import logging
-
-from fastapi import APIRouter, Depends
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session, selectinload
-from ..database import get_db
-from ..models.character import Combatant, Character, CharacterClass, EncounterState
+from sqlalchemy.exc import IntegrityError
+from ..database import get_db, SessionLocal
+from ..models.character import Combatant, EncounterState, Character, CharacterClass
 from ..models.content import Monster
 from ..dependencies import require_user
+from ..services.ws_manager import manager
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/encounter", tags=["encounter"])
+ws_router = APIRouter()  # no prefix — registers /ws/encounter at root level
 
 
 def _get_or_create_state(db: Session) -> EncounterState:
-    """Get the singleton EncounterState (id=1), creating it if it doesn't exist yet."""
     state = db.get(EncounterState, 1)
     if not state:
         try:
@@ -28,8 +28,8 @@ def _get_or_create_state(db: Session) -> EncounterState:
     return state
 
 
-@router.get("/state")
-def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_user)):
+def _build_state_dict(db: Session) -> dict:
+    """Build the full encounter state dict. Used by the HTTP endpoint and broadcast helper."""
     state = _get_or_create_state(db)
     rows = (
         db.query(Combatant)
@@ -43,7 +43,6 @@ def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_use
         .all()
     )
 
-    # Batch-load all monsters referenced by combatants in one query
     monster_ids = [row.monster_id for row in rows if row.monster_id]
     monsters_by_id = {}
     if monster_ids:
@@ -84,11 +83,7 @@ def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_use
         else:
             m = monsters_by_id.get(row.monster_id)
             if not m:
-                log.warning(
-                    "Combatant %s has missing monster_id=%s — skipping",
-                    row.id,
-                    row.monster_id,
-                )
+                log.warning("Combatant %s has missing monster_id=%s — skipping", row.id, row.monster_id)
                 continue
             entry.update({
                 "kind": "monster",
@@ -111,3 +106,45 @@ def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_use
         "current_turn_combatant_id": state.current_turn_combatant_id,
         "combatants": combatants,
     }
+
+
+async def _broadcast_state(db: Session):
+    """Build state dict and broadcast to all WebSocket clients."""
+    state = _build_state_dict(db)
+    await manager.broadcast(state)
+
+
+@router.get("/state")
+def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_user)):
+    return _build_state_dict(db)
+
+
+@ws_router.websocket("/ws/encounter")
+async def ws_encounter(websocket: WebSocket):
+    # Auth: session cookie is included in WS upgrade request headers
+    user = websocket.session.get("user")
+    if not user:
+        await websocket.close(code=1008)  # 1008 = Policy Violation
+        return
+
+    await manager.connect(websocket)
+    try:
+        db = SessionLocal()
+        try:
+            state = _build_state_dict(db)
+        finally:
+            db.close()
+        await websocket.send_json(state)
+
+        while True:
+            # Read-only push channel; clients POST to REST for writes
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as exc:
+        log.warning("WS encounter error: %s", exc)
+        manager.disconnect(websocket)
+        try:
+            await websocket.close(1011)
+        except Exception:
+            pass
