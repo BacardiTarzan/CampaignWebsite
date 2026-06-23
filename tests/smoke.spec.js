@@ -25,3 +25,18 @@ test('portal shows character cards or empty state', async ({ page }) => {
   expect(hasCards).toBeGreaterThanOrEqual(0); // page rendered
   await expect(page.locator('body')).toBeVisible();
 });
+
+test('encounter page loads and renders encounter UI', async ({ page }) => {
+  await login(page);
+  await page.goto('/encounter');
+  // After JS init(), either enc-status gets "No encounter in progress" (idle)
+  // or enc-turn-banner is populated (active turn). Wait for one or the other.
+  await page.waitForFunction(() => {
+    const status = document.getElementById('enc-status');
+    const banner = document.getElementById('enc-turn-banner');
+    return (status && status.textContent.trim().length > 0) ||
+           (banner && banner.textContent.trim().length > 0);
+  }, { timeout: 10000 });
+  // Reconnect banner should be hidden (no WS error)
+  await expect(page.locator('#enc-reconnect')).toBeHidden();
+});

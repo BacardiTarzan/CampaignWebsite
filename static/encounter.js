@@ -554,7 +554,92 @@ async function doUseAction(idx) {
   }
 }
 
-// ── Move stub (Task 10) ───────────────────────────────────────
-function renderMovePanel(combatant) { /* implemented in Task 10 */ }
+// ── Move stepper ──────────────────────────────────────────────
+function renderMovePanel(combatant) {
+  const el = document.getElementById('enc-move-panel');
+  el.style.display = 'block';
+
+  const remaining = combatant.movement_remaining ?? 0;
+  movementAmount = Math.min(5, remaining > 0 ? 5 : 0);
+
+  // Quick buttons: 5ft increments up to remaining (max 6 buttons shown)
+  const maxQuick = Math.min(remaining, 30);
+  const quickBtns = [];
+  for (let v = 5; v <= maxQuick; v += 5) {
+    quickBtns.push(`<button id="qbtn-${v}" onclick="setMoveAmount(${v})"
+      style="padding:0.35rem 0.55rem;border:1px solid var(--ink-soft);border-radius:4px;cursor:pointer;font-size:0.85rem;background:${movementAmount===v ? 'var(--ink)' : '#f5f5f5'};color:${movementAmount===v ? 'white' : 'inherit'}">${v} ft</button>`);
+  }
+
+  el.innerHTML = `<div style="border:1px solid var(--ink-soft);border-radius:6px;padding:0.6rem">
+    <div style="font-weight:bold;margin-bottom:0.4rem">Move how far?
+      <span style="font-weight:normal;color:var(--ink-soft)">(${remaining} ft remaining)</span>
+    </div>
+    <div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-bottom:0.5rem" id="move-quick-btns">
+      ${quickBtns.join('')}
+    </div>
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+      <button onclick="stepMove(-5)" style="padding:0.3rem 0.7rem;border:1px solid #ccc;border-radius:4px;font-size:1.1rem;cursor:pointer">−</button>
+      <span id="move-amount-display" style="min-width:5rem;text-align:center;font-weight:bold">${movementAmount} ft</span>
+      <button onclick="stepMove(5)" style="padding:0.3rem 0.7rem;border:1px solid #ccc;border-radius:4px;font-size:1.1rem;cursor:pointer">+</button>
+      <span style="font-size:0.75rem;color:var(--ink-soft)">(5 ft steps)</span>
+    </div>
+    <div style="display:flex;gap:0.4rem">
+      <button id="spend-move-btn" onclick="doSpendMovement(${combatant.combatant_id})"
+        style="flex:1;padding:0.5rem;background:var(--ink);color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold">
+        Spend ${movementAmount} ft
+      </button>
+      <button onclick="closeMovePanel()" style="padding:0.5rem 0.7rem;background:#eee;border:1px solid #ccc;border-radius:4px;cursor:pointer">← Back</button>
+    </div>
+  </div>`;
+}
+
+function setMoveAmount(val) {
+  const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+  const remaining = combatant?.movement_remaining ?? 0;
+  movementAmount = Math.max(5, Math.min(val, remaining));
+  // Update display
+  const display = document.getElementById('move-amount-display');
+  if (display) display.textContent = `${movementAmount} ft`;
+  const spendBtn = document.getElementById('spend-move-btn');
+  if (spendBtn) spendBtn.textContent = `Spend ${movementAmount} ft`;
+  // Update quick button highlights
+  document.querySelectorAll('#move-quick-btns button').forEach(b => {
+    const bVal = parseInt(b.textContent);
+    b.style.background = bVal === movementAmount ? 'var(--ink)' : '#f5f5f5';
+    b.style.color = bVal === movementAmount ? 'white' : 'inherit';
+  });
+}
+
+function stepMove(delta) {
+  const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+  const remaining = combatant?.movement_remaining ?? 0;
+  const newVal = Math.max(5, Math.min(movementAmount + delta, remaining));
+  setMoveAmount(newVal);
+}
+
+async function doSpendMovement(combatantId) {
+  if (movementAmount <= 0) return;
+  try {
+    const res = await fetch('/api/characters/encounter/spend-movement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ combatant_id: combatantId, amount: movementAmount }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || 'Could not spend movement');
+      return;
+    }
+    // WS push will update movement_remaining; close the panel
+    closeMovePanel();
+  } catch (e) { toast('Connection error'); }
+}
+
+function closeMovePanel() {
+  document.getElementById('enc-move-panel').style.display = 'none';
+  activeToken = null;
+  const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+  if (combatant) _updateTokens(combatant);
+}
 
 init();
