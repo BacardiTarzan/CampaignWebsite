@@ -1,12 +1,53 @@
-// encounter.js — player encounter page
-let myCharIds = [];
-let encounterState = { encounter_active: false, initiative_phase: false, current_round: 1, combatants: [] };
-let pollTimer = null;
-let myActions = [];        // cached from API
-let actionsLoaded = false; // avoid re-fetching on every render
-let myEncResources = [];
-let resourcesLoaded = false;
+// encounter.js — Phase 5.5 — token-first mobile encounter page
+// ─────────────────────────────────────────────────────────────
 
+// ── State ────────────────────────────────────────────────────
+let myCharIds = [];           // character IDs belonging to this player
+let encounterState = { encounter_active: false, initiative_phase: false, current_round: 1, combatants: [] };
+let myActions = [];           // cached from /encounter-actions (Tasks 9+)
+let actionsLoaded = false;
+let resourcesLoaded = false;
+let myEncResources = [];
+let activeToken = null;       // 'action'|'bonus'|'reaction'|'move'|null  (Tasks 9+)
+let selectedActionIdx = null; // index into myActions  (Tasks 9+)
+let movementAmount = 5;       // current move stepper value  (Task 10)
+let myActiveCombatantId = null; // combatant_id when it's my turn
+
+// ── WebSocket ─────────────────────────────────────────────────
+let ws = null;
+let wsReconnectDelay = 1000;
+let wsActive = false;
+
+function connectWS() {
+  if (!wsActive) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/encounter`);
+
+  ws.onopen = () => {
+    wsReconnectDelay = 1000;
+    document.getElementById('enc-reconnect').style.display = 'none';
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      encounterState = JSON.parse(event.data);
+      render();
+    } catch (e) { /* ignore parse errors */ }
+  };
+
+  ws.onclose = () => {
+    if (!wsActive) return;
+    document.getElementById('enc-reconnect').style.display = 'block';
+    setTimeout(() => {
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+      connectWS();
+    }, wsReconnectDelay);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// ── Toast ────────────────────────────────────────────────────
 function toast(msg) {
   const t = document.getElementById('toast');
   if (!t) return;
@@ -15,282 +56,198 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+// ── HTML escape ───────────────────────────────────────────────
+function _esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────
 async function init() {
-  // Verify auth
   const meRes = await fetch('/auth/me');
   if (!meRes.ok) { window.location.href = '/'; return; }
 
-  // Load this player's character IDs
   const charsRes = await fetch('/api/characters');
   if (charsRes.ok) {
     const chars = await charsRes.json();
     myCharIds = chars.filter(c => c.is_complete).map(c => c.id);
   }
 
-  await poll();
-  pollTimer = setInterval(poll, 2000);
-  window.addEventListener('beforeunload', () => clearInterval(pollTimer));
-}
-
-async function poll() {
+  // Fetch initial state via HTTP before WS connects
   try {
-    const res = await fetch('/api/encounter/state');
-    if (!res.ok) {
-      if (res.status === 401) window.location.href = '/';
-      return;
+    const stateRes = await fetch('/api/encounter/state');
+    if (stateRes.ok) {
+      encounterState = await stateRes.json();
+      render();
     }
-    encounterState = await res.json();
-    render();
-  } catch (e) { /* ignore network errors */ }
-}
+  } catch (e) { /* ignore */ }
 
-function _clearEncounterPanels() {
-  ['enc-actions', 'enc-action-panel', 'enc-resource-panel'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+  wsActive = true;
+  connectWS();
+  window.addEventListener('beforeunload', () => {
+    wsActive = false;
+    if (ws) ws.close();
   });
-  actionsLoaded = false; myActions = [];
-  resourcesLoaded = false; myEncResources = [];
 }
 
+// ── Main render ───────────────────────────────────────────────
 function render() {
   const { encounter_active, initiative_phase, current_round, current_turn_combatant_id, combatants } = encounterState;
 
   const statusEl = document.getElementById('enc-status');
   const bannerEl = document.getElementById('enc-turn-banner');
-  const economyEl = document.getElementById('enc-economy');
+  const tokenGrid = document.getElementById('enc-token-grid');
+  const endTurnEl = document.getElementById('enc-end-turn');
   const orderEl = document.getElementById('enc-order');
 
   if (!encounter_active) {
-    _clearEncounterPanels();
-    statusEl.innerHTML = `<h2>No encounter in progress</h2><p style="color:var(--ink-soft)">The DM will start an encounter when combat begins.</p>`;
+    _clearActivePanels();
+    statusEl.innerHTML = `<h2 style="text-align:center;margin:2rem 0 0.5rem">No encounter in progress</h2><p style="text-align:center;color:var(--ink-soft)">The DM will start an encounter when combat begins.</p>`;
     bannerEl.innerHTML = '';
-    economyEl.innerHTML = '';
+    tokenGrid.style.display = 'none';
+    endTurnEl.style.display = 'none';
     orderEl.innerHTML = '';
     return;
   }
 
   if (initiative_phase) {
-    _clearEncounterPanels();
-    statusEl.innerHTML = `<h2>Initiative Phase</h2><p style="color:var(--ink-soft)">The DM is collecting initiative rolls. Stand by...</p>`;
+    _clearActivePanels();
+    statusEl.innerHTML = `<h2 style="text-align:center;margin:2rem 0 0.5rem">Initiative Phase</h2><p style="text-align:center;color:var(--ink-soft)">The DM is collecting initiative rolls. Stand by…</p>`;
     bannerEl.innerHTML = '';
-    economyEl.innerHTML = '';
+    tokenGrid.style.display = 'none';
+    endTurnEl.style.display = 'none';
     orderEl.innerHTML = '';
     return;
   }
 
-  // Active encounter
-  statusEl.innerHTML = '';  // clear loading/no-encounter message
+  statusEl.innerHTML = '';
 
-  // Find the current combatant and whether it's my turn
+  // Determine if it's my turn
   const currentCombatant = combatants.find(c => c.combatant_id === current_turn_combatant_id);
   const myActiveCombatant = combatants.find(
     c => myCharIds.includes(c.character_id) && c.combatant_id === current_turn_combatant_id
   );
   const isMyTurn = !!myActiveCombatant;
 
-  // Turn banner
   if (isMyTurn) {
-    bannerEl.innerHTML = `<div style="background:var(--gold);color:#2a1a00;padding:0.75rem 1rem;border-radius:6px;font-weight:bold;font-size:1.1rem">
-      ⚔ YOUR TURN — Round ${current_round}
-    </div>`;
-    // Economy buttons
-    economyEl.innerHTML = renderEconomy(myActiveCombatant);
-    // Load actions once per turn
+    myActiveCombatantId = myActiveCombatant.combatant_id;
+    bannerEl.innerHTML = `<div style="background:var(--gold,#c8a84b);color:#1a0e00;padding:0.65rem;border-radius:6px;font-weight:bold;font-size:1.05rem;text-align:center">⚔ YOUR TURN — Round ${current_round}</div>`;
+    tokenGrid.style.display = 'grid';
+    endTurnEl.style.display = 'block';
+    _updateTokens(myActiveCombatant);
+
     if (!actionsLoaded && myActiveCombatant.character_id) {
       loadActions(myActiveCombatant.character_id);
     }
-    renderActionSelector();
-    // Load resources once per turn
     if (!resourcesLoaded && myActiveCombatant.character_id) {
       loadEncResources(myActiveCombatant.character_id);
-      resourcesLoaded = true;
     }
   } else {
-    const whose = currentCombatant ? currentCombatant.name : '—';
-    bannerEl.innerHTML = `<div style="font-size:1rem;color:var(--ink-soft)">Round ${current_round} — <em>${_esc(whose)}'s</em> turn</div>`;
-    economyEl.innerHTML = '';
-    // Clear actions panel when it's not my turn
-    const actEl = document.getElementById('enc-actions');
-    if (actEl) actEl.innerHTML = '';
-    const ap = document.getElementById('enc-action-panel');
-    if (ap) ap.style.display = 'none';
-    actionsLoaded = false;
-    myActions = [];
-    // Clear resource panel when it's not my turn
-    const rp = document.getElementById('enc-resource-panel');
-    if (rp) rp.innerHTML = '';
-    resourcesLoaded = false;
-    myEncResources = [];
+    myActiveCombatantId = null;
+    _clearActivePanels();
+    const whose = currentCombatant ? _esc(currentCombatant.name) : '—';
+    bannerEl.innerHTML = `<div style="text-align:center;color:var(--ink-soft);padding:0.4rem">Round ${current_round} — <em>${whose}</em>'s turn</div>`;
+    tokenGrid.style.display = 'none';
+    endTurnEl.style.display = 'none';
   }
 
-  // Initiative order list
-  orderEl.innerHTML = `<h3 style="margin-bottom:0.5rem">Initiative Order</h3>` +
+  // Initiative order list (always shown when encounter is active)
+  orderEl.innerHTML = `<div style="font-size:0.8rem;font-weight:bold;color:var(--ink-soft);margin-bottom:0.25rem">INITIATIVE ORDER</div>` +
     combatants.map(c => {
       const isActive = c.combatant_id === current_turn_combatant_id;
       const isMine = myCharIds.includes(c.character_id);
-      const hpStr = c.hp_current != null && c.hp_max != null
-        ? `${c.hp_current}/${c.hp_max} HP` : '';
+      const hp = c.hp_current != null && c.hp_max != null ? ` ${c.hp_current}/${c.hp_max} HP` : '';
       const conds = (c.conditions || []).map(cd => {
         const label = cd.startsWith('Exhaustion:') ? `Exhaustion ${cd.split(':')[1]}` : cd;
-        return `<span style="font-size:0.75rem;padding:0.1rem 0.3rem;background:var(--rubric);color:white;border-radius:3px">${label}</span>`;
+        return `<span style="font-size:0.7rem;padding:0.1rem 0.3rem;background:var(--rubric,#8b0000);color:white;border-radius:2px">${_esc(label)}</span>`;
       }).join(' ');
-      return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;border-radius:4px;margin-bottom:0.2rem;background:${isActive ? 'var(--parchment-bright, #f4e8c8)' : 'transparent'};${isActive ? 'border:1px solid var(--gold)' : ''}">
-        <span style="font-weight:bold;min-width:1.5rem">${c.turn_order ?? '—'}.</span>
-        <span style="${isActive ? 'font-weight:bold' : ''}">${_esc(c.name)}</span>
-        ${isMine ? '<span style="font-size:0.75rem;color:var(--ink-soft)">(You)</span>' : ''}
-        ${hpStr ? `<span style="font-size:0.85rem;color:var(--ink-soft)">${hpStr}</span>` : ''}
+      return `<div style="display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0.4rem;border-radius:4px;${isActive ? 'background:var(--parchment-bright,#f4e8c8);border:1px solid var(--gold)' : ''}">
+        <span style="min-width:1.4rem;font-weight:bold;color:var(--ink-soft)">${c.turn_order ?? '—'}.</span>
+        <span style="${isActive ? 'font-weight:bold' : ''}">${_esc(c.name)}${isMine ? ' <small style="color:var(--ink-soft)">(You)</small>' : ''}</span>
+        ${hp ? `<span style="font-size:0.8rem;color:var(--ink-soft);margin-left:auto">${hp}</span>` : ''}
         ${conds}
       </div>`;
     }).join('');
 }
 
-function renderEconomy(combatant) {
-  const { combatant_id, action_used, bonus_action_used, reaction_used, movement_remaining } = combatant;
-  const btn = (label, field, used) => `
-    <button onclick="toggleEcon(${combatant_id}, '${field}', ${!used})"
-      style="padding:0.4rem 0.8rem;border:2px solid var(--gold);border-radius:4px;cursor:pointer;
-             background:${used ? 'var(--ink-soft)' : 'var(--gold)'};
-             color:${used ? 'var(--light)' : '#2a1a00'};
-             text-decoration:${used ? 'line-through' : 'none'};opacity:${used ? '0.6' : '1'}">
-      ${used ? '✓' : '○'} ${label}
-    </button>`;
-  const mvStr = movement_remaining != null ? `<span style="padding:0.4rem;color:var(--ink-soft)">${movement_remaining} ft. move</span>` : '';
-  return `<div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
-    ${btn('Action', 'action_used', action_used)}
-    ${btn('Bonus Action', 'bonus_action_used', bonus_action_used)}
-    ${btn('Reaction', 'reaction_used', reaction_used)}
-    ${mvStr}
-  </div>`;
+// ── Panel helpers ─────────────────────────────────────────────
+function _clearActivePanels() {
+  const actionList = document.getElementById('enc-action-list');
+  const movePanel = document.getElementById('enc-move-panel');
+  const confirm = document.getElementById('enc-confirm');
+  const resourcePanel = document.getElementById('enc-resource-panel');
+  if (actionList) { actionList.style.display = 'none'; actionList.innerHTML = ''; }
+  if (movePanel) movePanel.style.display = 'none';
+  if (confirm) confirm.style.display = 'none';
+  if (resourcePanel) resourcePanel.innerHTML = '';
+  activeToken = null;
+  selectedActionIdx = null;
+  actionsLoaded = false;
+  myActions = [];
+  resourcesLoaded = false;
+  myEncResources = [];
 }
 
-async function toggleEcon(combatantId, field, value) {
-  try {
-    const res = await fetch('/api/characters/encounter/action-economy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ combatant_id: combatantId, [field]: value }),
-    });
-    if (!res.ok) { toast('Could not update — not your turn or not your character'); return; }
-    // Optimistic update
-    const c = encounterState.combatants.find(x => x.combatant_id === combatantId);
-    if (c) c[field] = value;
-    render();
-  } catch (e) {
-    toast('Connection error');
-  }
+function _updateTokens(combatant) {
+  const { action_used, bonus_action_used, reaction_used, movement_remaining } = combatant;
+  const tokAction = document.getElementById('tok-action');
+  const tokBonus = document.getElementById('tok-bonus');
+  const tokReaction = document.getElementById('tok-reaction');
+  const tokMove = document.getElementById('tok-move');
+  const tokMoveFt = document.getElementById('tok-move-ft');
+
+  _setTokenState(tokAction, action_used, 'action');
+  _setTokenState(tokBonus, bonus_action_used, 'bonus');
+  _setTokenState(tokReaction, reaction_used, 'reaction');
+
+  const moveExhausted = (movement_remaining ?? 0) <= 0;
+  _setTokenState(tokMove, moveExhausted, 'move');
+  if (tokMoveFt) tokMoveFt.textContent = movement_remaining != null ? `${movement_remaining} ft left` : '';
 }
 
-async function loadActions(charId) {
-  try {
-    const res = await fetch(`/api/characters/${charId}/encounter-actions`);
-    if (!res.ok) return;
-    myActions = await res.json();
-    actionsLoaded = true;
-    renderActionSelector();
-  } catch (e) { /* ignore */ }
-}
-
-function renderActionSelector() {
-  const el = document.getElementById('enc-actions');
-  if (!el) return;
-  if (!myActions.length) { el.innerHTML = ''; return; }
-
-  const attacks = myActions.reduce((acc, a, i) => a.type === 'attack' ? [...acc, i] : acc, []);
-  const spells = myActions.reduce((acc, a, i) => a.type === 'spell' && a.cost.action ? [...acc, i] : acc, []);
-  const bonusSpells = myActions.reduce((acc, a, i) => a.type === 'spell' && a.cost.bonus_action ? [...acc, i] : acc, []);
-
-  const actionBtns = (indices) => indices.map(i => {
-    const a = myActions[i];
-    return `<button onclick="showAction(${i})"
-      style="padding:0.3rem 0.6rem;margin:0.15rem;border:1px solid var(--gold);border-radius:4px;cursor:pointer;background:var(--parchment-bright,#f4e8c8);font-size:0.85rem">
-      ${_esc(a.name)}${a.level > 0 ? ` <small>(L${a.level})</small>` : ''}
-    </button>`;
-  }).join('');
-
-  let html = '';
-  if (attacks.length) html += `<div style="margin-bottom:0.4rem"><strong>Attacks</strong><br>${actionBtns(attacks)}</div>`;
-  if (spells.length) html += `<div style="margin-bottom:0.4rem"><strong>Spells (Action)</strong><br>${actionBtns(spells)}</div>`;
-  if (bonusSpells.length) html += `<div style="margin-bottom:0.4rem"><strong>Spells (Bonus)</strong><br>${actionBtns(bonusSpells)}</div>`;
-  el.innerHTML = html;
-}
-
-function showAction(idx) {
-  const action = myActions[idx];
-  if (!action) return;
-  const panel = document.getElementById('enc-action-panel');
-  if (!panel) return;
-  panel.style.display = 'block';
-
-  let html = `<div style="display:flex;justify-content:space-between;align-items:start">
-    <strong style="font-size:1rem">${_esc(action.name)}</strong>
-    <button onclick="document.getElementById('enc-action-panel').style.display='none'" style="cursor:pointer;font-size:0.8rem">✕</button>
-  </div>`;
-
-  if (action.type === 'attack') {
-    html += `<p style="margin:0.25rem 0"><strong>Attack Bonus:</strong> ${_esc(action.attack_bonus_display || '—')}</p>`;
-    html += `<p style="margin:0.25rem 0"><strong>Damage:</strong> ${_esc(action.damage) || '—'}</p>`;
-    html += `<p style="margin:0.25rem 0"><strong>Range:</strong> ${_esc(action.range || '5 ft.')}</p>`;
-    if (action.properties?.length) {
-      html += `<p style="margin:0.25rem 0"><strong>Properties:</strong> ${action.properties.map(_esc).join(', ')}</p>`;
-    }
-    if (action.mastery_property) {
-      html += `<p style="margin:0.25rem 0"><strong>Mastery:</strong> ${_esc(action.mastery_property)}</p>`;
-    }
+function _setTokenState(btn, used, type) {
+  if (!btn) return;
+  if (used) {
+    btn.className = 'enc-token used';
+    btn.onclick = null;
+  } else if (activeToken === type) {
+    btn.className = 'enc-token active';
+    btn.onclick = () => tapToken(type);
   } else {
-    // spell
-    const lvlStr = action.level === 0 ? 'Cantrip' : `Level ${action.level}`;
-    html += `<p style="margin:0.25rem 0"><em>${lvlStr} ${_esc(action.school || '')}</em></p>`;
-    html += `<p style="margin:0.25rem 0"><strong>Range:</strong> ${_esc(action.range || '—')}</p>`;
-    if (action.duration) html += `<p style="margin:0.25rem 0"><strong>Duration:</strong> ${_esc(action.duration)}${action.concentration ? ' (Concentration)' : ''}</p>`;
-    if (action.save_dc) html += `<p style="margin:0.25rem 0"><strong>Save DC:</strong> ${action.save_dc} ${_esc(action.save_ability || '')}</p>`;
-    if (action.attack_bonus_display) html += `<p style="margin:0.25rem 0"><strong>Spell Attack:</strong> ${_esc(action.attack_bonus_display)}</p>`;
-    if (action.description) {
-      const desc = action.description.length > 300
-        ? action.description.slice(0, 297) + '...'
-        : action.description;
-      html += `<details style="margin-top:0.4rem"><summary>Description</summary><p style="font-size:0.85rem;white-space:pre-wrap">${_esc(desc)}</p></details>`;
-    }
+    btn.className = 'enc-token';
+    btn.onclick = () => tapToken(type);
   }
-
-  panel.innerHTML = html;
 }
 
-// ---------------------------------------------------------------------------
-// Resource tracking
-// ---------------------------------------------------------------------------
+// ── Resources ─────────────────────────────────────────────────
 async function loadEncResources(charId) {
   try {
     const res = await fetch(`/api/characters/${charId}/resources`);
     if (!res.ok) return;
     myEncResources = await res.json();
+    resourcesLoaded = true;
     renderEncResources(charId);
   } catch (e) { /* ignore */ }
 }
 
 function renderEncResources(charId) {
   const panel = document.getElementById('enc-resource-panel');
-  if (!panel) return;
-  if (!myEncResources.length) { panel.innerHTML = ''; return; }
-
-  panel.innerHTML = `<div style="padding:0.5rem;background:var(--parchment-bright,#f4e8c8);border-radius:6px;border:1px solid var(--gold)">
-    <strong style="font-size:0.9rem">Resources</strong>
-    ${myEncResources.map(r => `
-      <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
-        <span style="font-size:0.8rem;min-width:8rem;font-weight:bold">${_esc(r.label)}</span>
+  if (!panel || !myEncResources.length) return;
+  panel.innerHTML = `<div style="font-size:0.8rem;font-weight:bold;color:var(--ink-soft);margin-bottom:0.25rem">RESOURCES</div>` +
+    myEncResources.map(r => `
+      <div style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.2rem;font-size:0.85rem">
+        <span style="min-width:8rem;font-weight:bold">${_esc(r.label)}</span>
         <span>${Array.from({length: r.max_uses}, (_, i) => `<button
           onclick="spendEncResource(${charId}, ${r.id}, ${i < r.remaining})"
-          style="background:none;border:none;font-size:1rem;cursor:${i < r.remaining ? 'pointer' : 'default'};
-                 color:${i < r.remaining ? 'var(--gold-deep,#6b4a18)' : 'var(--ink-faded,#9a8070)'}">●</button>`
+          style="background:none;border:none;font-size:1rem;cursor:${i < r.remaining ? 'pointer' : 'default'};color:${i < r.remaining ? 'var(--gold-deep,#6b4a18)' : 'var(--ink-faded,#9a8070)'}">●</button>`
         ).join('')}</span>
-        <small style="color:var(--ink-soft);font-size:0.7rem">(${_esc(r.rest_type)})</small>
-      </div>
-    `).join('')}
-  </div>`;
+        <small style="color:var(--ink-soft)">(${_esc(r.rest_type)})</small>
+      </div>`
+    ).join('');
 }
 
-async function spendEncResource(charId, resourceId, isAvailable) {
-  if (!isAvailable) return;
+async function spendEncResource(charId, resourceId, available) {
+  if (!available) return;
   try {
     const res = await fetch(`/api/characters/${charId}/resources/spend`, {
       method: 'POST',
@@ -302,10 +259,27 @@ async function spendEncResource(charId, resourceId, isAvailable) {
   } catch (e) { toast('Connection error'); }
 }
 
-// Escape HTML to prevent XSS from server-returned names
-function _esc(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── End Turn ─────────────────────────────────────────────────
+async function doEndTurn() {
+  if (!myActiveCombatantId) return;
+  try {
+    const res = await fetch('/api/characters/encounter/end-turn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ combatant_id: myActiveCombatantId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || 'Could not end turn');
+    }
+    // WS will push the state update automatically
+  } catch (e) { toast('Connection error'); }
 }
+
+// ── Stubs for Tasks 9+10 ──────────────────────────────────────
+// tapToken, loadActions, renderActionList, selectAction, doUseAction,
+// renderMovePanel, doSpendMovement — added in Tasks 9 and 10
+function tapToken(type) { /* implemented in Task 9 */ }
+function loadActions(charId) { /* implemented in Task 9 */ }
 
 init();
