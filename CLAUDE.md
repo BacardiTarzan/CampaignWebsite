@@ -3,220 +3,207 @@
 ## Running locally
 
 ```bash
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+~/.local/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-On first start the server auto-seeds from `reference/`. If you need to reseed, delete `campaign.db` and restart.
+On first start the server auto-seeds from `reference_claude/`. If you need to reseed, delete `campaign.db` and restart.
 
-## Current status (as of 2026-05-17)
+**Note:** No virtualenv — Python packages are installed user-local via `~/.local/bin/pip`. pip was bootstrapped with `get-pip.py --user --break-system-packages` on Python 3.14.4.
 
-**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Rules Glossary complete. Next: Phase 4 — Sheet Spellcasting Tracking.**
+## Current status (as of 2026-06-23)
+
+**Phase 1 complete. Phase 2 sheet overhaul complete. Physical lock complete. Level-Up Wizard Overhaul (Phase 3) complete. Rules Glossary complete. Phase 4 prepared-spell tracking complete. Conditions + Mastery Swap complete. Playwright test infrastructure in place. Next: CSS/HTML UX overhaul.**
 
 ### Phase 1 — Character Creation Wizard (complete)
 The full 10-step wizard runs end-to-end:
 1. Identity · 2. Species · 3. Background · 4. Class · 5. Stats · 6. Class features · 7. Skills + languages · 8. Equipment · 9. Spells · 10. Bio → complete
 
 ### Phase 1.5 — Auth + Railway hosting (complete)
-Google OAuth live, Railway deployed, PostgreSQL running.
+Google OAuth via Authlib + server-side sessions (cookie-backed). Railway deployed, PostgreSQL running.
+- `ALLOWED_EMAILS` controls who can log in; `ADMIN_EMAIL` controls admin access
+- All `/api/characters` routes scoped to `owner_email`; all `/api/admin` routes require admin
+- Startup order: `create_all` first (idempotent), then stamp alembic to head on fresh DB or `upgrade head` on existing DB
 
 ### Phase 2 — Character sheet overhaul (complete)
 4-tab live character sheet at `/characters/{id}/sheet`:
-
 - **Stats & Attacks** — ability scores, saves, skills (left); languages, weapon attack cards, spellcasting info (right); class features + species traits below
 - **Biography** — height dropdown + weight counter + deity text (autosave); backstory read-only; journal with 2s autosave; physical details lockable by player
 - **Equipment** — inventory grouped by type; currency widget (PP/GP/SP/CP)
-- **Spells** (casters only) — read-only slot reference panel; spell cards with School/Cast Time/Range/Duration/Components; click to expand description; Prepared/Spellbook/Species badges
+- **Spells** (casters only) — slot reference bar; spell cards; Prepared/Spellbook/Species/Always-Prepared/Arcanum badges; "✎ Prepare Spells" modal for prep casters
 
-HP polled every 15 seconds. Spell slot toggles removed — use physical tokens.
+HP polled every 15 seconds (same poll also carries `conditions`). Spell slot toggles removed — use physical tokens.
 
 ### Phase 2.5 — Physical lock (complete)
-Player can lock height/weight/deity once set. DM unlocks via admin panel.
 - `physical_locked` Boolean on `Character` + migration `3f9a2b1c4d5e`
 - `POST /api/characters/{id}/bio/lock` (player) · `POST /api/admin/characters/{id}/unlock-physical` (DM)
-- `PATCH /bio` blocks height/weight/deity when locked; journal always editable
-- Admin roster shows unlock button when locked
 
 ### Phase 3 — Level-Up Wizard Overhaul (complete as of 2026-05-15)
-Full dynamic level-up wizard replacing the old 3-choice flow. Every D&D 2024 decision point is now wired.
+Full dynamic level-up wizard at `/characters/{id}/levelup`.
 
-**What was built:**
-- `app/services/levelup_rules.py` — rules engine: `required_steps()`, `auto_grants()`, `subclass_auto_grants()`, `max_spell_level()`. Encodes all 12 classes' per-level decision tables from `level-up-wizard/*.md`.
-- Migration `a1b2c3d4e5f6` — adds `character_spells.always_prepared`, `character_choices.level`, `characters.hp_roll_log`
-- `app/models/character.py` — three new columns above
-- `app/routers/characters.py` — `GET /api/characters/{id}/levelup-options` returns full step list; `POST /api/characters/{id}/levelup` applies all choices, audits to `CharacterChoice`, updates HP/ASI/feats/spells
-- `static/levelup.js` — full rewrite: dynamic step runner, one renderer per step kind (`hp`, `subclass`, `asi`, `epic_boon`, `fighting_style`, `fighting_style_swap`, `expertise`, `cantrips_new`, `spells_new`, `wizard_spellbook`, `spell_swap`, `cantrip_swap`, `metamagic`, `invocations_new`, `invocation_swap`, `mystic_arcanum`, `feature_choice`)
-- `static/levelup.css` — all new step-type styles; `--color-ink` overridden to light on dark background
-- `static/levelup.html` — stripped fixed panels, single `#lu-step-host` dynamic host
-- Admin Repair Schema updated with the three new columns
+**Key files:**
+- `app/services/levelup_rules.py` — pure rules engine: `required_steps()`, `auto_grants()`, `subclass_auto_grants()`, `max_spell_level()`. Also exports `BARD_PREPARED_BY_LEVEL` (fixed table, not formula), `CANTRIP_GAINS`, `KNOWN_SPELL_GAINS`, `ELDRITCH_INVOCATIONS`, `METAMAGIC_OPTIONS`, `CLASS_ALWAYS_PREPARED`, `SUBCLASS_ALWAYS_PREPARED`, `BATTLE_MASTER_MANEUVERS`.
+- `app/routers/characters.py` — `GET /api/characters/{id}/levelup-options` + `POST /api/characters/{id}/levelup`
+- `static/levelup.js` / `levelup.css` / `levelup.html`
+- Migration `a1b2c3d4e5f6` — `character_spells.always_prepared`, `character_choices.level`, `characters.hp_roll_log`
 
-**Flow:**
-1. DM clicks LVL+ in admin → sets `cc.level_granted += 1` (does NOT bump `cc.level`)
-2. Portal shows "⬆ Level Up to N" button when `level_granted > level`
-3. Player clicks → wizard at `/characters/{id}/levelup`
-4. Wizard fetches options, renders steps one at a time, collects choices
-5. On confirm: `POST /levelup` → bumps `cc.level`, applies all choices, returns `{ok, new_level, hp_max, hp_gained, auto_added_spells}`
-6. Done panel shows result and links to character sheet
+**Bard/Ranger are prepared casters in 2024 PHB** (not known-spell casters). Bard's prepared count comes from `BARD_PREPARED_BY_LEVEL` table (not `cha_mod + level`). Both auto-populate their full class spell list in `PREPARED_CASTERS` during level-up (like Cleric/Druid/Paladin).
 
-**Step types covered:**
-| Step | Classes | Notes |
-|---|---|---|
-| HP (roll/average/manual) | All | Server floors roll at average; CON mod applied |
-| Subclass | All (L3) | Auto-grants domain/patron/oath spells |
-| ASI (+2/+1+1/feat) | All ASI levels | Retroactive CON HP recompute |
-| Epic Boon | All (L19) | Picks from epic_boon feat category |
-| Fighting Style | Paladin/Ranger L2 | Also optional swap for Fighter every level |
-| Expertise | Bard/Ranger/Rogue | Picks from owned non-expertise skills |
-| Cantrips | All casters at gain levels | |
-| Spells (known) | Bard/Sorcerer/Warlock/Ranger | |
-| Wizard Spellbook | Wizard (+2/level) | saved as `prepared=False` |
-| Spell swap | Known-spell casters | Optional each level |
-| Cantrip swap | Known-spell casters | Optional each level |
-| Metamagic | Sorcerer (L2/10/17) | Hard-coded 10 options |
-| Invocations | Warlock | Gains + optional swap each level |
-| Mystic Arcanum | Warlock (L9/11/13/15) | 6th/7th/8th/9th spell, 1/long rest |
-| Feature choices | All | Parsed from `choice_required=True` features |
-
-**Audit trail:** Every choice stored in `CharacterChoice` with `level=next_level` and `feature_key="lvlup:{level}:{step_id}"`.
+**Step types covered:** `hp`, `subclass`, `asi`, `epic_boon`, `fighting_style`, `fighting_style_swap`, `expertise`, `cantrips_new`, `spells_new`, `wizard_spellbook`, `spell_swap`, `cantrip_swap`, `metamagic`, `invocations_new`, `invocation_swap`, `mystic_arcanum`, `feature_choice`
 
 ### Phase 3.5 — Rules Glossary (complete as of 2026-05-17)
-Standalone `/glossary` page + inline tooltips on the character sheet.
+Standalone `/glossary` page + inline click-to-popover tooltips on the character sheet.
+- `GlossaryTerm` model + migration `b2c3d4e5f6a7`
+- 94 terms across 6 categories: combat, condition, action, weapon_property, mastery, skill
+- Sheet: `gloss(name)` → `<span class="gloss-term" data-slug="...">` + delegated click handler → parchment popover (position: fixed, viewport coords only — no scrollX/Y). Condition chips and mastery tags both use this system (click/tap to open, tap outside to close).
 
-**What was built:**
-- `static/glossary.html` / `glossary.js` / `glossary.css` — standalone page reusing lore layout (leather sidebar + parchment content area). Sidebar shows category counts; accordion cards expand to full description; hash-anchor deep-linking (`/glossary#advantage`); search filters across all fields.
-- `GET /api/content/glossary` — auth-guarded endpoint returning all `GlossaryTerm` rows.
-- `GlossaryTerm` model + migration `b2c3d4e5f6a7` — `slug`, `term`, `category`, `short_description`, `full_description`, `ability`, `source`.
-- 94 terms seeded from `reference_claude/rules/glossary.md` across 6 categories: combat, condition, action, weapon_property, mastery, skill.
-- Sheet tooltip system (`sheet.js`) — `loadGlossary()` fetches terms on boot; `gloss(name)` wraps matching text in `<span class="gloss-term">`; `glossifyDescription(text)` auto-links descriptions. Click opens a popover; "Read full rule ›" (only shown when `full_description ≠ short_description`) opens a modal; modal footer has "View in Glossary ↗" link.
-- Portal `portal.html` — added "📜 Rules Glossary" button alongside Lore Library.
+### Phase 4 — Sheet Spellcasting Tracking (complete)
+- `PATCH /api/characters/{id}/prepared-spells` — validates caster type + prepared max; sets `prepared=True/False` on spell rows
+- `PATCH /api/characters/{id}/masteries/swap` — player-accessible one-at-a-time mastery swap (remove one, add one from proficient weapons); no rest gate (tracked with physical tokens)
+- **Prepared casters:** Cleric `wis+level`, Druid `wis+level`, Paladin `cha+level//2`, Ranger `wis+level//2`, Wizard `int+level`, Bard (table lookup via `BARD_PREPARED_BY_LEVEL`)
+- Sheet Spells tab has "✎ Prepare Spells" modal for prep casters; Stats tab has "⇄ Swap Mastery" modal
+- `_CATEGORY_MAP` (weapon category → set of weapon names) lives at **module scope** in `export.py` and is imported by `characters.py` for proficiency validation
 
-**Key CSS:**
-- `.gloss-term` — dotted gold underline, `cursor: help`
-- `.gloss-popover` — `position: fixed`, `z-index: 2000`, `pointer-events: none` (child `.gloss-popover-more` has `pointer-events: auto`)
-- Popover positioned using viewport coords from `getBoundingClientRect()` only — do NOT add `scrollX`/`scrollY` (popover is `position: fixed`, not absolute)
-- `.char-card-name` on portal — `color: #fff; font-weight: 700` (was too-pale `var(--light)` against dark card background)
+### Phase 4.5 — Conditions System (complete as of 2026-06-17)
+DM-assigned conditions visible on character sheets and monster stat blocks.
 
-## Next: Phase 4 — Sheet Spellcasting Tracking
+**Data model:**
+- `Character.conditions` — JSON column (list like `["Grappled", "Exhaustion:3"]`). Persists on character across sessions.
+- `Combatant.conditions` — JSON column on combatant row. Monster-only; cleared when combatant removed.
+- Migration `l8m9o0p1q2r3` (latest)
 
-The Spells tab shows spells but has no way to manage prepared spells per long rest, no Wizard spellbook/prepared split, no Pact Magic block, no Mystic Arcanum section, and no always-prepared badges for domain/patron/oath spells.
+**API:**
+- `PATCH /api/admin/combatants/{id}/conditions` — body `{conditions: ["Grappled", "Exhaustion:3"]}`. Routes to `Character.conditions` for PC combatants; `Combatant.conditions` for monsters. Validates against `VALID_CONDITIONS` set + `Exhaustion:1–6` pattern. Empty list stores NULL.
+- `GET /api/characters/{id}/hp` — now also returns `conditions: []`
+- `GET /api/characters/{id}/sheet-data` — includes `conditions`
+- `GET /api/admin/combatants` — includes `conditions` in each entry
 
-### What to build
+**15 conditions:** Blinded, Charmed, Deafened, Frightened, Grappled, Incapacitated, Invisible, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned, Unconscious, + Exhaustion (levels 1–6 stored as `"Exhaustion:N"`)
 
-**Backend:**
-- `PATCH /api/characters/{id}/prepared-spells` — body: `{spell_ids: [int]}`. Validates caster type, spell levels, prepared max formula. Sets `prepared=True` on listed rows + always-prepared; `False` on rest. Wizard spellbook spells stay in DB but `prepared=False`.
-- Add to `sheet-data` response: `prepared_max` (formula per class), `always_prepared_ids`, `spellbook_ids` (Wizard), `prepared_count`
+**Speed reflection on sheet:**
+- Grappled/Restrained/Paralyzed/Petrified/Stunned/Unconscious → `0 ft` (rubric red)
+- Exhaustion 3–4 → halved (amber); Exhaustion 5–6 → `0 ft` (rubric red)
+- Prone: shown in condition strip but no speed effect
 
-**Prepared max formulas (by class):**
-- Cleric: `wisdom_mod + cleric_level`
-- Druid: `wisdom_mod + druid_level`
-- Paladin: `charisma_mod + floor(paladin_level / 2)`
-- Ranger: `wisdom_mod + floor(ranger_level / 2)`
-- Wizard: `intelligence_mod + wizard_level`
+**Sheet UI:** `.sh-condition-strip` renders between combat bar and tabs (hidden when empty). Each chip is a `.gloss-term` (click = popover). 15-second poll updates both HP and conditions. Speed cell has `id="sh-speed-cell"` for targeted DOM updates.
 
-**Frontend (sheet.js `renderSpellsTab`):**
-Restructure into sections:
-1. Spellcasting header (already exists — keep)
-2. Slot reference bar (already exists — keep)
-3. Class resource blocks (new — Warlock Pact Magic note, Mystic Arcanum list, Paladin Lay on Hands pool, Wizard Arcane Recovery note, etc.)
-4. "Prepared X / Y — ✎ Prepare Spells" row (for prep casters: Cleric/Druid/Paladin/Ranger/Wizard)
-5. Spell groups with new badges:
-   - `Always Prepared` silver (domain/patron/oath/subclass)
-   - `Spellbook` blue (Wizard — always visible)
-   - `Prepared` green (prepared=True; for Wizard means spellbook AND prepared)
-6. Warlock: no prep button; known spells always available; Mystic Arcanum group at top with "1/long rest" badge
-7. Bard/Sorcerer: no prep button; "Known Spells" header with note
+**Admin tracker:** Inline condition picker per combatant card (popover, `position: fixed`). Exhaustion handled via level buttons 1–6. Monster stat block modal shows read-only condition chips at top. DM-only; players see but cannot change conditions.
 
-**Prepare Spells modal:**
-- Header: "Prepare Spells — Long Rest · X of Y"
-- Locked always-prepared section (doesn't count against max)
-- Selectable section: class list (or spellbook for Wizard), filtered by max slot level; checkboxes; disable at max
-- Cantrips listed below (no checkbox)
-- Save → `PATCH /prepared-spells` → re-render
+**Repair Schema** covers `conditions` columns for both tables.
 
-**Known issues / gaps to fix in Phase 4:**
-- Sheet Spells tab currently shows a static "Prepared" badge on all class spells — this is incorrect for prepared casters; Phase 4 replaces it with real prep state
-- `always_prepared` rows exist in DB (added by Phase 3 level-up) but the sheet doesn't display them differently yet
-- Mystic Arcanum spells (source="arcanum") need their own section on the Warlock sheet
+## Playwright test environment (as of 2026-06-23)
+
+**Stack:** Node v24.16.0 via nvm · `@playwright/test` 1.61.0 · Chromium headless
+
+**Prerequisites (WSL2 specific):** Linux system libs extracted without sudo to `~/.local/usr/lib/x86_64-linux-gnu/` (libnspr4, libnss3, libasound2). Required because `playwright install-deps` needs sudo. Done once; persists.
+
+**Running tests:**
+```bash
+export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh"
+export LD_LIBRARY_PATH="$HOME/.local/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+npx playwright test                  # headless, all tests
+npx playwright test --ui             # visual test runner
+npx playwright test tests/foo.spec.js  # single file
+```
+
+**Test auth bypass:** `GET /auth/test-login?email=...` sets a session without Google OAuth. Only active when `TEST_AUTH_ENABLED=true` (set by `playwright.config.js` webServer env). Controlled by `settings.test_auth_enabled` in `app/config.py`. **Never enable on Railway/production.**
+
+**Config:** `playwright.config.js` — baseURL `localhost:8000`, auto-starts uvicorn via `~/.local/bin/uvicorn`, `reuseExistingServer: true` in dev.
+
+**Test files:** `tests/smoke.spec.js` — 3 passing smoke tests (server reachable, test-login → portal, portal renders).
+
+**Shared login helper pattern:**
+```js
+async function login(page, email = 'zachpoguephil@gmail.com') {
+  await page.goto(`/auth/test-login?email=${encodeURIComponent(email)}`);
+  await page.waitForURL('/portal');
+}
+```
 
 ## Known issues
 
-- **End-to-end testing not done for all 12 classes at all levels** — spot-tested a few classes; full matrix check still needed before calling Phase 3 production-ready
+- **End-to-end testing not done for all 12 classes at all levels** — spot-tested; full matrix still needed
+- **College of Lore "Magical Discoveries" (L6)** — player picks 2 spells from Cleric/Druid/Wizard lists; not yet a level-up wizard step (noted in `levelup_rules.py` comments as a Phase 3.6 gap)
 - **PDF export** — `app/templates/character_sheet.html` exists but visual QA not done. PDF button removed from player side; admin still has export.
-- **Bard skill list** — falls back to full 18-skill list (correct behavior).
-
-## Bugs fixed (cumulative)
-
-- `skill_options` was always empty for all classes — fixed with direct regex in `_parse_class_file`.
-- Bard "choose any 3" skills — second regex branch added.
-- `save_species` broken `__import__` hack — fixed.
-- Tool choice dropdown always showed Artisan's Tools — fixed with direct `TOOL_OPTIONS[bg.tool_proficiency]` lookup.
-- Fighting style / divine order options now show inline descriptions; weapon mastery checklist shows mastery property tags with tooltips.
-- Species display "Forest Gnome Gnome" — fixed to `species_lineage || species_name` throughout portal, sheet, export.
-- Parent lineage trait (e.g. "Gnomish Lineage") was showing instead of the selected lineage's traits — export now filters parent trait and injects selected lineage description.
-- Species cantrips were selectable again as class cantrips — class spell picker now filters owned spell IDs; species grants are a bonus, not counted against class cantrip allotment.
-- `save_spells` was wiping species spells — now only deletes rows where `source != "species"`.
-- Gold stored as custom equipment row — admin "Convert Gold" button moves it to `currency.gp`; sheet filters it from gear display.
-- Spell stats (casting_time, range, duration) were empty on Railway from old seed — seeder now refreshes rows missing any of those fields; admin "Refresh Spells" button triggers it.
-- Railway missing `source`/`notes` columns on `character_spells` and `height`/`weight`/`deity`/`journal`/`currency` on `characters` — admin "Repair Schema" button applies all missing columns via `ALTER TABLE ... IF NOT EXISTS`.
-- Repair Schema used `ADD COLUMN IF NOT EXISTS` (PostgreSQL-only syntax) — fixed to use dialect-aware inspector check on SQLite.
-- `combatants` table created with `character_id NOT NULL` and unique constraint by migration `e1f2a3b4c5d6`; monster columns (`monster_id`, `custom_name`, `hp_current`, `hp_max_override`) never applied on Railway because `bind.execute()` silently no-ops in newer SQLAlchemy — fixed in migration `h4i5j6k7l8m9` using `op.execute()` + `ADD COLUMN IF NOT EXISTS`.
-- Admin character HP endpoint read `delta` from query params but combat tracker sent it as JSON body — fixed with `AdminHpIn` Pydantic model; endpoint accepts both body and query param for backward compat.
-- Fresh Railway DB failed on startup because initial schema migration is empty (`pass`) so `add_column` migrations failed on non-existent tables — fixed in `app/main.py`: run `create_all` first, then stamp alembic to head if `alembic_version` is empty (fresh DB), else run `upgrade head` for existing DBs.
-
-## Phase 1.5 — Google Auth + Railway (complete)
-
-- Google OAuth via Authlib + server-side sessions (cookie-backed)
-- `ALLOWED_EMAILS` controls who can log in; `ADMIN_EMAIL` controls admin access
-- All `/api/characters` routes scoped to `owner_email`; all `/api/admin` routes require admin
-- Railway deployed with PostgreSQL; startup order: `create_all` first (idempotent), then stamp alembic to head on fresh DB or `upgrade head` on existing DB
-- `app/config.py` `reference_dir` points to `reference_claude/`
 
 ## Architecture notes
 
-- All theming via CSS variables in `static/style.css` `:root {}`.
-- Equipment options are JSON arrays of `{label, items[], gold?}` on `DnDClass.equipment_options` and `Background.equipment_options`.
-- `stat_roll_locked` on `Character` prevents re-rolling; DM unlocks via `POST /api/admin/characters/{id}/unlock-stats`.
-- `physical_locked` on `Character` locks height/weight/deity edits; player locks via `POST /api/characters/{id}/bio/lock`; DM unlocks via `POST /api/admin/characters/{id}/unlock-physical`. Added in migration `3f9a2b1c4d5e`.
-- Seeder is idempotent for inserts; also refreshes spells missing `casting_time`/`range`/`duration`.
-- `CharacterSpell` has `source` ("class" | "species" | "subclass" | "arcanum"), `notes`, and `always_prepared` (Boolean) columns. Species spells preserved across spell saves. Subclass/arcanum spells added by level-up wizard.
-- `Character` has `height`, `weight`, `deity`, `journal`, `currency` (JSON), `hp_roll_log` (JSON — level-up HP audit) columns.
-- `CharacterChoice` has `level` (Integer) column — all level-up choices stored with `feature_key="lvlup:{level}:{step_id}"`.
-- `app/services/levelup_rules.py` — pure rules engine for level-up wizard. No DB writes; only reads class/subclass/char data.
-- Admin Import tab has one-shot maintenance buttons: Repair Schema, Convert Gold, Refresh Spells, Backfill Species Spells. Repair Schema covers all columns through migration `h4i5j6k7l8m9`.
-- `Monster` model in `content.py`; `Combatant` model in `character.py`. `Combatant.character_id` nullable (PC combatants); `Combatant.monster_id` nullable (monster combatants). Combat tracker in admin Combat tab.
-- **Migration rule:** always use `op.execute(text(...))` for raw SQL in alembic migrations — never `bind.execute()` which silently no-ops on PostgreSQL in SQLAlchemy 2.x. Use `ADD COLUMN IF NOT EXISTS` on PostgreSQL for idempotent column additions.
+- **All theming** via CSS variables in `static/style.css` `:root {}`. Dark surfaces use leather variants; text on dark must use `--light`, `--light-dim`, `--gold`, or `--gold-bright`. `--gold-deep` (#6b4a18) is too dark for leather backgrounds — use only on parchment panels.
+- **Parchment panels** (`.sh-section`, `.tome`, `.card`, `.modal-box`) use light parchment gradients. Dark ink (`--ink`, `--ink-soft`, `--ink-faded`) is correct here.
+- **Glossary tooltip system** — `gloss(name)` / `glossifyDescription(text)` wrap text in `.gloss-term[data-slug]`; delegated click handler calls `_showGlossPopover(slug, el)`. Popover is `position: fixed` — use `getBoundingClientRect()` only, never add `scrollX`/`scrollY`. Condition chips and mastery tags both use this.
+- **`_CATEGORY_MAP`** (weapon category → weapon name set) is module-scope in `export.py` and imported by `characters.py` (`from ..services.export import _CATEGORY_MAP`).
+- **`BARD_PREPARED_BY_LEVEL`** in `levelup_rules.py` — exported and used by both `export.py` and `characters.py` for Bard's prepared-spell max (fixed table, not formula).
+- **`VALID_CONDITIONS`** set in `app/routers/admin.py` — 14 binary conditions; Exhaustion handled separately as `"Exhaustion:N"`.
+- **`Character.conditions`** JSON — persists across sessions; `Combatant.conditions` JSON — monster-scoped, lost on removal. Both default NULL (not `[]`); read with `char.conditions or []`.
+- **HP poll** — `GET /api/characters/{id}/hp` returns `{hp_current, hp_max, conditions}`. `pollHp()` in `sheet.js` handles both HP and condition updates; updates condition strip and speed cell in-place without full re-render.
+- **Migration rule:** always use `op.execute(text(...))` for raw SQL — never `bind.execute()`. PostgreSQL: `ADD COLUMN IF NOT EXISTS`. SQLite: inspect columns first via `sa_inspect(bind).get_columns(table)`.
+- **Repair Schema button** (admin Import tab) covers all columns through migration `l8m9o0p1q2r3`. Run after Railway deploys that skip migrations.
+- **`stat_roll_locked`** prevents re-rolling; DM unlocks via `POST /api/admin/characters/{id}/unlock-stats`.
+- **`physical_locked`** locks height/weight/deity; player locks, DM unlocks.
+- **`CharacterSpell.source`** — "class" | "species" | "subclass" | "arcanum". Species spells preserved across spell saves. Always-prepared subclass/arcanum spells added by level-up wizard.
+- **`CharacterChoice.level`** — all level-up choices stored with `feature_key="lvlup:{level}:{step_id}"`.
 
 ## Project structure
 
 ```
 app/
   main.py          — FastAPI app + lifespan seeder
-  config.py        — pydantic-settings from .env
+  config.py        — pydantic-settings (.env); test_auth_enabled flag
   database.py      — SQLAlchemy engine + session
   models/
-    content.py     — Species, DnDClass, Subclass, Background, Feat, Spell, Equipment
-    character.py   — Character + all join tables
+    content.py     — Species, DnDClass, Subclass, Background, Feat, Spell, Equipment, Monster, GlossaryTerm
+    character.py   — Character + all join tables (CharacterSpell, WeaponMasteryUnlock, Combatant, …)
   dependencies.py  — require_user / require_admin FastAPI deps
   routers/
     content.py     — GET endpoints for content (public)
-    characters.py  — Wizard step endpoints + JSON/PDF export (require_user)
-    admin.py       — DM roster, codex CRUD, seed trigger (require_admin)
-    auth.py        — Google OAuth login/callback/logout/me
+    characters.py  — Wizard steps, sheet-data, HP, prepared-spells, masteries/swap, levelup (require_user)
+    admin.py       — DM roster, codex CRUD, combatants, conditions, seed trigger (require_admin)
+    auth.py        — Google OAuth login/callback/logout/me + /test-login bypass
   services/
     seeder.py      — Markdown → DB (regex parser)
-    export.py      — Character → JSON dict
+    export.py      — Character → JSON dict; _CATEGORY_MAP at module scope
+    levelup_rules.py — Pure rules engine; exports BARD_PREPARED_BY_LEVEL, VALID_CONDITIONS, etc.
     pdf.py         — WeasyPrint renderer
   templates/
     character_sheet.html
 static/
-  index.html / script.js   — Player wizard
-  portal.html / portal.js  — Player character roster
+  index.html / script.js        — Player wizard (10 steps)
+  portal.html / portal.js       — Player character roster
   sheet.html / sheet.js / sheet.css — Live character sheet (4-tab)
+  levelup.html / levelup.js / levelup.css — Level-up wizard
   glossary.html / glossary.js / glossary.css — Rules Glossary page
-  admin.html / admin.js    — DM admin panel
-  style.css                — Design system (CSS variables)
+  admin.html / admin.js         — DM admin panel (roster, codex, combat/status tracker, import)
+  style.css                     — Design system (CSS variables, shared components)
   lore.html / lore.js / lore.css — Lore Library page
-reference_claude/          — 2024 PHB markdown (authoritative source)
-reference_old/             — Old reference files (do not use)
-alembic/                   — Migrations
+reference_claude/               — 2024 PHB markdown (authoritative source)
+alembic/versions/               — Migrations (latest: l8m9o0p1q2r3_add_conditions)
+tests/                          — Playwright test specs
+playwright.config.js            — Playwright config (Chromium, auto-start uvicorn)
+package.json                    — npm dev deps (@playwright/test)
+docs/superpowers/
+  specs/                        — Design specs from brainstorming sessions
+  plans/                        — Implementation plans
 ```
+
+## Bugs fixed (cumulative)
+
+- `skill_options` was always empty — fixed with direct regex in `_parse_class_file`.
+- Bard "choose any 3" skills — second regex branch added.
+- Tool choice dropdown always showed Artisan's Tools — fixed.
+- Fighting style / divine order options now show inline descriptions.
+- Species display "Forest Gnome Gnome" — fixed to `species_lineage || species_name` throughout.
+- Parent lineage trait was showing instead of selected lineage's traits — export filters parent.
+- Species cantrips were re-selectable as class cantrips — class spell picker filters owned spell IDs.
+- `save_spells` was wiping species spells — now only deletes rows where `source != "species"`.
+- Gold stored as custom equipment row — admin "Convert Gold" button moves to `currency.gp`.
+- Spell stats empty on Railway from old seed — seeder refreshes rows missing those fields.
+- Railway missing columns — admin "Repair Schema" button applies all via dialect-aware ALTER TABLE.
+- `combatants` table missing monster columns on Railway — fixed in migration `h4i5j6k7l8m9`.
+- Admin HP endpoint accepted query params but tracker sent JSON body — fixed with `AdminHpIn` model.
+- Fresh Railway DB failed on startup — fixed: `create_all` first, then stamp or `upgrade head`.
+- `.sh-combat-label` / `.lore-nav-category` used `--gold-deep` on dark leather → near-invisible — changed to `--gold`.
+- `.gloss-cat-count` used `--ink-faded` on dark leather sidebar → changed to `--light-dim`.
+- `.wizard-step-pip.done .pip-label` used `--gold-deep` on leather body (darker than default!) → changed to `--gold`.
+- `.spell-badge--always-prep` / `.modal-spell-always` used `#8a8040` (3:1 contrast on parchment) → changed to `#4a4510`.
+- `openMonsterModal` looked up combatant by `monster_id`, always returning first instance when two of same monster are in combat — fixed to use `combatant_id` when called from tracker card.
+- `removeCondition` left condition picker open (stopPropagation swallowed the once-listener) — added `closeConditionPicker()` call.
+- Exhaustion label inconsistency ("Exhausted N" in admin vs "Exhaustion N" in sheet) — standardised to "Exhaustion N".
