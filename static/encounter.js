@@ -276,10 +276,285 @@ async function doEndTurn() {
   } catch (e) { toast('Connection error'); }
 }
 
-// ── Stubs for Tasks 9+10 ──────────────────────────────────────
-// tapToken, loadActions, renderActionList, selectAction, doUseAction,
-// renderMovePanel, doSpendMovement — added in Tasks 9 and 10
-function tapToken(type) { /* implemented in Task 9 */ }
-function loadActions(charId) { /* implemented in Task 9 */ }
+// ── Action loading ────────────────────────────────────────────
+async function loadActions(charId) {
+  try {
+    const res = await fetch(`/api/characters/${charId}/encounter-actions`);
+    if (!res.ok) return;
+    myActions = await res.json();
+    actionsLoaded = true;
+    // Inject class ability resources as action list entries
+    _injectResourceAbilities();
+  } catch (e) { /* ignore */ }
+}
+
+function _injectResourceAbilities() {
+  for (const r of myEncResources) {
+    const key = `ability:${r.resource_key}`;
+    if (myActions.find(a => a._key === key)) continue;
+    myActions.push({
+      _key: key,
+      type: 'ability',
+      name: r.label,
+      resource_id: r.id,
+      resource_key: r.resource_key,
+      cost: { action: true, bonus_action: false, spell_slot: null },
+      max_uses: r.max_uses,
+      remaining: r.remaining,
+      rest_type: r.rest_type,
+      description: '',
+      attack_bonus: null,
+      attack_bonus_display: null,
+      save_dc: null,
+      save_ability: null,
+      damage: '',
+      range: '',
+      level: null,
+      school: null,
+    });
+  }
+}
+
+// ── Token tap ─────────────────────────────────────────────────
+function tapToken(tokenType) {
+  const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+  if (!combatant) return;
+
+  // Don't allow tapping already-used tokens
+  if (tokenType === 'action' && combatant.action_used) return;
+  if (tokenType === 'bonus' && combatant.bonus_action_used) return;
+  if (tokenType === 'reaction' && combatant.reaction_used) return;
+  if (tokenType === 'move' && (combatant.movement_remaining ?? 0) <= 0) return;
+
+  // Toggle: tapping the active token closes the panel
+  if (activeToken === tokenType) {
+    activeToken = null;
+    selectedActionIdx = null;
+    document.getElementById('enc-action-list').style.display = 'none';
+    document.getElementById('enc-move-panel').style.display = 'none';
+    document.getElementById('enc-confirm').style.display = 'none';
+    _updateTokens(combatant);
+    return;
+  }
+
+  activeToken = tokenType;
+  selectedActionIdx = null;
+  document.getElementById('enc-confirm').style.display = 'none';
+  _updateTokens(combatant);
+
+  if (tokenType === 'move') {
+    document.getElementById('enc-action-list').style.display = 'none';
+    renderMovePanel(combatant);  // implemented in Task 10
+  } else {
+    document.getElementById('enc-move-panel').style.display = 'none';
+    renderActionList(tokenType, combatant);
+  }
+}
+
+// ── Action list ───────────────────────────────────────────────
+function renderActionList(tokenType, combatant) {
+  const el = document.getElementById('enc-action-list');
+  el.style.display = 'block';
+
+  const isAction = tokenType === 'action';
+  const isBonus = tokenType === 'bonus';
+
+  // Filter myActions by which token is tapped
+  const attacks = isAction ? myActions.filter(a => a.type === 'attack') : [];
+  const cantrips = isAction ? myActions.filter(a => a.type === 'spell' && a.level === 0) : [];
+  const spells = (isAction || isBonus)
+    ? myActions.filter(a => a.type === 'spell' && a.level > 0 && (isAction ? a.cost.action : a.cost.bonus_action))
+    : [];
+  const abilities = myActions.filter(a =>
+    a.type === 'ability' && (isAction ? a.cost.action : (isBonus ? a.cost.bonus_action : a.cost.reaction))
+  );
+
+  const section = (title, items) => {
+    if (!items.length) return '';
+    return `<div style="background:var(--parchment-bright,#f4e8c8);padding:0.25rem 0.5rem;font-size:0.7rem;font-weight:bold;letter-spacing:0.05em;color:var(--ink-soft)">${_esc(title)}</div>` +
+      items.map(a => {
+        const globalIdx = myActions.indexOf(a);
+        const exhausted = a.type === 'ability' && (a.remaining ?? 1) <= 0;
+        const statStr = a.attack_bonus_display
+          ? `${a.attack_bonus_display} · ${a.damage || '—'}`
+          : (a.save_dc ? `DC ${a.save_dc} ${a.save_ability || ''}` : (a.damage || ''));
+        const rightLabel = a.type === 'ability'
+          ? `<span style="font-size:0.75rem;color:${exhausted ? '#ccc' : 'var(--ink-soft)'}">${a.remaining ?? 0}/${a.max_uses ?? 1}</span>`
+          : (statStr ? `<span style="font-size:0.75rem;color:var(--ink-soft)">${_esc(statStr)}</span>` : '');
+        return `<div onclick="${exhausted ? '' : `selectAction(${globalIdx})`}"
+          style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.5rem;border-bottom:1px solid #eee;cursor:${exhausted ? 'default' : 'pointer'};opacity:${exhausted ? '0.4' : '1'}">
+          <span style="flex:1">${_esc(a.name)}${a.level > 0 ? ` <small>(L${a.level})</small>` : ''}</span>
+          ${rightLabel}
+        </div>`;
+      }).join('');
+  };
+
+  let html = `<div style="border:1px solid var(--gold);border-radius:6px;overflow:hidden;background:white">`;
+  html += section('ATTACKS', attacks);
+  html += section('CANTRIPS', cantrips);
+  html += section('SPELLS', spells);
+  html += section('ABILITIES', abilities);
+  html += `<div onclick="selectAction(-1)" style="padding:0.4rem 0.5rem;color:var(--ink-soft);cursor:pointer;font-style:italic;border-top:1px solid #eee">— Skip (use ${_esc(tokenType)}, do nothing)</div>`;
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Confirm panel ─────────────────────────────────────────────
+function selectAction(idx) {
+  selectedActionIdx = idx;
+  const confirmEl = document.getElementById('enc-confirm');
+  confirmEl.style.display = 'block';
+
+  if (idx === -1) {
+    confirmEl.innerHTML = `<div style="border:1px solid var(--gold);border-radius:6px;padding:0.6rem">
+      <div style="font-weight:bold;margin-bottom:0.4rem">— Skip</div>
+      <div style="font-size:0.8rem;color:var(--ink-soft);margin-bottom:0.5rem">Use your ${_esc(activeToken)} without doing anything.</div>
+      <div style="display:flex;gap:0.4rem">
+        <button onclick="doUseAction(-1)" style="flex:1;padding:0.5rem;background:var(--ink);color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold">✓ Confirm Skip</button>
+        <button onclick="closeConfirm()" style="padding:0.5rem 0.7rem;background:#eee;border:1px solid #ccc;border-radius:4px;cursor:pointer">← Back</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const action = myActions[idx];
+  if (!action) return;
+
+  let statsHtml = '';
+  let slotPickerHtml = '';
+
+  if (action.type === 'attack') {
+    statsHtml = `
+      <p style="margin:0.2rem 0;font-size:0.82rem"><strong>Attack Bonus:</strong> ${_esc(action.attack_bonus_display || '—')}</p>
+      <p style="margin:0.2rem 0;font-size:0.82rem"><strong>Damage:</strong> ${_esc(action.damage || '—')}</p>
+      <p style="margin:0.2rem 0;font-size:0.82rem"><strong>Range:</strong> ${_esc(action.range || '5 ft.')}</p>
+      ${(action.properties || []).length ? `<p style="margin:0.2rem 0;font-size:0.82rem"><strong>Properties:</strong> ${action.properties.map(_esc).join(', ')}</p>` : ''}
+      ${action.mastery_property ? `<p style="margin:0.2rem 0;font-size:0.82rem"><strong>Mastery:</strong> ${_esc(action.mastery_property)}</p>` : ''}`;
+  } else if (action.type === 'spell') {
+    const lvlStr = action.level === 0 ? 'Cantrip' : `Level ${action.level}`;
+    statsHtml = `
+      <p style="margin:0.2rem 0;font-size:0.78rem;color:var(--ink-soft)"><em>${_esc(lvlStr)} ${_esc(action.school || '')}</em></p>
+      <p style="margin:0.2rem 0;font-size:0.82rem"><strong>Range:</strong> ${_esc(action.range || '—')}</p>
+      ${action.duration ? `<p style="margin:0.2rem 0;font-size:0.82rem"><strong>Duration:</strong> ${_esc(action.duration)}${action.concentration ? ' (Concentration)' : ''}</p>` : ''}
+      ${action.save_dc ? `<p style="margin:0.2rem 0;font-size:0.82rem"><strong>Save DC:</strong> ${action.save_dc} ${_esc(action.save_ability || '')}</p>` : ''}
+      ${action.attack_bonus_display ? `<p style="margin:0.2rem 0;font-size:0.82rem"><strong>Spell Attack:</strong> ${_esc(action.attack_bonus_display)}</p>` : ''}`;
+
+    if (action.level > 0) {
+      slotPickerHtml = `<div style="margin:0.4rem 0;font-size:0.82rem"><strong>Slot:</strong>
+        <select id="slot-pick" style="margin-left:0.3rem;font-size:0.82rem">
+          ${_buildSlotOptions(action.level)}
+        </select>
+      </div>`;
+    }
+
+    if (action.description) {
+      const desc = action.description.length > 300 ? action.description.slice(0, 297) + '…' : action.description;
+      statsHtml += `<details style="margin-top:0.4rem"><summary style="font-size:0.8rem;cursor:pointer">Description</summary><p style="font-size:0.78rem;white-space:pre-wrap">${_esc(desc)}</p></details>`;
+    }
+  } else if (action.type === 'ability') {
+    statsHtml = `
+      <p style="margin:0.2rem 0;font-size:0.82rem"><strong>Uses:</strong> ${action.remaining ?? 0}/${action.max_uses ?? 1} (${_esc(action.rest_type || '')} rest)</p>
+      ${action.description ? `<p style="margin:0.2rem 0;font-size:0.82rem">${_esc(action.description)}</p>` : ''}`;
+  }
+
+  const costParts = [];
+  if (activeToken === 'action') costParts.push('1 Action');
+  if (activeToken === 'bonus') costParts.push('1 Bonus Action');
+  if (activeToken === 'reaction') costParts.push('1 Reaction');
+  if (action.type === 'ability' && action.resource_id) costParts.push(`1 ${_esc(action.name)} use`);
+
+  confirmEl.innerHTML = `<div style="border:2px solid var(--gold);border-radius:6px;padding:0.6rem">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.35rem">
+      <strong style="font-size:1rem">${_esc(action.name)}</strong>
+      <button onclick="closeConfirm()" style="background:none;border:none;cursor:pointer;font-size:0.85rem">✕</button>
+    </div>
+    ${statsHtml}
+    ${slotPickerHtml}
+    <p style="font-size:0.75rem;color:var(--ink-soft);margin:0.4rem 0">Costs: ${costParts.join(' + ') || '—'}</p>
+    <div style="display:flex;gap:0.4rem;margin-top:0.5rem">
+      <button onclick="doUseAction(${idx})" style="flex:1;padding:0.55rem;background:var(--gold,#c8a84b);color:#1a0e00;border:none;border-radius:5px;font-weight:bold;cursor:pointer">✓ Use It</button>
+      <button onclick="closeConfirm()" style="padding:0.55rem 0.8rem;background:#eee;border:1px solid #ccc;border-radius:5px;cursor:pointer">← Back</button>
+    </div>
+  </div>`;
+}
+
+function _buildSlotOptions(minLevel) {
+  let opts = '';
+  for (let lvl = minLevel; lvl <= 9; lvl++) {
+    opts += `<option value="${lvl}">Level ${lvl}</option>`;
+  }
+  return opts;
+}
+
+function closeConfirm() {
+  document.getElementById('enc-confirm').style.display = 'none';
+  selectedActionIdx = null;
+}
+
+// ── Use It ────────────────────────────────────────────────────
+async function doUseAction(idx) {
+  const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+  if (!combatant) return;
+
+  const action = idx >= 0 ? myActions[idx] : null;
+  const updates = {};
+
+  // Mark the token used
+  if (activeToken === 'action') updates.action_used = true;
+  else if (activeToken === 'bonus') updates.bonus_action_used = true;
+  else if (activeToken === 'reaction') updates.reaction_used = true;
+
+  try {
+    // 1. Mark action economy (triggers WS broadcast)
+    const econRes = await fetch('/api/characters/encounter/action-economy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ combatant_id: myActiveCombatantId, ...updates }),
+    });
+    if (!econRes.ok) { toast('Could not mark action — try again'); return; }
+
+    // 2. Spend spell slot if leveled spell
+    if (action && action.type === 'spell' && action.level > 0) {
+      const slotEl = document.getElementById('slot-pick');
+      const slotLevel = slotEl ? parseInt(slotEl.value) : action.level;
+      const charId = combatant.character_id;
+      // GET sheet-data (which includes spell_slots_used), then increment the chosen level
+      const sheetRes = await fetch(`/api/characters/${charId}/sheet-data`).catch(() => null);
+      if (sheetRes && sheetRes.ok) {
+        const sheetData = await sheetRes.json();
+        const used = { ...(sheetData.spell_slots_used || {}) };
+        used[String(slotLevel)] = (used[String(slotLevel)] || 0) + 1;
+        await fetch(`/api/characters/${charId}/spell-slots`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ used }),
+        }).catch(() => {});
+      }
+    }
+
+    // 3. Spend class ability use
+    if (action && action.type === 'ability' && action.resource_id) {
+      await fetch(`/api/characters/${combatant.character_id}/resources/spend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource_id: action.resource_id, amount: 1 }),
+      });
+      // Refresh resource panel
+      await loadEncResources(combatant.character_id);
+    }
+
+    // Close panels — WS broadcast from step 1 will update token states
+    document.getElementById('enc-action-list').style.display = 'none';
+    document.getElementById('enc-confirm').style.display = 'none';
+    activeToken = null;
+    selectedActionIdx = null;
+
+  } catch (e) {
+    toast('Action failed — try again');
+  }
+}
+
+// ── Move stub (Task 10) ───────────────────────────────────────
+function renderMovePanel(combatant) { /* implemented in Task 10 */ }
 
 init();
