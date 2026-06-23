@@ -39,6 +39,7 @@ function switchTab(tab) {
   if (tab === "grimoire") loadGrimoireSpells();
   if (tab === "lore") loadLore();
   if (tab === "combat") loadCombat();
+  if (tab !== "combat") _stopEncounterPolling();
 }
 
 function switchCodexTab(sub) {
@@ -1318,8 +1319,8 @@ async function openMonsterModal(monsterId, combatantId) {
   const m = await api("GET", `/api/admin/monsters/${monsterId}`);
   document.getElementById("monster-modal-name").textContent = m.name;
   const combatant = combatantId != null
-    ? _combatants.find(c => c.combatant_id === combatantId)
-    : _combatants.find(c => c.monster_id === monsterId);
+    ? _findCombatant(combatantId)
+    : (_encounterState.combatants.find(c => c.monster_id === monsterId) || _combatants.find(c => c.monster_id === monsterId));
   const activeConditions = combatant ? (combatant.conditions || []) : [];
   const mod = n => { const v = Math.floor((n - 10) / 2); return (v >= 0 ? "+" : "") + v; };
   const fmtSection = (items) => (items || []).map(i =>
@@ -1374,6 +1375,43 @@ function closeMonsterModal(e) {
 // ---------------------------------------------------------------------------
 let _combatants = [];
 
+// Encounter state
+let _encounterState = {
+  encounter_active: false,
+  initiative_phase: false,
+  current_round: 1,
+  current_turn_combatant_id: null,
+  combatants: []
+};
+let _encPollInterval = null;
+
+async function _pollEncounterState() {
+  try {
+    const res = await fetch('/api/encounter/state');
+    if (!res.ok) return;
+    _encounterState = await res.json();
+    _renderEncounterBar();
+    _renderCombatCards();
+  } catch (e) { /* ignore network errors */ }
+}
+
+function _startEncounterPolling() {
+  if (_encPollInterval) return;
+  _encPollInterval = setInterval(_pollEncounterState, 2000);
+  _pollEncounterState();  // immediate first poll
+}
+
+function _stopEncounterPolling() {
+  clearInterval(_encPollInterval);
+  _encPollInterval = null;
+}
+
+// Helper: find a combatant by id from either the encounter list or the base list
+function _findCombatant(combatantId) {
+  return _encounterState.combatants.find(c => c.combatant_id === combatantId)
+    || _combatants.find(c => c.combatant_id === combatantId);
+}
+
 const ALL_CONDITIONS = [
   "Blinded","Charmed","Deafened","Frightened","Grappled",
   "Incapacitated","Invisible","Paralyzed","Petrified","Poisoned",
@@ -1391,48 +1429,196 @@ function renderCondChips(combatantId, conditions) {
 
 async function loadCombat() {
   _combatants = await api("GET", "/api/admin/combatants");
+  _startEncounterPolling();  // starts polling (noop if already running)
+  _renderCombatCards();
+}
+
+function _renderEncounterBar() {
+  const bar = document.getElementById("encounter-bar");
+  if (!bar) return;
+  const { encounter_active, initiative_phase, current_round } = _encounterState;
+
+  if (!encounter_active) {
+    bar.innerHTML = `
+      <button class="btn-primary" onclick="_startEncounter()">⚔ Start Encounter</button>
+    `;
+  } else if (initiative_phase) {
+    bar.innerHTML = `
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+        <strong>Initiative Phase</strong>
+        <span style="color:var(--ink-soft)">— Enter initiatives on each card, then:</span>
+        <button class="btn-primary" onclick="_beginRound1()">▶ Begin Round 1</button>
+        <button class="btn-secondary" onclick="_endEncounter()">✕ End Encounter</button>
+      </div>
+    `;
+  } else {
+    bar.innerHTML = `
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+        <strong>Round ${current_round}</strong>
+        <button class="btn-primary" onclick="_advanceTurn()">→ Next Turn</button>
+        <button class="btn-secondary" onclick="_endEncounter()">✕ End Encounter</button>
+      </div>
+    `;
+  }
+}
+
+async function _startEncounter() {
+  await api("POST", "/api/admin/encounter/start");
+  await _pollEncounterState();
+}
+
+async function _beginRound1() {
+  try {
+    await api("POST", "/api/admin/encounter/begin-round-1");
+    await _pollEncounterState();
+  } catch (e) {
+    toast(e.message || "Enter at least one initiative first");
+  }
+}
+
+async function _advanceTurn() {
+  await api("POST", "/api/admin/encounter/advance-turn");
+  await _pollEncounterState();
+}
+
+async function _endEncounter() {
+  if (!confirm("End encounter and reset initiative order?")) return;
+  await api("POST", "/api/admin/encounter/end");
+  await _pollEncounterState();
+}
+
+function _renderCombatCards() {
+  // Preserve any input that currently has focus (e.g., HP adjustment or initiative)
+  const focusedId = document.activeElement?.id;
+  const focusedVal = document.activeElement?.value;
+
+  const { encounter_active, combatants: encCombatants } = _encounterState;
+
+  // During active encounter: use encounter state's ordered list
+  // Outside encounter: use the old _combatants list
+  const list = encounter_active ? encCombatants : _combatants;
+
   const el = document.getElementById("combat-list");
-  if (!_combatants.length) {
+  if (!list || !list.length) {
     el.innerHTML = `<p class="hint">No combatants. Click "+ Add Combatant" to begin.</p>`;
     return;
   }
-  el.innerHTML = `<div class="combat-grid">${_combatants.map((c, i) => {
-    const isMonster = c.kind === "monster";
-    const hp = c.hp_max ? `${c.hp_current ?? "?"}/${c.hp_max}` : "—";
-    const hpId = `chp-${c.combatant_id}`;
-    const subtitle = isMonster
-      ? [c.creature_type, c.cr ? `CR ${c.cr}` : ""].filter(Boolean).join(" · ")
-      : [[c.species_lineage, c.species_name].filter(Boolean).join(" "),
-         [c.class_name, c.level ? `Lv ${c.level}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
-    const clickHandler = isMonster
-      ? `openMonsterModal(${c.monster_id}, ${c.combatant_id})`
-      : `combatOpenSheet(${c.character_id}, event)`;
-    const speed = isMonster ? (c.speed || "—") : `${c.speed || 30} ft`;
-    const acBadge = isMonster && c.ac != null ? `<span class="combat-stat"><span class="combat-stat-label">AC</span> ${c.ac}</span>` : "";
-    const tag = isMonster ? `<span class="combat-monster-tag">Monster</span>` : "";
-    return `<div class="combat-card" onclick="${clickHandler}">
-      <div class="combat-card-header">
-        <span class="combat-card-num">${i + 1}</span>
-        <span class="combat-card-name">${c.name}</span>
-        ${tag}
-        <button class="combat-remove-btn" onclick="removeCombatant(${c.combatant_id}, event)" title="Remove">✕</button>
+  el.innerHTML = `<div class="combat-grid">${list.map((c, i) => _buildCombatCard(c, i)).join("")}</div>`;
+
+  // Restore focus and value to the input that was active before re-render
+  if (focusedId) {
+    const restored = document.getElementById(focusedId);
+    if (restored) {
+      restored.value = focusedVal ?? '';
+      restored.focus();
+    }
+  }
+}
+
+function _buildCombatCard(c, i) {
+  const { encounter_active, initiative_phase } = _encounterState;
+  const isMonster = c.kind === "monster";
+  const hp = c.hp_max ? `${c.hp_current ?? "?"}/${c.hp_max}` : "—";
+  const hpId = `chp-${c.combatant_id}`;
+
+  const subtitle = isMonster
+    ? [c.creature_type, c.cr ? `CR ${c.cr}` : ""].filter(Boolean).join(" · ")
+    : [[c.species_lineage, c.species_name].filter(Boolean).join(" "),
+       [c.class_name, c.level ? `Lv ${c.level}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+  const clickHandler = isMonster
+    ? `openMonsterModal(${c.monster_id}, ${c.combatant_id})`
+    : `combatOpenSheet(${c.character_id}, event)`;
+  const speed = isMonster ? (c.speed || "—") : `${c.speed || 30} ft`;
+  const acBadge = isMonster && c.ac != null
+    ? `<span class="combat-stat"><span class="combat-stat-label">AC</span> ${c.ac}</span>` : "";
+  const tag = isMonster ? `<span class="combat-monster-tag">Monster</span>` : "";
+
+  // Active turn highlight
+  const activeClass = c.is_current_turn ? " combat-card--active" : "";
+
+  // Initiative display or input
+  let initiativeHtml = "";
+  if (encounter_active && initiative_phase) {
+    initiativeHtml = `
+      <div class="combat-init-row" onclick="event.stopPropagation()">
+        <input type="number" id="init-${c.combatant_id}" class="combat-hp-input"
+          placeholder="Init" style="width:52px" value="${c.initiative ?? ""}">
+        <button class="combat-hp-btn" onclick="_submitInitiative(${c.combatant_id})">✓</button>
       </div>
-      ${subtitle ? `<div class="combat-card-sub">${subtitle}</div>` : ""}
-      <div class="combat-card-stats">
-        <span class="combat-stat"><span class="combat-stat-label">HP</span> <span id="${hpId}">${hp}</span></span>
-        ${acBadge}
-        <span class="combat-stat"><span class="combat-stat-label">Speed</span> ${speed}</span>
+    `;
+  } else if (encounter_active && c.initiative != null) {
+    initiativeHtml = `<span class="combat-stat"><span class="combat-stat-label">Init</span> ${c.initiative}</span>`;
+  }
+
+  // Action economy tokens (only during active non-initiative-phase encounter)
+  let economyHtml = "";
+  if (encounter_active && !initiative_phase) {
+    const mvRemain = c.movement_remaining != null ? `${c.movement_remaining} ft` : "— ft";
+    economyHtml = `
+      <div class="combat-economy" onclick="event.stopPropagation()">
+        <label class="econ-token${c.action_used ? " used" : ""}">
+          <input type="checkbox" ${c.action_used ? "checked" : ""}
+            onchange="_toggleAction(${c.combatant_id}, 'action_used', this.checked)">
+          Action
+        </label>
+        <label class="econ-token${c.bonus_action_used ? " used" : ""}">
+          <input type="checkbox" ${c.bonus_action_used ? "checked" : ""}
+            onchange="_toggleAction(${c.combatant_id}, 'bonus_action_used', this.checked)">
+          Bonus
+        </label>
+        <label class="econ-token${c.reaction_used ? " used" : ""}">
+          <input type="checkbox" ${c.reaction_used ? "checked" : ""}
+            onchange="_toggleAction(${c.combatant_id}, 'reaction_used', this.checked)">
+          Reaction
+        </label>
+        <span class="combat-stat" title="Movement remaining">${mvRemain}</span>
       </div>
-      ${renderCondChips(c.combatant_id, c.conditions)}
-      <div class="combat-card-actions" onclick="event.stopPropagation()">
-        <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, -1)">−1</button>
-        <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, +1)">+1</button>
-        <input type="number" id="combat-adj-${c.combatant_id}" class="combat-hp-input" placeholder="±HP">
-        <button class="combat-hp-btn" onclick="combatApplyAdj(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id})">Apply</button>
-        <button class="combat-hp-btn" onclick="openConditionPicker(${c.combatant_id},event)" title="Set conditions">＋ Cond</button>
-      </div>
-    </div>`;
-  }).join("")}</div>`;
+    `;
+  }
+
+  return `<div class="combat-card${activeClass}" onclick="${clickHandler}">
+    <div class="combat-card-header">
+      <span class="combat-card-num">${i + 1}</span>
+      <span class="combat-card-name">${c.name}</span>
+      ${tag}
+      <button class="combat-remove-btn" onclick="removeCombatant(${c.combatant_id}, event)" title="Remove">✕</button>
+    </div>
+    ${subtitle ? `<div class="combat-card-sub">${subtitle}</div>` : ""}
+    <div class="combat-card-stats">
+      <span class="combat-stat"><span class="combat-stat-label">HP</span> <span id="${hpId}">${hp}</span></span>
+      ${acBadge}
+      ${initiativeHtml}
+      <span class="combat-stat"><span class="combat-stat-label">Speed</span> ${speed}</span>
+    </div>
+    ${renderCondChips(c.combatant_id, c.conditions)}
+    ${economyHtml}
+    <div class="combat-card-actions" onclick="event.stopPropagation()">
+      <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, -1)">−1</button>
+      <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, +1)">+1</button>
+      <input type="number" id="combat-adj-${c.combatant_id}" class="combat-hp-input" placeholder="±HP">
+      <button class="combat-hp-btn" onclick="combatApplyAdj(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id})">Apply</button>
+      <button class="combat-hp-btn" onclick="openConditionPicker(${c.combatant_id},event)" title="Set conditions">＋ Cond</button>
+    </div>
+  </div>`;
+}
+
+async function _toggleAction(combatantId, field, value) {
+  try {
+    await api('PATCH', `/api/admin/combatants/${combatantId}/actions`, { [field]: value });
+    const c = _encounterState.combatants.find(x => x.combatant_id === combatantId);
+    if (c) c[field] = value;
+  } catch (e) {
+    toast('Failed to update action economy');
+    await _pollEncounterState(); // revert optimistic update
+  }
+}
+
+async function _submitInitiative(combatantId) {
+  const input = document.getElementById(`init-${combatantId}`);
+  const val = parseInt(input?.value);
+  if (isNaN(val)) { toast("Enter a valid initiative number"); return; }
+  await api("PATCH", `/api/admin/combatants/${combatantId}/initiative`, { initiative: val });
+  await _pollEncounterState();
 }
 
 function combatOpenSheet(charId, e) {
@@ -1442,7 +1628,7 @@ function combatOpenSheet(charId, e) {
 
 async function combatAdjHpBtn(combatantId, isMonster, charId, delta) {
   if (isMonster) {
-    const c = _combatants.find(x => x.combatant_id === combatantId);
+    const c = _findCombatant(combatantId);
     if (!c) return;
     const newHp = Math.max(0, (c.hp_current ?? c.hp_max ?? 0) + delta);
     try {
@@ -1480,6 +1666,9 @@ async function clearCombat() {
   if (!_combatants.length) { toast("Combat is already empty."); return; }
   if (!confirm("Remove all combatants?")) return;
   try {
+    if (_encounterState.encounter_active) {
+      await api("POST", "/api/admin/encounter/end").catch(() => {});
+    }
     await api("POST", "/api/admin/combatants/clear");
     loadCombat();
   } catch(e) { err(e.message); }
@@ -1495,7 +1684,7 @@ function openConditionPicker(combatantId, event) {
   closeConditionPicker();
   _condPickerCombatantId = combatantId;
 
-  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  const combatant = _findCombatant(combatantId);
   const active = new Set(combatant ? (combatant.conditions || []) : []);
   let exhaustLevel = 0;
   for (const c of active) {
@@ -1542,7 +1731,7 @@ function closeConditionPicker() {
 async function toggleCondition(combatantId, condName, event) {
   event.stopPropagation();
   if (condName === "Exhaustion") return;
-  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  const combatant = _findCombatant(combatantId);
   if (!combatant) return;
   const current = [...(combatant.conditions || [])];
   const idx = current.indexOf(condName);
@@ -1555,7 +1744,7 @@ async function toggleCondition(combatantId, condName, event) {
 
 async function setExhaustionLevel(combatantId, level, event) {
   event.stopPropagation();
-  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  const combatant = _findCombatant(combatantId);
   if (!combatant) return;
   const current = (combatant.conditions || []).filter(c => !c.startsWith("Exhaustion"));
   if (level > 0) current.push(`Exhaustion:${level}`);
@@ -1567,7 +1756,7 @@ async function setExhaustionLevel(combatantId, level, event) {
 async function removeCondition(combatantId, condName, event) {
   event.stopPropagation();
   closeConditionPicker();
-  const combatant = _combatants.find(c => c.combatant_id === combatantId);
+  const combatant = _findCombatant(combatantId);
   if (!combatant) return;
   const current = (combatant.conditions || []).filter(c => c !== condName);
   await _applyConditions(combatantId, current);
@@ -1577,7 +1766,7 @@ async function removeCondition(combatantId, condName, event) {
 async function _applyConditions(combatantId, conditions) {
   try {
     const r = await api("PATCH", `/api/admin/combatants/${combatantId}/conditions`, { conditions });
-    const combatant = _combatants.find(c => c.combatant_id === combatantId);
+    const combatant = _findCombatant(combatantId);
     if (combatant) combatant.conditions = r.conditions;
   } catch(e) { err(e.message || "Failed to set conditions"); }
 }

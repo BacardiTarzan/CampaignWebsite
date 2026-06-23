@@ -34,9 +34,10 @@ def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_use
     rows = (
         db.query(Combatant)
         .options(
-            selectinload(Combatant.character)
-            .selectinload(Character.character_classes)
-            .selectinload(CharacterClass.dnd_class)
+            selectinload(Combatant.character).options(
+                selectinload(Character.character_classes).selectinload(CharacterClass.dnd_class),
+                selectinload(Character.species),
+            )
         )
         .order_by(Combatant.turn_order.nulls_last(), Combatant.added_at)
         .all()
@@ -77,6 +78,8 @@ def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_use
                 "conditions": char.conditions or [],
                 "class_name": cc.dnd_class.name if cc else None,
                 "level": cc.level if cc else None,
+                "species_lineage": char.species_lineage,
+                "species_name": char.species.name if char.species else None,
             })
         else:
             m = monsters_by_id.get(row.monster_id)
@@ -96,6 +99,7 @@ def get_encounter_state(db: Session = Depends(get_db), _user=Depends(require_use
                 "ac": m.ac,
                 "speed": m.speed,
                 "cr": m.cr,
+                "creature_type": m.creature_type,
                 "conditions": row.conditions or [],
             })
         combatants.append(entry)

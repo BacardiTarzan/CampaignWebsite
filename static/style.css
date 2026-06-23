@@ -1568,6 +1568,49 @@ label, .field-label {
   letter-spacing: 0.04em;
 }
 
+/* Encounter: active turn highlight */
+.combat-card--active {
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 8px var(--gold-bright);
+}
+
+/* Encounter: action economy tokens */
+.combat-economy {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.25rem 0;
+  flex-wrap: wrap;
+}
+
+.econ-token {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background: var(--leather-mid, #5a3a1a);
+  color: var(--light);
+}
+
+.econ-token.used {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.econ-token input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* Encounter: initiative input row */
+.combat-init-row {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
 /* ─────────────────────────────────────────────────────────────────
    MONSTER STAT BLOCK
    ───────────────────────────────────────────────────────────────── */
