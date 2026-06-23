@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, HTMLResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Any
 from ..database import get_db
 from ..dependencies import require_user
@@ -9,6 +9,7 @@ from ..models.character import (
     Character, CharacterClass, StatRollSet, CharacterChoice,
     CharacterFeat, CharacterSpell, CharacterEquipment,
     SkillProficiency, ToolProficiency, LanguageProficiency, WeaponMasteryUnlock,
+    CharacterResource,
 )
 from ..models.content import DnDClass, Background, Feat, Spell, Equipment, Species, Subclass
 from ..services.export import character_to_dict, character_to_sheet_dict, compute_ac
@@ -1599,3 +1600,139 @@ def export_pdf(char_id: int, db: Session = Depends(get_db), user: dict = Depends
     pdf_bytes = render_character_pdf(char_dict, class_obj=class_obj, species_obj=char.species, background_obj=char.background)
     return Response(content=pdf_bytes, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{char.character_name}.pdf"'})
+
+
+# ---------------------------------------------------------------------------
+# Per-rest resource tracking
+# ---------------------------------------------------------------------------
+
+@router.get("/{char_id}/resources")
+def get_resources(char_id: int, db: Session = Depends(get_db), user=Depends(require_user)):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if char.owner_email != user["email"] and not user.get("is_admin"):
+        raise HTTPException(403)
+    rows = db.query(CharacterResource).filter_by(character_id=char_id).all()
+    return [
+        {
+            "id": r.id,
+            "resource_key": r.resource_key,
+            "label": r.label,
+            "max_uses": r.max_uses,
+            "used": r.used,
+            "remaining": r.max_uses - r.used,
+            "rest_type": r.rest_type,
+        }
+        for r in rows
+    ]
+
+
+class SpendResourceIn(BaseModel):
+    resource_id: int
+    amount: int = Field(default=1, ge=1)
+
+
+@router.post("/{char_id}/resources/spend")
+def spend_resource(
+    char_id: int,
+    body: SpendResourceIn,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if char.owner_email != user["email"] and not user.get("is_admin"):
+        raise HTTPException(403)
+    res = db.get(CharacterResource, body.resource_id)
+    if not res or res.character_id != char_id:
+        raise HTTPException(404)
+    new_used = res.used + body.amount
+    if new_used > res.max_uses:
+        raise HTTPException(400, "Not enough uses remaining")
+    res.used = new_used
+    db.commit()
+    return {"id": res.id, "used": res.used, "remaining": res.max_uses - res.used}
+
+
+class PlayerRestIn(BaseModel):
+    rest_type: str  # "short" | "long"
+
+
+@router.post("/{char_id}/rest")
+def take_rest(
+    char_id: int,
+    body: PlayerRestIn,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    """Player-triggered rest. Short rest restores 'short' resources; long rest restores all."""
+    if body.rest_type not in ("short", "long"):
+        raise HTTPException(400, "rest_type must be 'short' or 'long'")
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if char.owner_email != user["email"] and not user.get("is_admin"):
+        raise HTTPException(403)
+
+    resources = db.query(CharacterResource).filter_by(character_id=char_id).all()
+    restored = []
+    for res in resources:
+        should_restore = (
+            body.rest_type == "long"
+            or res.rest_type in ("short", "encounter")
+        )
+        if should_restore and res.used > 0:
+            res.used = 0
+            restored.append(res.resource_key)
+
+    # Long rest: restore all spell slots
+    if body.rest_type == "long" and char.spell_slots_used:
+        char.spell_slots_used = {}
+
+    # Long rest: restore all hit dice
+    if body.rest_type == "long":
+        for cc in char.character_classes:
+            cc.hit_dice_remaining = cc.level
+
+    db.commit()
+    return {"ok": True, "restored_resources": restored, "rest_type": body.rest_type}
+
+
+# ---------------------------------------------------------------------------
+# Player action economy
+# ---------------------------------------------------------------------------
+
+class PlayerActionEconomyIn(BaseModel):
+    combatant_id: int
+    action_used: bool | None = None
+    bonus_action_used: bool | None = None
+    reaction_used: bool | None = None
+
+
+# Note: this endpoint lives under /api/characters but needs a separate router prefix
+# We use a workaround by registering with an absolute path via the app router at main.py,
+# or we accept /api/characters/encounter/action-economy as the path.
+@router.post("/encounter/action-economy")
+def player_mark_action(
+    body: PlayerActionEconomyIn,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    """Player marks their own action economy during their turn."""
+    # TODO Task 7: add enforcement that only marks are allowed on current_turn_combatant_id
+    from ..models.character import Combatant
+    row = db.get(Combatant, body.combatant_id)
+    if not row or not row.character_id:
+        raise HTTPException(404)
+    if row.character.owner_email != user["email"]:
+        raise HTTPException(403, "Can only update your own character's actions")
+    if body.action_used is not None:
+        row.action_used = body.action_used
+    if body.bonus_action_used is not None:
+        row.bonus_action_used = body.bonus_action_used
+    if body.reaction_used is not None:
+        row.reaction_used = body.reaction_used
+    db.commit()
+    return {"ok": True}

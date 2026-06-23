@@ -12,7 +12,7 @@ from ..models.content import Species, DnDClass, Subclass, Background, Feat, Spel
 from ..models.character import (
     Character, CharacterSpell, SkillProficiency, ToolProficiency,
     LanguageProficiency, WeaponMasteryUnlock, CharacterWeaponProficiency,
-    CharacterFeat, CharacterClass, Combatant, EncounterState,
+    CharacterFeat, CharacterClass, Combatant, EncounterState, CharacterResource,
 )
 from ..services.seeder import seed_all
 from ..services.export import character_to_dict
@@ -137,20 +137,6 @@ def unlock_physical(char_id: int, db: Session = Depends(get_db)):
     char.physical_locked = False
     db.commit()
     return {"ok": True}
-
-
-@router.post("/characters/{char_id}/rest")
-def long_rest(char_id: int, db: Session = Depends(get_db)):
-    char = db.get(Character, char_id)
-    if not char:
-        raise HTTPException(404)
-    char.hp_current = char.hp_max
-    char.spell_slots_used = {}
-    # 2024 RAW: all spent hit dice recovered on long rest
-    for cc in char.character_classes:
-        cc.hit_dice_remaining = cc.level
-    db.commit()
-    return {"ok": True, "hp_current": char.hp_current}
 
 
 class ShortRestIn(BaseModel):
@@ -1527,3 +1513,128 @@ def trigger_seed(db: Session = Depends(get_db)):
     except Exception as e:
         tb = traceback.format_exc()
         raise HTTPException(status_code=500, detail=f"{e}\n\n{tb}")
+
+
+# ---------------------------------------------------------------------------
+# Character resource admin
+# ---------------------------------------------------------------------------
+
+COMMON_RESOURCES = [
+    {"resource_key": "second_wind",        "label": "Second Wind",        "max_uses": 1, "rest_type": "short"},
+    {"resource_key": "action_surge",       "label": "Action Surge",       "max_uses": 1, "rest_type": "short"},
+    {"resource_key": "rage",               "label": "Rage",               "max_uses": 3, "rest_type": "long"},
+    {"resource_key": "ki_points",          "label": "Ki Points",          "max_uses": 2, "rest_type": "short"},
+    {"resource_key": "channel_divinity",   "label": "Channel Divinity",   "max_uses": 1, "rest_type": "short"},
+    {"resource_key": "wild_shape",         "label": "Wild Shape",         "max_uses": 2, "rest_type": "short"},
+    {"resource_key": "bardic_inspiration", "label": "Bardic Inspiration", "max_uses": 4, "rest_type": "short"},
+    {"resource_key": "sorcery_points",     "label": "Sorcery Points",     "max_uses": 4, "rest_type": "long"},
+    {"resource_key": "heroic_inspiration", "label": "Heroic Inspiration", "max_uses": 1, "rest_type": "long"},
+]
+
+
+@router.get("/common-resources")
+def list_common_resources(_admin=Depends(require_admin)):
+    return COMMON_RESOURCES
+
+
+class AddResourceIn(BaseModel):
+    resource_key: str
+    label: str
+    max_uses: int
+    rest_type: str  # "short" | "long" | "encounter"
+
+
+@router.post("/characters/{char_id}/resources")
+def add_resource(
+    char_id: int,
+    body: AddResourceIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    if body.rest_type not in ("short", "long", "encounter"):
+        raise HTTPException(400, "rest_type must be short, long, or encounter")
+    if body.max_uses < 1:
+        raise HTTPException(400, "max_uses must be at least 1")
+    # Upsert: if resource_key already exists for this character, update it
+    existing = db.query(CharacterResource).filter_by(
+        character_id=char_id, resource_key=body.resource_key
+    ).first()
+    if existing:
+        existing.label = body.label
+        existing.max_uses = body.max_uses
+        existing.rest_type = body.rest_type
+        # Clamp used so it never exceeds the new max_uses
+        if existing.used > body.max_uses:
+            existing.used = body.max_uses
+        db.commit()
+        return {"id": existing.id, "resource_key": existing.resource_key,
+                "label": existing.label, "max_uses": existing.max_uses,
+                "used": existing.used, "rest_type": existing.rest_type}
+    res = CharacterResource(
+        character_id=char_id,
+        resource_key=body.resource_key,
+        label=body.label,
+        max_uses=body.max_uses,
+        used=0,
+        rest_type=body.rest_type,
+    )
+    db.add(res)
+    db.commit()
+    db.refresh(res)
+    return {"id": res.id, "resource_key": res.resource_key, "label": res.label,
+            "max_uses": res.max_uses, "used": 0, "rest_type": res.rest_type}
+
+
+@router.delete("/characters/{char_id}/resources/{resource_id}")
+def delete_resource(
+    char_id: int,
+    resource_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    res = db.get(CharacterResource, resource_id)
+    if not res or res.character_id != char_id:
+        raise HTTPException(404)
+    db.delete(res)
+    db.commit()
+    return {"ok": True}
+
+
+class AdminRestIn(BaseModel):
+    rest_type: str  # "short" | "long"
+
+
+@router.post("/characters/{char_id}/rest")
+def admin_rest(
+    char_id: int,
+    body: AdminRestIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """DM-triggered rest for a character."""
+    if body.rest_type not in ("short", "long"):
+        raise HTTPException(400, "rest_type must be short or long")
+    char = db.get(Character, char_id)
+    if not char:
+        raise HTTPException(404)
+    resources = db.query(CharacterResource).filter_by(character_id=char_id).all()
+    restored = []
+    for res in resources:
+        should_restore = (body.rest_type == "long" or res.rest_type in ("short", "encounter"))
+        if should_restore and res.used > 0:
+            res.used = 0
+            restored.append(res.resource_key)
+    if body.rest_type == "long":
+        char.hp_current = char.hp_max
+        char.spell_slots_used = {}
+        for cc in char.character_classes:
+            cc.hit_dice_remaining = cc.level
+    else:
+        for cc in char.character_classes:
+            half = max(1, (cc.level + 1) // 2)
+            cc.hit_dice_remaining = min(cc.level, cc.hit_dice_remaining + half)
+    db.commit()
+    return {"ok": True, "restored_resources": restored, "rest_type": body.rest_type}
