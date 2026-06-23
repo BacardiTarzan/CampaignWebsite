@@ -330,17 +330,6 @@ async function spendResource(resourceId, isAvailable) {
   }
 }
 
-async function takeRest(type) {
-  if (!confirm(`Take a ${type === 'long' ? 'long' : 'short'} rest?`)) return;
-  try {
-    await api("POST", `/api/characters/${charId}/rest`, { rest_type: type });
-    toast(`${type === 'long' ? 'Long' : 'Short'} rest taken — resources restored!`);
-    loadResources(); // refresh resource strip
-    pollHp();        // refresh HP (long rest restores HP)
-  } catch (e) {
-    toast("Rest failed");
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -474,11 +463,6 @@ function render() {
         <div class="sh-combat-big">${passivePerc}</div>
       </div>
     </div>
-    <div class="sh-rest-btns">
-      <button class="sh-rest-btn" onclick="takeRest('short')">Short Rest</button>
-      <button class="sh-rest-btn" onclick="takeRest('long')">Long Rest</button>
-    </div>
-
     ${renderConditionStrip(c.conditions || [])}
 
     <div class="sh-tabs">
