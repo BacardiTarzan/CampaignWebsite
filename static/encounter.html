@@ -16,14 +16,47 @@
     </div>
   </div>
 
-  <div id="enc-main" style="padding: 1rem; max-width: 720px; margin: 0 auto">
-    <div id="enc-status">Loading...</div>
-    <div id="enc-turn-banner" style="margin: 1rem 0"></div>
-    <div id="enc-economy" style="margin-bottom: 1rem"></div>
-    <div id="enc-actions"></div>
-    <div id="enc-action-panel" style="display:none;margin-top:0.5rem;padding:0.75rem;background:var(--parchment-bright,#f4e8c8);border-radius:6px;border:1px solid var(--gold)"></div>
+  <div id="enc-main" style="max-width:480px;margin:0 auto;padding:0.75rem">
+
+    <!-- Reconnecting banner (hidden normally) -->
+    <div id="enc-reconnect" style="display:none;background:#884;color:white;padding:0.4rem;text-align:center;border-radius:4px;margin-bottom:0.5rem">
+      Reconnecting…
+    </div>
+
+    <!-- No encounter / initiative phase message -->
+    <div id="enc-status"></div>
+
+    <!-- YOUR TURN banner (shown on active turn) -->
+    <div id="enc-turn-banner" style="margin-bottom:0.5rem"></div>
+
+    <!-- 2x2 token grid (shown on your turn) -->
+    <div id="enc-token-grid" style="display:none;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
+      <button id="tok-action"   class="enc-token" onclick="tapToken('action')">○ ACTION</button>
+      <button id="tok-bonus"    class="enc-token" onclick="tapToken('bonus')">○ BONUS</button>
+      <button id="tok-reaction" class="enc-token" onclick="tapToken('reaction')">○ REACTION</button>
+      <button id="tok-move"     class="enc-token" onclick="tapToken('move')">○ MOVE<br><small id="tok-move-ft"></small></button>
+    </div>
+
+    <!-- Inline action list (expands when token tapped) -->
+    <div id="enc-action-list" style="display:none;margin-bottom:0.5rem"></div>
+
+    <!-- Move stepper (expands when MOVE token tapped) -->
+    <div id="enc-move-panel" style="display:none;margin-bottom:0.5rem"></div>
+
+    <!-- Confirm panel (shown when ability selected) -->
+    <div id="enc-confirm" style="display:none;margin-bottom:0.5rem"></div>
+
+    <!-- Initiative order (always visible during encounter) -->
+    <div id="enc-order" style="margin-bottom:0.5rem"></div>
+
+    <!-- Resource panel (your resources, shown on your turn) -->
     <div id="enc-resource-panel" style="margin-top:0.75rem"></div>
-    <div id="enc-order"></div>
+
+    <!-- End Turn button (shown on your turn, sticky at bottom) -->
+    <div id="enc-end-turn" style="display:none;position:sticky;bottom:0.75rem;margin-top:0.5rem">
+      <button onclick="doEndTurn()" style="width:100%;padding:0.75rem;font-size:1rem;border-radius:6px;background:#555;color:white;border:none;cursor:pointer">→ End Turn</button>
+    </div>
+
   </div>
 </div>
 <div class="toast" id="toast"></div>
