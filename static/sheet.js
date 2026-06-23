@@ -271,6 +271,78 @@ document.addEventListener("keydown", e => {
 });
 
 // ---------------------------------------------------------------------------
+// Resource tracking
+// ---------------------------------------------------------------------------
+async function loadResources() {
+  try {
+    const resources = await api("GET", `/api/characters/${charId}/resources`);
+    renderResourceStrip(resources);
+  } catch (_) { /* ignore if user lacks permission or resources not set up */ }
+}
+
+function renderResourceStrip(resources) {
+  // Remove any existing resource strip
+  const existing = document.getElementById('sh-resource-strip');
+  if (existing) existing.remove();
+
+  if (!resources || !resources.length) return;
+
+  // Insert before condition strip if present, otherwise before .sh-tabs
+  const condStrip = document.querySelector(".sh-condition-strip");
+  const tabs = document.querySelector(".sh-tabs");
+  const insertTarget = condStrip || tabs;
+  if (!insertTarget) return;
+
+  const html = `<div id="sh-resource-strip" class="sh-resource-strip">
+    ${resources.map(r => `
+      <div class="resource-row">
+        <span class="resource-label">${_escRes(r.label)}</span>
+        <span class="resource-pips">
+          ${Array.from({length: r.max_uses}, (_, i) => `<button
+            class="resource-pip${i < r.remaining ? '' : ' spent'}"
+            onclick="spendResource(${r.id}, ${i < r.remaining})"
+            title="${i < r.remaining ? 'Click to spend' : 'Already spent'}"
+          >●</button>`).join('')}
+        </span>
+        <small class="resource-rest">(${_escRes(r.rest_type)})</small>
+      </div>
+    `).join('')}
+  </div>`;
+
+  insertTarget.insertAdjacentHTML("beforebegin", html);
+}
+
+function _escRes(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function spendResource(resourceId, isAvailable) {
+  if (!isAvailable) return; // already spent
+  try {
+    await api("POST", `/api/characters/${charId}/resources/spend`, {
+      resource_id: resourceId,
+      amount: 1,
+    });
+    loadResources(); // refresh display
+  } catch (e) {
+    toast("Could not spend resource");
+  }
+}
+
+async function takeRest(type) {
+  if (!confirm(`Take a ${type === 'long' ? 'long' : 'short'} rest?`)) return;
+  try {
+    await api("POST", `/api/characters/${charId}/rest`, { rest_type: type });
+    toast(`${type === 'long' ? 'Long' : 'Short'} rest taken — resources restored!`);
+    loadResources(); // refresh resource strip
+    pollHp();        // refresh HP (long rest restores HP)
+  } catch (e) {
+    toast("Rest failed");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 async function boot() {
@@ -298,6 +370,7 @@ async function boot() {
   document.getElementById("sheet-root").classList.remove("hidden");
   render();
   setInterval(pollHp, 15000);
+  loadResources();
 }
 
 async function pollHp() {
@@ -400,6 +473,10 @@ function render() {
         <div class="sh-combat-label">Passive Perc.</div>
         <div class="sh-combat-big">${passivePerc}</div>
       </div>
+    </div>
+    <div class="sh-rest-btns">
+      <button class="sh-rest-btn" onclick="takeRest('short')">Short Rest</button>
+      <button class="sh-rest-btn" onclick="takeRest('long')">Long Rest</button>
     </div>
 
     ${renderConditionStrip(c.conditions || [])}

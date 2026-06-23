@@ -2,9 +2,10 @@
 let myCharIds = [];
 let encounterState = { encounter_active: false, initiative_phase: false, current_round: 1, combatants: [] };
 let pollTimer = null;
-let myCharId = null;       // first own character in current encounter (set on render)
 let myActions = [];        // cached from API
 let actionsLoaded = false; // avoid re-fetching on every render
+let myEncResources = [];
+let resourcesLoaded = false;
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -43,6 +44,15 @@ async function poll() {
   } catch (e) { /* ignore network errors */ }
 }
 
+function _clearEncounterPanels() {
+  ['enc-actions', 'enc-action-panel', 'enc-resource-panel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+  });
+  actionsLoaded = false; myActions = [];
+  resourcesLoaded = false; myEncResources = [];
+}
+
 function render() {
   const { encounter_active, initiative_phase, current_round, current_turn_combatant_id, combatants } = encounterState;
 
@@ -52,6 +62,7 @@ function render() {
   const orderEl = document.getElementById('enc-order');
 
   if (!encounter_active) {
+    _clearEncounterPanels();
     statusEl.innerHTML = `<h2>No encounter in progress</h2><p style="color:var(--ink-soft)">The DM will start an encounter when combat begins.</p>`;
     bannerEl.innerHTML = '';
     economyEl.innerHTML = '';
@@ -60,6 +71,7 @@ function render() {
   }
 
   if (initiative_phase) {
+    _clearEncounterPanels();
     statusEl.innerHTML = `<h2>Initiative Phase</h2><p style="color:var(--ink-soft)">The DM is collecting initiative rolls. Stand by...</p>`;
     bannerEl.innerHTML = '';
     economyEl.innerHTML = '';
@@ -89,6 +101,11 @@ function render() {
       loadActions(myActiveCombatant.character_id);
     }
     renderActionSelector();
+    // Load resources once per turn
+    if (!resourcesLoaded && myActiveCombatant.character_id) {
+      loadEncResources(myActiveCombatant.character_id);
+      resourcesLoaded = true;
+    }
   } else {
     const whose = currentCombatant ? currentCombatant.name : '—';
     bannerEl.innerHTML = `<div style="font-size:1rem;color:var(--ink-soft)">Round ${current_round} — <em>${_esc(whose)}'s</em> turn</div>`;
@@ -100,6 +117,11 @@ function render() {
     if (ap) ap.style.display = 'none';
     actionsLoaded = false;
     myActions = [];
+    // Clear resource panel when it's not my turn
+    const rp = document.getElementById('enc-resource-panel');
+    if (rp) rp.innerHTML = '';
+    resourcesLoaded = false;
+    myEncResources = [];
   }
 
   // Initiative order list
@@ -232,6 +254,52 @@ function showAction(idx) {
   }
 
   panel.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Resource tracking
+// ---------------------------------------------------------------------------
+async function loadEncResources(charId) {
+  try {
+    const res = await fetch(`/api/characters/${charId}/resources`);
+    if (!res.ok) return;
+    myEncResources = await res.json();
+    renderEncResources(charId);
+  } catch (e) { /* ignore */ }
+}
+
+function renderEncResources(charId) {
+  const panel = document.getElementById('enc-resource-panel');
+  if (!panel) return;
+  if (!myEncResources.length) { panel.innerHTML = ''; return; }
+
+  panel.innerHTML = `<div style="padding:0.5rem;background:var(--parchment-bright,#f4e8c8);border-radius:6px;border:1px solid var(--gold)">
+    <strong style="font-size:0.9rem">Resources</strong>
+    ${myEncResources.map(r => `
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
+        <span style="font-size:0.8rem;min-width:8rem;font-weight:bold">${_esc(r.label)}</span>
+        <span>${Array.from({length: r.max_uses}, (_, i) => `<button
+          onclick="spendEncResource(${charId}, ${r.id}, ${i < r.remaining})"
+          style="background:none;border:none;font-size:1rem;cursor:${i < r.remaining ? 'pointer' : 'default'};
+                 color:${i < r.remaining ? 'var(--gold-deep,#6b4a18)' : 'var(--ink-faded,#9a8070)'}">●</button>`
+        ).join('')}</span>
+        <small style="color:var(--ink-soft);font-size:0.7rem">(${_esc(r.rest_type)})</small>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+async function spendEncResource(charId, resourceId, isAvailable) {
+  if (!isAvailable) return;
+  try {
+    const res = await fetch(`/api/characters/${charId}/resources/spend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resource_id: resourceId, amount: 1 }),
+    });
+    if (!res.ok) { toast('Could not spend resource'); return; }
+    await loadEncResources(charId);
+  } catch (e) { toast('Connection error'); }
 }
 
 // Escape HTML to prevent XSS from server-returned names
