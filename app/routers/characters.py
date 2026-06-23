@@ -20,6 +20,7 @@ from ..services.levelup_rules import (
 )
 from ..config import settings
 from ..services.pdf import render_character_pdf, render_character_html
+from .encounter import _broadcast_state
 import random
 import re
 from sqlalchemy import func
@@ -1719,7 +1720,7 @@ class PlayerActionEconomyIn(BaseModel):
 # We use a workaround by registering with an absolute path via the app router at main.py,
 # or we accept /api/characters/encounter/action-economy as the path.
 @router.post("/encounter/action-economy")
-def player_mark_action(
+async def player_mark_action(
     body: PlayerActionEconomyIn,
     db: Session = Depends(get_db),
     user=Depends(require_user),
@@ -1739,7 +1740,94 @@ def player_mark_action(
     if body.reaction_used is not None:
         row.reaction_used = body.reaction_used
     db.commit()
+    await _broadcast_state(db)
     return {"ok": True}
+
+
+class EndTurnIn(BaseModel):
+    combatant_id: int
+
+
+@router.post("/encounter/end-turn")
+async def player_end_turn(
+    body: EndTurnIn,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    """Player ends their turn — advances initiative to the next combatant."""
+    from ..models.character import Combatant, EncounterState
+    row = db.get(Combatant, body.combatant_id)
+    if not row or not row.character_id:
+        raise HTTPException(404)
+    if row.character.owner_email != user["email"]:
+        raise HTTPException(403, "Can only end your own character's turn")
+
+    state = db.get(EncounterState, 1)
+    if not state or not state.encounter_active or state.initiative_phase:
+        raise HTTPException(400, "No active encounter")
+    if state.current_turn_combatant_id != body.combatant_id:
+        raise HTTPException(400, "It is not this character's turn")
+
+    ordered = db.query(Combatant).filter(
+        Combatant.turn_order.isnot(None)
+    ).order_by(Combatant.turn_order).all()
+    if not ordered:
+        raise HTTPException(400, "No combatants in initiative order")
+
+    current_ids = [c.id for c in ordered]
+    try:
+        idx = current_ids.index(state.current_turn_combatant_id)
+    except ValueError:
+        idx = -1
+
+    next_idx = idx + 1
+    if next_idx >= len(ordered):
+        next_idx = 0
+        state.current_round += 1
+
+    next_combatant = ordered[next_idx]
+    state.current_turn_combatant_id = next_combatant.id
+
+    # Reset action economy for the next combatant's turn
+    next_combatant.action_used = False
+    next_combatant.bonus_action_used = False
+    next_combatant.reaction_used = False
+    if next_combatant.character_id and next_combatant.character:
+        next_combatant.movement_remaining = (
+            next_combatant.character.speed if next_combatant.character.speed is not None else 30
+        )
+
+    db.commit()
+    await _broadcast_state(db)
+    return {"ok": True, "current_round": state.current_round}
+
+
+class SpendMovementIn(BaseModel):
+    combatant_id: int
+    amount: int  # must be a positive multiple of 5
+
+
+@router.post("/encounter/spend-movement")
+async def player_spend_movement(
+    body: SpendMovementIn,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    from ..models.character import Combatant
+    if body.amount <= 0 or body.amount % 5 != 0:
+        raise HTTPException(400, "Amount must be a positive multiple of 5")
+    row = db.get(Combatant, body.combatant_id)
+    if not row or not row.character_id:
+        raise HTTPException(404)
+    if row.character.owner_email != user["email"]:
+        raise HTTPException(403, "Can only spend your own character's movement")
+    remaining = row.movement_remaining or 0
+    if body.amount > remaining:
+        raise HTTPException(400, f"Only {remaining} ft remaining")
+    row.movement_remaining = remaining - body.amount
+    db.commit()
+    await _broadcast_state(db)
+    return {"ok": True, "movement_remaining": row.movement_remaining}
 
 
 # ---------------------------------------------------------------------------
@@ -1797,7 +1885,9 @@ def get_encounter_actions(
 
     # Prepared spells with 1 action or bonus action casting time
     for sp in data.get("spells", []):
-        if not sp.get("prepared") and not sp.get("always_prepared"):
+        is_cantrip = sp.get("level", 0) == 0
+        # Cantrips are always available regardless of prepared flag
+        if not is_cantrip and not sp.get("prepared") and not sp.get("always_prepared"):
             continue
         ct = (sp.get("casting_time") or "").lower()
         is_action = "1 action" in ct
