@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, func
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, String, Text, JSON, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -194,9 +194,9 @@ class Combatant(Base):
     # Phase 5 fields:
     initiative = Column(Integer, nullable=True)                   # rolled total (INTEGER); distinct from Monster.initiative which is a VARCHAR like "+5 (15)"
     turn_order = Column(Integer, nullable=True)                   # position in initiative order (1-based)
-    action_used = Column(Boolean, default=False)
-    bonus_action_used = Column(Boolean, default=False)
-    reaction_used = Column(Boolean, default=False)
+    action_used = Column(Boolean, default=False, nullable=False)
+    bonus_action_used = Column(Boolean, default=False, nullable=False)
+    reaction_used = Column(Boolean, default=False, nullable=False)
     movement_remaining = Column(Integer, nullable=True)           # NULL = not yet set for this encounter
     legendary_actions_remaining = Column(Integer, nullable=True)  # NULL = not yet set for this encounter
 
@@ -214,6 +214,7 @@ class EncounterState(Base):
     current_turn_combatant_id = Column(
         Integer, ForeignKey("combatants.id", ondelete="SET NULL"), nullable=True
     )
+    __table_args__ = (CheckConstraint("id = 1", name="ck_encounter_state_singleton"),)
 
 
 class CharacterResource(Base):
@@ -225,5 +226,6 @@ class CharacterResource(Base):
     max_uses = Column(Integer, nullable=False, default=1)
     used = Column(Integer, nullable=False, default=0)
     rest_type = Column(String, nullable=False, default="long")  # "long" | "short"
+    __table_args__ = (UniqueConstraint("character_id", "resource_key", name="uq_character_resource_key"),)
 
     character = relationship("Character", back_populates="resources")
