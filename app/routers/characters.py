@@ -1727,7 +1727,8 @@ async def player_mark_action(
     user=Depends(require_user),
 ):
     """Player marks their own action economy during their turn."""
-    # TODO Task 7: add enforcement that only marks are allowed on current_turn_combatant_id
+    # Note: reaction_used may be set off-turn (off-turn reaction flow in encounter.js).
+    # Ownership check below is the only server-side guard needed — do not add a current-turn restriction.
     from ..models.character import Combatant
     row = db.get(Combatant, body.combatant_id)
     if not row or not row.character_id:
