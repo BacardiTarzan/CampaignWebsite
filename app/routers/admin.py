@@ -1626,6 +1626,7 @@ class AddResourceIn(BaseModel):
     label: str
     max_uses: int
     rest_type: str  # "short" | "long" | "encounter"
+    action_type: str | None = None
 
 
 @router.post("/characters/{char_id}/resources")
@@ -1650,13 +1651,16 @@ def add_resource(
         existing.label = body.label
         existing.max_uses = body.max_uses
         existing.rest_type = body.rest_type
+        if body.action_type is not None:
+            existing.action_type = body.action_type
         # Clamp used so it never exceeds the new max_uses
         if existing.used > body.max_uses:
             existing.used = body.max_uses
         db.commit()
         return {"id": existing.id, "resource_key": existing.resource_key,
                 "label": existing.label, "max_uses": existing.max_uses,
-                "used": existing.used, "rest_type": existing.rest_type}
+                "used": existing.used, "rest_type": existing.rest_type,
+                "action_type": existing.action_type}
     res = CharacterResource(
         character_id=char_id,
         resource_key=body.resource_key,
@@ -1664,6 +1668,7 @@ def add_resource(
         max_uses=body.max_uses,
         used=0,
         rest_type=body.rest_type,
+        action_type=body.action_type,
     )
     db.add(res)
     db.commit()
@@ -1685,6 +1690,48 @@ def delete_resource(
     db.delete(res)
     db.commit()
     return {"ok": True}
+
+
+class AdminResourceAdjIn(BaseModel):
+    amount: int = 1  # number of uses to spend or restore; -1 to restore all
+
+
+@router.post("/characters/{char_id}/resources/{resource_id}/spend")
+def admin_spend_resource(
+    char_id: int,
+    resource_id: int,
+    body: AdminResourceAdjIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """DM spends uses of a character resource (e.g. trigger Indomitable)."""
+    res = db.get(CharacterResource, resource_id)
+    if not res or res.character_id != char_id:
+        raise HTTPException(404)
+    new_used = min(res.max_uses, res.used + body.amount)
+    res.used = new_used
+    db.commit()
+    return {"id": res.id, "used": res.used, "remaining": res.max_uses - res.used}
+
+
+@router.post("/characters/{char_id}/resources/{resource_id}/restore")
+def admin_restore_resource(
+    char_id: int,
+    resource_id: int,
+    body: AdminResourceAdjIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """DM restores uses of a character resource. amount=-1 restores all."""
+    res = db.get(CharacterResource, resource_id)
+    if not res or res.character_id != char_id:
+        raise HTTPException(404)
+    if body.amount == -1:
+        res.used = 0
+    else:
+        res.used = max(0, res.used - body.amount)
+    db.commit()
+    return {"id": res.id, "used": res.used, "remaining": res.max_uses - res.used}
 
 
 class AdminRestIn(BaseModel):

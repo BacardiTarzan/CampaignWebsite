@@ -1599,6 +1599,15 @@ function _buildCombatCard(c, i) {
     `;
   }
 
+  // Collapsible resource panel for player characters
+  const resourcePanelId = `res-panel-${c.combatant_id}`;
+  const resourceHtml = !isMonster ? `
+    <div onclick="event.stopPropagation()" style="padding:0.2rem 0 0">
+      <button style="background:none;border:none;cursor:pointer;font-size:0.78rem;color:var(--ink-soft);padding:0.2rem 0"
+        onclick="event.stopPropagation();_toggleResourcePanel(${c.character_id},'${resourcePanelId}',this)">Resources ▸</button>
+      <div id="${resourcePanelId}" style="display:none;padding:0.25rem 0 0"></div>
+    </div>` : '';
+
   return `<div class="combat-card${activeClass}" onclick="${clickHandler}">
     <div class="combat-card-header">
       <span class="combat-card-num">${i + 1}</span>
@@ -1615,6 +1624,7 @@ function _buildCombatCard(c, i) {
     </div>
     ${renderCondChips(c.combatant_id, c.conditions)}
     ${economyHtml}
+    ${resourceHtml}
     <div class="combat-card-actions" onclick="event.stopPropagation()">
       <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, -1)">−1</button>
       <button class="combat-hp-btn" onclick="combatAdjHpBtn(${c.combatant_id}, ${isMonster}, ${isMonster ? 0 : c.character_id}, +1)">+1</button>
@@ -1632,6 +1642,64 @@ async function _toggleAction(combatantId, field, value) {
     if (c) c[field] = value;
   } catch (e) {
     toast('Failed to update action economy');
+  }
+}
+
+async function _adminResourcePanel(charId, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  try {
+    const resources = await api('GET', `/api/characters/${charId}/resources`);
+    if (!resources || resources.length === 0) {
+      container.innerHTML = '<div style="font-size:0.8rem;color:var(--ink-soft);padding:0.25rem 0">No tracked resources.</div>';
+      return;
+    }
+    container.innerHTML = resources.map(r => {
+      const remaining = r.max_uses - r.used;
+      const pips = Array.from({ length: r.max_uses }, (_, i) =>
+        `<span style="font-size:1rem;color:${i < remaining ? 'var(--gold)' : '#ccc'}">●</span>`
+      ).join('');
+      return `<div style="display:flex;align-items:center;gap:0.4rem;padding:0.2rem 0;font-size:0.8rem;flex-wrap:wrap">
+        <span style="flex:1;min-width:8rem;font-weight:bold">${r.label}</span>
+        <span>${pips}</span>
+        <button style="padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer"
+          onclick="event.stopPropagation();_adminSpendResource(${charId},${r.id},'${containerId}')">− Spend</button>
+        <button style="padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer"
+          onclick="event.stopPropagation();_adminRestoreResource(${charId},${r.id},'${containerId}')">+ Restore</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<div style="font-size:0.8rem;color:red">Failed to load resources.</div>';
+  }
+}
+
+async function _adminSpendResource(charId, resourceId, containerId) {
+  try {
+    await api('POST', `/api/admin/characters/${charId}/resources/${resourceId}/spend`, { amount: 1 });
+    await _adminResourcePanel(charId, containerId);
+  } catch (e) { err(e.message || 'Could not spend resource'); }
+}
+
+async function _adminRestoreResource(charId, resourceId, containerId) {
+  try {
+    await api('POST', `/api/admin/characters/${charId}/resources/${resourceId}/restore`, { amount: 1 });
+    await _adminResourcePanel(charId, containerId);
+  } catch (e) { err(e.message || 'Could not restore resource'); }
+}
+
+function _toggleResourcePanel(charId, panelId, btn) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.textContent = 'Resources ▸';
+  } else {
+    panel.style.display = 'block';
+    btn.textContent = 'Resources ▾';
+    if (!panel.hasChildNodes() || panel.innerHTML.trim() === '') {
+      _adminResourcePanel(charId, panelId);
+    }
   }
 }
 
