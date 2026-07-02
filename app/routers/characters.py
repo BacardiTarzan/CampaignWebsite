@@ -1893,13 +1893,14 @@ def get_encounter_actions(
         ct = (sp.get("casting_time") or "").lower()
         is_action = "1 action" in ct
         is_bonus = "bonus action" in ct
-        if not is_action and not is_bonus:
-            continue  # skip rituals, reactions, 1 minute, etc.
+        is_reaction = "reaction" in ct
+        if not is_action and not is_bonus and not is_reaction:
+            continue  # skip rituals, 1-minute casts, etc.
         slot_level = sp.get("level", 0) if sp.get("level", 0) > 0 else None
         actions.append({
             "type": "spell",
             "name": sp["name"],
-            "cost": {"action": is_action, "bonus_action": is_bonus, "spell_slot": slot_level},
+            "cost": {"action": is_action, "bonus_action": is_bonus, "reaction": is_reaction, "spell_slot": slot_level},
             "attack_bonus": spell_atk,
             "attack_bonus_display": spell_atk_display,
             "damage": "",  # not parsed from description (proof of concept)
