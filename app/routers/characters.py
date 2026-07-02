@@ -1624,6 +1624,7 @@ def get_resources(char_id: int, db: Session = Depends(get_db), user=Depends(requ
             "used": r.used,
             "remaining": r.max_uses - r.used,
             "rest_type": r.rest_type,
+            "action_type": r.action_type,
         }
         for r in rows
     ]

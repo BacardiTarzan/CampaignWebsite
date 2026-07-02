@@ -226,6 +226,7 @@ class CharacterResource(Base):
     max_uses = Column(Integer, nullable=False, default=1)
     used = Column(Integer, nullable=False, default=0)
     rest_type = Column(String, nullable=False, default="long")  # "long" | "short"
+    action_type = Column(String, nullable=True)                 # action | bonus_action | reaction | free_action | move_action | special | passive
     __table_args__ = (UniqueConstraint("character_id", "resource_key", name="uq_character_resource_key"),)
 
     character = relationship("Character", back_populates="resources")

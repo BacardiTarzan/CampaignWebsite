@@ -63,7 +63,11 @@ def _load_class_actions(class_name: str) -> list[dict]:
         for key in ("action_type", "resource_key", "min_level", "max_uses", "rest_type", "description"):
             m = re.search(rf"^{key}:\s*(.+)$", block, re.MULTILINE)
             if m:
-                fields[key] = m.group(1).strip()
+                val = m.group(1).strip()
+                # Strip inline # comments from all fields except description
+                if key != "description":
+                    val = val.split("#")[0].strip()
+                fields[key] = val
 
         required = ("action_type", "resource_key", "min_level", "max_uses", "rest_type")
         if not all(k in fields for k in required):
@@ -115,6 +119,7 @@ def seed_class_abilities(char, db: Session) -> None:
             max_uses=max_uses,
             used=0,
             rest_type=ability["rest_type"],
+            action_type=ability.get("action_type"),
         ))
         added += 1
 
