@@ -12,6 +12,7 @@ let activeToken = null;       // 'action'|'bonus'|'reaction'|'move'|null  (Tasks
 let selectedActionIdx = null; // index into myActions  (Tasks 9+)
 let movementAmount = 5;       // current move stepper value  (Task 10)
 let myActiveCombatantId = null; // combatant_id when it's my turn
+let _offTurnReaction = false;  // true while a player is spending their reaction off-turn
 
 // ── WebSocket ─────────────────────────────────────────────────
 let ws = null;
@@ -143,12 +144,39 @@ function render() {
       loadEncResources(myActiveCombatant.character_id);
     }
   } else {
-    myActiveCombatantId = null;
-    _clearActivePanels();
+    // Don't reset state if a reaction flow is in progress
+    if (!_offTurnReaction) {
+      myActiveCombatantId = null;
+      _clearActivePanels();
+    }
     const whose = currentCombatant ? _esc(currentCombatant.name) : '—';
     bannerEl.innerHTML = `<div style="text-align:center;color:var(--ink-soft);padding:0.4rem">Round ${current_round} — <em>${whose}</em>'s turn</div>`;
     tokenGrid.style.display = 'none';
     endTurnEl.style.display = 'none';
+
+    // Off-turn reaction zone
+    const reactionZone = document.getElementById('enc-reaction-zone');
+    if (reactionZone) {
+      const myOffTurnCombatants = combatants.filter(
+        c => c.kind === 'character' && myCharIds.includes(c.character_id)
+      );
+      if (myOffTurnCombatants.length === 0) {
+        reactionZone.style.display = 'none';
+      } else {
+        const btns = myOffTurnCombatants.map(c => {
+          const used = c.reaction_used;
+          const label = myOffTurnCombatants.length === 1
+            ? (used ? '⚡ Reaction Used' : '⚡ Use Reaction')
+            : (used ? `⚡ ${_esc(c.name)}: Used` : `⚡ ${_esc(c.name)}: Use Reaction`);
+          return `<button onclick="_startOffTurnReaction(${c.combatant_id})"
+            style="width:100%;padding:0.6rem;border-radius:6px;font-size:0.95rem;cursor:${used ? 'default' : 'pointer'};
+            background:${used ? '#ccc' : 'var(--ink)'};color:${used ? '#666' : 'white'};border:none;margin-bottom:0.3rem"
+            ${used ? 'disabled' : ''}>${label}</button>`;
+        }).join('');
+        reactionZone.style.display = 'block';
+        reactionZone.innerHTML = btns;
+      }
+    }
   }
 
   // Initiative order list (always shown when encounter is active)
@@ -186,6 +214,9 @@ function _clearActivePanels() {
   myActions = [];
   resourcesLoaded = false;
   myEncResources = [];
+  const reactionZone = document.getElementById('enc-reaction-zone');
+  if (reactionZone) reactionZone.style.display = 'none';
+  _offTurnReaction = false;
 }
 
 function _updateTokens(combatant) {
@@ -292,8 +323,12 @@ async function loadActions(charId) {
   } catch (e) { /* ignore */ }
 }
 
+const SKIP_ACTION_TYPES = new Set(['special', 'free_action', 'move_action', 'passive']);
+
 function _injectResourceAbilities() {
   for (const r of myEncResources) {
+    // Skip pool definitions and contextual triggers — they track resources but don't appear as tappable actions
+    if (!r.action_type || SKIP_ACTION_TYPES.has(r.action_type)) continue;
     const key = `ability:${r.resource_key}`;
     if (myActions.find(a => a._key === key)) continue;
     myActions.push({
@@ -302,11 +337,16 @@ function _injectResourceAbilities() {
       name: r.label,
       resource_id: r.id,
       resource_key: r.resource_key,
-      cost: { action: true, bonus_action: false, spell_slot: null },
+      cost: {
+        action:       r.action_type === 'action',
+        bonus_action: r.action_type === 'bonus_action',
+        reaction:     r.action_type === 'reaction',
+        spell_slot: null,
+      },
       max_uses: r.max_uses,
       remaining: r.remaining,
       rest_type: r.rest_type,
-      description: '',
+      description: r.description || '',
       attack_bonus: null,
       attack_bonus_display: null,
       save_dc: null,
@@ -355,6 +395,26 @@ function tapToken(tokenType) {
   }
 }
 
+// ── Off-turn reaction ─────────────────────────────────────────
+function _startOffTurnReaction(combatantId) {
+  const combatant = encounterState.combatants.find(c => c.combatant_id === combatantId);
+  if (!combatant || combatant.reaction_used) return;
+
+  myActiveCombatantId = combatantId;
+  _offTurnReaction = true;
+
+  const doTap = () => tapToken('reaction');
+
+  if (!actionsLoaded && combatant.character_id) {
+    loadActions(combatant.character_id).then(doTap);
+  } else {
+    doTap();
+  }
+  if (!resourcesLoaded && combatant.character_id) {
+    loadEncResources(combatant.character_id);
+  }
+}
+
 // ── Action list ───────────────────────────────────────────────
 function renderActionList(tokenType, combatant) {
   const el = document.getElementById('enc-action-list');
@@ -372,6 +432,9 @@ function renderActionList(tokenType, combatant) {
   const abilities = myActions.filter(a =>
     a.type === 'ability' && (isAction ? a.cost.action : (isBonus ? a.cost.bonus_action : a.cost.reaction))
   );
+  const reactSpells = tokenType === 'reaction'
+    ? myActions.filter(a => a.type === 'spell' && a.cost && a.cost.reaction)
+    : [];
 
   const section = (title, items) => {
     if (!items.length) return '';
@@ -398,6 +461,7 @@ function renderActionList(tokenType, combatant) {
   html += section('CANTRIPS', cantrips);
   html += section('SPELLS', spells);
   html += section('ABILITIES', abilities);
+  html += section('REACTION SPELLS', reactSpells);
   html += `<div onclick="selectAction(-1)" style="padding:0.4rem 0.5rem;color:var(--ink-soft);cursor:pointer;font-style:italic;border-top:1px solid #eee">— Skip (use ${_esc(tokenType)}, do nothing)</div>`;
   html += '</div>';
   el.innerHTML = html;
@@ -552,6 +616,10 @@ async function doUseAction(idx) {
     document.getElementById('enc-confirm').style.display = 'none';
     activeToken = null;
     selectedActionIdx = null;
+    if (_offTurnReaction) {
+      _offTurnReaction = false;
+      myActiveCombatantId = null;
+    }
 
   } catch (e) {
     toast('Action failed — try again');
