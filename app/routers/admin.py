@@ -1372,6 +1372,7 @@ def repair_schema(db: Session = Depends(get_db)):
                 rest_type VARCHAR NOT NULL DEFAULT 'long'
             )
         """))
+        db.execute(text("ALTER TABLE character_resources ADD COLUMN IF NOT EXISTS action_type VARCHAR"))
     else:
         existing_tables = sa_inspect(engine).get_table_names()
         if "character_resources" not in existing_tables:
@@ -1383,9 +1384,14 @@ def repair_schema(db: Session = Depends(get_db)):
                     label VARCHAR NOT NULL,
                     max_uses INTEGER NOT NULL DEFAULT 1,
                     used INTEGER NOT NULL DEFAULT 0,
-                    rest_type VARCHAR NOT NULL DEFAULT 'long'
+                    rest_type VARCHAR NOT NULL DEFAULT 'long',
+                    action_type VARCHAR
                 )
             """))
+        else:
+            existing_cols = {c["name"] for c in sa_inspect(engine).get_columns("character_resources")}
+            if "action_type" not in existing_cols:
+                db.execute(text("ALTER TABLE character_resources ADD COLUMN action_type VARCHAR"))
 
     db.commit()
     applied = [
@@ -1394,6 +1400,7 @@ def repair_schema(db: Session = Depends(get_db)):
         "character_classes.level_granted", "character_choices.level", "classes.tool_proficiencies",
         "tables: character_weapon_proficiencies, glossary_terms, monsters, combatants",
         "phase5: combatants action economy columns, encounter_state table, character_resources table",
+        "character_resources.action_type",
     ]
     return {"ok": True, "applied": applied}
 
