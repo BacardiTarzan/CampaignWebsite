@@ -1344,7 +1344,10 @@ def repair_schema(db: Session = Depends(get_db)):
                 current_turn_combatant_id INTEGER REFERENCES combatants(id) ON DELETE SET NULL
             )
         """))
-        db.execute(text("INSERT INTO encounter_state (id) VALUES (1) ON CONFLICT DO NOTHING"))
+        db.execute(text(
+            "INSERT INTO encounter_state (id, encounter_active, initiative_phase, current_round)"
+            " VALUES (1, FALSE, FALSE, 1) ON CONFLICT DO NOTHING"
+        ))
     else:
         existing_tables = sa_inspect(engine).get_table_names()
         if "encounter_state" not in existing_tables:
