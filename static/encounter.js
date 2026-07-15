@@ -258,9 +258,13 @@ async function loadEncResources(charId) {
     myEncResources = await res.json();
     resourcesLoaded = true;
     renderEncResources(charId);
-    // If actions were already loaded, inject resource abilities now (they race in render())
     if (actionsLoaded) {
       _injectResourceAbilities();
+      // Re-render action list so newly injected abilities appear
+      if (activeToken && activeToken !== 'move') {
+        const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+        if (combatant) renderActionList(activeToken, combatant);
+      }
     }
   } catch (e) { /* ignore */ }
 }
@@ -318,8 +322,12 @@ async function loadActions(charId) {
     if (!res.ok) return;
     myActions = await res.json();
     actionsLoaded = true;
-    // Inject class ability resources as action list entries
     _injectResourceAbilities();
+    // Re-render action list if player already tapped a token while we were loading
+    if (activeToken && activeToken !== 'move') {
+      const combatant = encounterState.combatants.find(c => c.combatant_id === myActiveCombatantId);
+      if (combatant) renderActionList(activeToken, combatant);
+    }
   } catch (e) { /* ignore */ }
 }
 
